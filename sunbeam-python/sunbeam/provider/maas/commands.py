@@ -69,6 +69,7 @@ from sunbeam.commands.openstack import (
     OPENSTACK_MODEL,
     DeployControlPlaneStep,
     PatchLoadBalancerServicesStep,
+    PromptRegionStep,
 )
 from sunbeam.commands.proxy import PromptForProxyStep
 from sunbeam.commands.sunbeam_machine import (
@@ -497,6 +498,8 @@ def deploy(
         sys.exit(1)
 
     plan2 = []
+
+    plan2.append(PromptRegionStep(client, preseed, accept_defaults))
     plan2.append(TerraformInitStep(tfhelper_sunbeam_machine))
     plan2.append(
         DeploySunbeamMachineApplicationStep(

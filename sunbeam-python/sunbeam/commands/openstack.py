@@ -20,6 +20,7 @@ from lightkube.core import exceptions
 from lightkube.core.client import Client as KubeClient
 from lightkube.core.client import KubeConfig
 from lightkube.resources.core_v1 import Service
+from rich.console import Console
 from rich.status import Status
 
 import sunbeam.commands.microceph as microceph
@@ -41,6 +42,12 @@ from sunbeam.jobs.common import (
 )
 from sunbeam.jobs.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
 from sunbeam.jobs.manifest import Manifest
+from sunbeam.jobs.questions import (
+    PromptQuestion,
+    QuestionBank,
+    load_answers,
+    write_answers,
+)
 
 LOG = logging.getLogger(__name__)
 OPENSTACK_MODEL = "openstack"
@@ -48,6 +55,8 @@ OPENSTACK_DEPLOY_TIMEOUT = 5400  # 90 minutes
 
 CONFIG_KEY = "TerraformVarsOpenstack"
 TOPOLOGY_KEY = "Topology"
+REGION_CONFIG_KEY = "Region"
+DEFAULT_REGION = "RegionOne"
 
 
 def determine_target_topology(client: Client) -> str:
@@ -152,6 +161,10 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
 
         return tfvars
 
+    def get_region_tfvars(self) -> dict:
+        """Create terraform variables related to region."""
+        return {"region": read_config(self.client, REGION_CONFIG_KEY)["region"]}
+
     def is_skip(self, status: Optional[Status] = None) -> Result:
         """Determines if the step should be skipped or not.
 
@@ -214,6 +227,7 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
         model_config = convert_proxy_to_model_configs(self.proxy_settings)
         model_config.update({"workload-storage": K8SHelper.get_default_storageclass()})
         extra_tfvars = self.get_storage_tfvars(storage_nodes)
+        extra_tfvars.update(self.get_region_tfvars())
         extra_tfvars.update(
             {
                 "model": self.model,
@@ -419,3 +433,67 @@ class UpdateOpenStackModelConfigStep(BaseStep):
         except TerraformException as e:
             LOG.exception("Error updating modelconfigs for openstack plan")
             return Result(ResultType.FAILED, str(e))
+
+
+def region_questions():
+    return {
+        "region": PromptQuestion(
+            "Enter a region name (cannot be changed later)",
+            default_value=DEFAULT_REGION,
+        )
+    }
+
+
+class PromptRegionStep(BaseStep):
+    """Prompt user for region."""
+
+    def __init__(
+        self,
+        client: Client,
+        deployment_preseed: dict | None = None,
+        accept_defaults: bool = False,
+    ):
+        super().__init__("Region", "Query user for region")
+        self.client = client
+        self.preseed = deployment_preseed or {}
+        self.accept_defaults = accept_defaults
+        self.variables = {}
+
+    def prompt(self, console: Console | None = None) -> None:
+        """Determines if the step can take input from the user.
+
+        Prompts are used by Steps to gather the necessary input prior to
+        running the step. Steps should not expect that the prompt will be
+        available and should provide a reasonable default where possible.
+        """
+        self.variables = load_answers(self.client, REGION_CONFIG_KEY)
+
+        if region := self.variables.get("region"):
+            # Region cannot be modified once set
+            LOG.debug(f"Region already set to {region}")
+            return
+        region_bank = QuestionBank(
+            questions=region_questions(),
+            console=console,
+            preseed=self.preseed,
+            previous_answers=self.variables,
+            accept_defaults=self.accept_defaults,
+        )
+        self.variables["region"] = region_bank.region.ask()
+        write_answers(self.client, REGION_CONFIG_KEY, self.variables)
+
+    def has_prompts(self) -> bool:
+        """Returns true if the step has prompts that it can ask the user.
+
+        :return: True if the step can ask the user for prompts,
+                 False otherwise
+        """
+        return True
+
+    def run(self, status: Status | None) -> Result:
+        """Run the step to completion.
+
+        Invoked when the step is run and returns a ResultType to indicate
+        :return:
+        """
+        return Result(ResultType.COMPLETED, f"Region set to {self.variables['region']}")

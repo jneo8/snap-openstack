@@ -88,6 +88,7 @@ from sunbeam.commands.openstack import (
     OPENSTACK_MODEL,
     DeployControlPlaneStep,
     PatchLoadBalancerServicesStep,
+    PromptRegionStep,
 )
 from sunbeam.commands.proxy import PromptForProxyStep
 from sunbeam.commands.sunbeam_machine import (
@@ -322,6 +323,8 @@ def bootstrap(
     deployment.reload_juju_credentials()
     jhelper = JujuHelper(deployment.get_connected_controller())
     plan4 = []
+
+    plan4.append(PromptRegionStep(client, preseed, accept_defaults))
     # Deploy sunbeam machine charm
     sunbeam_machine_tfhelper = deployment.get_tfhelper("sunbeam-machine-plan")
     plan4.append(TerraformInitStep(sunbeam_machine_tfhelper))

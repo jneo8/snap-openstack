@@ -34,6 +34,7 @@ from sunbeam.commands.configure import (
 )
 from sunbeam.commands.juju import BOOTSTRAP_CONFIG_KEY, bootstrap_questions
 from sunbeam.commands.k8s import K8S_ADDONS_CONFIG_KEY, k8s_addons_questions
+from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.microceph import CONFIG_DISKS_KEY, microceph_questions
 from sunbeam.commands.microk8s import (
     MICROK8S_ADDONS_CONFIG_KEY,
@@ -126,6 +127,22 @@ class LocalDeployment(Deployment):
             previous_answers=variables.get("proxy", {}),
         )
         preseed_content.extend(show_questions(proxy_bank, section="proxy"))
+
+        variables = {}
+        try:
+            if client is not None:
+                variables = load_answers(client, REGION_CONFIG_KEY)
+        except ClusterServiceUnavailableException:
+            pass
+
+        region_bank = QuestionBank(
+            questions=region_questions(),
+            console=console,
+            previous_answers=variables,
+        )
+        preseed_content.extend(show_questions(region_bank))
+
+        variables = {}
         try:
             variables = load_answers(client, BOOTSTRAP_CONFIG_KEY)
         except ClusterServiceUnavailableException:

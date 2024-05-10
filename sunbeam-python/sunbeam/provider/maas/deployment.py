@@ -25,6 +25,7 @@ from sunbeam.commands.configure import (
     ext_net_questions,
     user_questions,
 )
+from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.proxy import proxy_questions
 from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment
 from sunbeam.jobs.plugin import PluginManager
@@ -201,6 +202,20 @@ class MaasDeployment(Deployment):
             previous_answers=variables.get("proxy", {}),
         )
         preseed_content.extend(show_questions(proxy_bank, section="proxy"))
+
+        variables = {}
+        try:
+            if client is not None:
+                variables = load_answers(client, REGION_CONFIG_KEY)
+        except ClusterServiceUnavailableException:
+            pass
+
+        region_bank = QuestionBank(
+            questions=region_questions(),
+            console=console,
+            previous_answers=variables,
+        )
+        preseed_content.extend(show_questions(region_bank))
 
         variables = {}
         try:
