@@ -99,8 +99,6 @@ else
 fi
 
 if [[ $risk != "stable" ]]; then
-    echo "You're deploying from $risk channel," \
-        " to test $risk charms, you must provide the $risk manifest."
     sudo snap set openstack deployment.risk=$risk
     echo "Snap has been automatically configured to deploy from" \
         "$risk channel."
