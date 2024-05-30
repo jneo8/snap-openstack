@@ -263,7 +263,7 @@ class TestMachineStorageCheck:
         assert result.details["machine"] == "test_machine"
         assert result.message and "storage node has no ceph storage" in result.message
         assert result.diagnostics
-        assert "https://maas.io/docs/using-storage-tags" in result.diagnostics
+        assert "https://maas.io/docs/how-to-use-storage-tags" in result.diagnostics
 
     def test_run_with_ceph_storage(self):
         machine = {
@@ -311,7 +311,7 @@ class TestMachineComputeNicCheck:
         assert result.details["machine"] == "test_machine"
         assert result.message and "no compute nic found" in result.message
         assert result.diagnostics
-        assert "https://maas.io/docs/using-network-tags" in result.diagnostics
+        assert "https://maas.io/docs/how-to-use-network-tags" in result.diagnostics
 
     def test_run_with_compute_nic(self):
         machine = {
