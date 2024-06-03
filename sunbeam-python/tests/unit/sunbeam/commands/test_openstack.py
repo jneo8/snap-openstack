@@ -94,7 +94,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
         )
         with patch(
             "sunbeam.commands.openstack.read_config",
-            Mock(return_value={}),
+            Mock(return_value={"region": "TestOne"}),
         ):
             result = step.run()
 
@@ -118,7 +118,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
         )
         with patch(
             "sunbeam.commands.openstack.read_config",
-            Mock(return_value={}),
+            Mock(return_value={"region": "TestOne"}),
         ):
             result = step.run()
 
@@ -141,7 +141,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
         )
         with patch(
             "sunbeam.commands.openstack.read_config",
-            Mock(return_value={}),
+            Mock(return_value={"region": "TestOne"}),
         ):
             result = step.run()
 
@@ -166,7 +166,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
         )
         with patch(
             "sunbeam.commands.openstack.read_config",
-            Mock(return_value={}),
+            Mock(return_value={"region": "TestOne"}),
         ):
             result = step.run()
 
