@@ -76,7 +76,7 @@ console = Console()
 ROLES_NEEDED_ERROR = f"""A machine needs roles to be a part of an openstack deployment.
 Available roles are: {maas_deployment.RoleTags.values()}.
 Roles can be assigned to a machine by applying tags in MAAS.
-More on assigning tags: https://maas.io/docs/using-machine-tags
+More on assigning tags: https://maas.io/docs/how-to-use-machine-tags
 """
 
 
@@ -357,7 +357,8 @@ class MachineStorageCheck(DiagnosticsCheck):
                     machine or remove the storage role. Add the tag
                     `{maas_deployment.StorageTags.CEPH.value}` to the storage device in\
                      MAAS.
-                    More on assigning tags: https://maas.io/docs/using-storage-tags"""
+                    More on assigning tags:
+                    https://maas.io/docs/how-to-use-storage-tags"""
                 ),
                 machine=self.machine["hostname"],
             )
@@ -418,7 +419,7 @@ class MachineComputeNicCheck(DiagnosticsCheck):
                 of an openstack deployment. Either add a compute nic to the machine or
                 remove the compute role. Add the tag `{compute_tag}`
                 to the nic in MAAS.
-                More on assigning tags: https://maas.io/docs/using-network-tags
+                More on assigning tags: https://maas.io/docs/how-to-use-network-tags
                 """
             ),
             machine=self.machine["hostname"],
@@ -590,7 +591,7 @@ class DeploymentRolesCheck(DiagnosticsCheck):
                     A deployment needs to have at least {min_count} {role_name} to be
                     a part of an openstack deployment. You need to add more {role_name}
                     to the deployment using {role_tag} tag.
-                    More on using tags: https://maas.io/docs/using-machine-tags
+                    More on using tags: https://maas.io/docs/how-to-use-machine-tags
                     """.format(
                         min_count=self.min_count,
                         role_name=self.role_name,
@@ -671,7 +672,7 @@ class ZoneBalanceCheck(DiagnosticsCheck):
                 A deployment needs to have the same number of machines with the same
                 role in each zone. Either add more machines to the zones or remove the
                 zone from the deployment.
-                More on using tags: https://maas.io/docs/using-machine-tags
+                More on using tags: https://maas.io/docs/how-to-use-machine-tags
                 Distribution of roles across zones:
                 """
             )
@@ -701,7 +702,7 @@ class IpRangesCheck(DiagnosticsCheck):
         {label!r}.
 
         More on setting up IP ranges:
-        https://maas.io/docs/ip-ranges
+        https://maas.io/docs/how-to-manage-ip-ranges
         """
     )
 
