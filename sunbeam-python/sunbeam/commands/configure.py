@@ -270,9 +270,6 @@ class SetHypervisorCharmConfigStep(BaseStep):
             self.client, CLOUD_CONFIG_SECTION
         )
         self.ext_network = self.variables.get("external_network", {})
-        self.charm_config["enable-gateway"] = str(
-            self.variables["user"]["remote_access_location"] == utils.REMOTE_ACCESS
-        )
         self.charm_config["external-bridge"] = "br-ex"
         if self.variables["user"]["remote_access_location"] == utils.LOCAL_ACCESS:
             external_network = ipaddress.ip_network(
