@@ -14,6 +14,7 @@
 # limitations under the License.
 
 
+import itertools
 import json
 import logging
 import os
@@ -26,16 +27,14 @@ from typing import Optional
 
 import pexpect
 import pwgen
+import tenacity
 import yaml
 from packaging import version
-from rich.console import Console
 from rich.status import Status
 from snaphelpers import Snap
 
-from sunbeam import utils
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import NodeNotExistInClusterException
-from sunbeam.jobs import questions
 from sunbeam.jobs.common import (
     BaseStep,
     Result,
@@ -47,6 +46,7 @@ from sunbeam.jobs.juju import (
     ControllerNotFoundException,
     JujuAccount,
     JujuAccountNotFound,
+    JujuException,
     JujuHelper,
     ModelNotFoundException,
     run_sync,
@@ -314,15 +314,6 @@ class JujuStepHelper:
             return False
 
 
-def bootstrap_questions():
-    return {
-        "management_cidr": questions.PromptQuestion(
-            "Management networks shared by hosts (CIDRs, separated by comma)",
-            default_value=utils.get_local_cidr_by_default_routes(),
-        ),
-    }
-
-
 class AddCloudJujuStep(BaseStep, JujuStepHelper):
     """Add cloud definition to juju client."""
 
@@ -422,8 +413,6 @@ class AddCredentialsJujuStep(BaseStep, JujuStepHelper):
 class BootstrapJujuStep(BaseStep, JujuStepHelper):
     """Bootstraps the Juju controller."""
 
-    _CONFIG = BOOTSTRAP_CONFIG_KEY
-
     def __init__(
         self,
         client: Client,
@@ -431,9 +420,7 @@ class BootstrapJujuStep(BaseStep, JujuStepHelper):
         cloud_type: str,
         controller: str,
         bootstrap_args: list[str] | None = None,
-        deployment_preseed: dict | None = None,
         proxy_settings: dict | None = None,
-        accept_defaults: bool = False,
     ):
         super().__init__("Bootstrap Juju", "Bootstrapping Juju onto machine")
 
@@ -442,46 +429,11 @@ class BootstrapJujuStep(BaseStep, JujuStepHelper):
         self.cloud_type = cloud_type
         self.controller = controller
         self.bootstrap_args = bootstrap_args or []
-        self.preseed = deployment_preseed or {}
         self.proxy_settings = proxy_settings or {}
-        self.accept_defaults = accept_defaults
         self.juju_clouds = []
 
         home = os.environ.get("SNAP_REAL_HOME")
         os.environ["JUJU_DATA"] = f"{home}/.local/share/juju"
-
-    def prompt(self, console: Optional[Console] = None) -> None:
-        """Determines if the step can take input from the user.
-
-        Prompts are used by Steps to gather the necessary input prior to
-        running the step. Steps should not expect that the prompt will be
-        available and should provide a reasonable default where possible.
-        """
-        self.variables = questions.load_answers(self.client, self._CONFIG)
-        self.variables.setdefault("bootstrap", {})
-
-        bootstrap_bank = questions.QuestionBank(
-            questions=bootstrap_questions(),
-            console=console,  # type: ignore
-            preseed=self.preseed.get("bootstrap"),
-            previous_answers=self.variables.get("bootstrap", {}),
-            accept_defaults=self.accept_defaults,
-        )
-
-        self.variables["bootstrap"][
-            "management_cidr"
-        ] = bootstrap_bank.management_cidr.ask()
-
-        LOG.debug(self.variables)
-        questions.write_answers(self.client, self._CONFIG, self.variables)
-
-    def has_prompts(self) -> bool:
-        """Returns true if the step has prompts that it can ask the user.
-
-        :return: True if the step can ask the user for prompts,
-                 False otherwise
-        """
-        return True
 
     def is_skip(self, status: Optional["Status"] = None) -> Result:
         """Determines if the step should be skipped or not.
@@ -1503,3 +1455,135 @@ class DownloadJujuControllerCharmStep(BaseStep, JujuStepHelper):
         except subprocess.CalledProcessError as e:
             LOG.exception("Error downloading Juju Controller charm")
             return Result(ResultType.FAILED, str(e))
+
+
+class AddJujuSpaceStep(BaseStep):
+    def __init__(self, jhelper: JujuHelper, model: str, space: str, subnets: list[str]):
+        super().__init__("Add Juju Space", f"Adding Juju Space to model {model}")
+        self.jhelper = jhelper
+        self.model = model
+        self.space = space
+        self.subnets = subnets
+
+    async def _get_spaces_subnets_mapping(self, model: str) -> dict[str, list[str]]:
+        """Return a mapping of all spaces with associated subnets."""
+        spaces = await self.jhelper.get_spaces(model)
+        return {
+            space["name"]: [subnet["cidr"] for subnet in space["subnets"]]
+            for space in spaces
+        }
+
+    @tenacity.retry(
+        wait=tenacity.wait_fixed(10),
+        stop=tenacity.stop_after_delay(300),
+        retry=tenacity.retry_if_exception_type(ValueError),
+        reraise=True,
+    )
+    def _wait_for_spaces(self, model: str) -> dict:
+        spaces_subnets = run_sync(self._get_spaces_subnets_mapping(model))
+        LOG.debug("Spaces and subnets mapping: %s", spaces_subnets)
+        all_subnets = set(itertools.chain.from_iterable(spaces_subnets.values()))
+        if not all_subnets:
+            raise ValueError("No subnets available in any space")
+        return spaces_subnets
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not."""
+        self.update_status(status, "Checking if spaces are populated")
+        try:
+            spaces_subnets = self._wait_for_spaces(self.model)
+        except ValueError as e:
+            return Result(ResultType.FAILED, str(e))
+
+        all_subnets = set(itertools.chain.from_iterable(spaces_subnets.values()))
+
+        self.update_status(status, "Checking spaces configuration")
+
+        wanted_subnets = set(self.subnets)
+        missing_from_all = wanted_subnets - all_subnets
+        if missing_from_all:
+            LOG.debug(f"Subnets {missing_from_all} are not available in any space")
+            return Result(ResultType.FAILED)
+
+        space_subnets = spaces_subnets.get(self.space)
+
+        if space_subnets and set(space_subnets).issuperset(wanted_subnets):
+            LOG.debug("Wanted subnets are already in use by the space")
+            return Result(ResultType.SKIPPED)
+
+        for space, subnets in spaces_subnets.items():
+            if space == self.space or space == "alpha":
+                continue
+            if intersect := wanted_subnets.intersection(subnets):
+                return Result(
+                    ResultType.FAILED,
+                    f"Subnets {intersect} are already in use by space {space}",
+                )
+
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Optional["Status"] = None) -> Result:
+        """Run the step to completion.
+
+        Invoked when the step is run and returns a ResultType to indicate
+
+        :return:
+        """
+        self.update_status(status, "Adding space to model")
+        try:
+            run_sync(self.jhelper.add_space(self.model, self.space, self.subnets))
+        except JujuException as e:
+            message = f"Failed to create space : {str(e)}"
+            return Result(ResultType.FAILED, message)
+
+        return Result(ResultType.COMPLETED)
+
+
+class BindJujuApplicationStep(BaseStep):
+    """Bind all application endpoints to a space."""
+
+    def __init__(self, jhelper: JujuHelper, model: str, app: str, space: str):
+        super().__init__(
+            "Bind Application", f"Binding application {app} to space {space}"
+        )
+        self.jhelper = jhelper
+        self.model = model
+        self.app = app
+        self.space = space
+        self._bindings = None
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not."""
+        current_bindings = run_sync(
+            self.jhelper.get_application_bindings(self.model, self.app)
+        )
+        new_bindings = current_bindings.copy()
+        for endpoint, space in current_bindings.items():
+            if space != self.space:
+                LOG.debug(
+                    "Application's endpoint %r is bound to space %s",
+                    endpoint,
+                    space,
+                )
+                new_bindings[endpoint] = self.space
+
+        if new_bindings == current_bindings:
+            LOG.debug("Application's endpoints already bound to right spaces")
+            return Result(ResultType.SKIPPED)
+
+        self._bindings = new_bindings
+
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Optional["Status"] = None) -> Result:
+        """Bind application to space."""
+        if not self._bindings:
+            return Result(ResultType.FAILED, "Bindings not set")
+        self.update_status(status, "Binding application to space")
+        try:
+            run_sync(self.jhelper.merge_bindings(self.model, self.app, self._bindings))
+        except JujuException as e:
+            message = f"Failed to bind application to space: {str(e)}"
+            return Result(ResultType.FAILED, message)
+
+        return Result(ResultType.COMPLETED)
