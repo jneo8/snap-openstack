@@ -40,7 +40,6 @@ from sunbeam.commands.terraform import (
 from sunbeam.jobs.common import BaseStep, Result, ResultType, run_plan
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import (
-    CONTROLLER,
     ActionFailedException,
     ApplicationNotFoundException,
     JujuHelper,
@@ -315,6 +314,20 @@ class ValidationPlugin(OpenStackControlPlanePlugin):
                 raise click.ClickException(str(e))
             return unit
 
+    def _get_tempest_absolute_model_name(self) -> str:
+        """Return the absolute model name where the tempest unit resides."""
+        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        with console.status(
+            f"Retrieving the absolute model name for {TEMPEST_APP_NAME}'s unit."
+        ):
+            try:
+                model_name = run_sync(
+                    jhelper.get_model_name_with_owner(OPENSTACK_MODEL)
+                )
+            except (ApplicationNotFoundException, LeaderNotFoundException) as e:
+                raise click.ClickException(str(e))
+            return f"{self.deployment.controller}:{model_name}"
+
     def _run_action_on_tempest_unit(
         self,
         action_name: str,
@@ -346,6 +359,7 @@ class ValidationPlugin(OpenStackControlPlanePlugin):
     def _check_file_exist_in_tempest_container(self, filename: str) -> bool:
         """Check if file exist in tempest container."""
         unit = self._get_tempest_leader_unit()
+        model_name = self._get_tempest_absolute_model_name()
         # Note: this is a workaround to run command to payload container
         # since python-libjuju does not support such feature. See related
         # bug: https://github.com/juju/python-libjuju/issues/1029
@@ -355,7 +369,7 @@ class ValidationPlugin(OpenStackControlPlanePlugin):
                     "juju",
                     "ssh",
                     "--model",
-                    f"{CONTROLLER}:{OPENSTACK_MODEL}",
+                    model_name,
                     "--container",
                     TEMPEST_CONTAINER_NAME,
                     unit,
@@ -375,6 +389,7 @@ class ValidationPlugin(OpenStackControlPlanePlugin):
     def _copy_file_from_tempest_container(self, source: str, destination: str) -> None:
         """Copy file from tempest container."""
         unit = self._get_tempest_leader_unit()
+        model_name = self._get_tempest_absolute_model_name()
         progress_message = (
             f"Copying {source} from "
             f"{TEMPEST_APP_NAME} ({TEMPEST_CONTAINER_NAME}) "
@@ -393,7 +408,7 @@ class ValidationPlugin(OpenStackControlPlanePlugin):
                         "juju",
                         "scp",
                         "--model",
-                        f"{CONTROLLER}:{OPENSTACK_MODEL}",
+                        model_name,
                         "--container",
                         TEMPEST_CONTAINER_NAME,
                         f"{unit}:{source}",
