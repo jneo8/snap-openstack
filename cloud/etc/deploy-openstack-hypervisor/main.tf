@@ -46,8 +46,9 @@ resource "juju_application" "openstack-hypervisor" {
 
   config = merge({
     snap-channel = var.snap_channel
+    use-migration-binding = true
   }, var.charm_config)
-
+  endpoint_bindings = var.endpoint_bindings
 }
 
 resource "juju_integration" "hypervisor-amqp" {

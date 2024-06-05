@@ -43,4 +43,5 @@ resource "juju_application" "k8s" {
   }
 
   config = var.k8s_config
+  endpoint_bindings = var.endpoint_bindings
 }

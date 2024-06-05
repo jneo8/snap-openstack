@@ -58,6 +58,13 @@ variable "openstack-state-backend" {
   type        = string
   default     = "local"
 }
+
 variable "openstack-state-config" {
   type = map(any)
+}
+
+variable "endpoint_bindings" {
+  description = "Endpoint bindings for openstack-hypervisor"
+  type        = set(map(string))
+  default     = null
 }

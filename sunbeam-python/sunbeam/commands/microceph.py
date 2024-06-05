@@ -15,7 +15,7 @@
 
 import ast
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import click
 from rich.console import Console
@@ -25,6 +25,7 @@ from sunbeam.clusterd.client import Client
 from sunbeam.commands.terraform import TerraformHelper
 from sunbeam.jobs import questions
 from sunbeam.jobs.common import BaseStep, Result, ResultType
+from sunbeam.jobs.deployment import Deployment, Networks
 from sunbeam.jobs.juju import (
     ActionFailedException,
     ApplicationNotFoundException,
@@ -83,6 +84,7 @@ class DeployMicrocephApplicationStep(DeployMachineApplicationStep):
 
     def __init__(
         self,
+        deployment: Deployment,
         client: Client,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
@@ -91,6 +93,7 @@ class DeployMicrocephApplicationStep(DeployMachineApplicationStep):
         refresh: bool = False,
     ):
         super().__init__(
+            deployment,
             client,
             tfhelper,
             jhelper,
@@ -108,14 +111,54 @@ class DeployMicrocephApplicationStep(DeployMachineApplicationStep):
 
     def extra_tfvars(self) -> dict:
         storage_nodes = self.client.cluster.list_nodes_by_role("storage")
+        tfvars: dict[str, Any] = {
+            "endpoint_bindings": [
+                {
+                    "space": self.deployment.get_space(Networks.MANAGEMENT),
+                },
+                {
+                    # microcluster related space
+                    "endpoint": "admin",
+                    "space": self.deployment.get_space(Networks.MANAGEMENT),
+                },
+                {
+                    "endpoint": "peers",
+                    "space": self.deployment.get_space(Networks.MANAGEMENT),
+                },
+                {
+                    # internal activites for ceph services, heartbeat + replication
+                    "endpoint": "cluster",
+                    "space": self.deployment.get_space(Networks.STORAGE_CLUSTER),
+                },
+                {
+                    # access to ceph services
+                    "endpoint": "public",
+                    "space": self.deployment.get_space(Networks.STORAGE),
+                },
+                {
+                    # acess to ceph services for related applications
+                    "endpoint": "ceph",
+                    "space": self.deployment.get_space(Networks.STORAGE),
+                },
+                # both mds and radosgw are specialized clients to access ceph services
+                # they will not be used by sunbeam,
+                # set them the same as other ceph clients
+                {
+                    "endpoint": "mds",
+                    "space": self.deployment.get_space(Networks.STORAGE),
+                },
+                {
+                    "endpoint": "radosgw",
+                    "space": self.deployment.get_space(Networks.STORAGE),
+                },
+            ],
+        }
         if len(storage_nodes):
-            return {
-                "charm_microceph_config": {
-                    "default-pool-size": ceph_replica_scale(len(storage_nodes))
-                }
+            tfvars["charm_microceph_config"] = {
+                "default-pool-size": ceph_replica_scale(len(storage_nodes))
             }
 
-        return {}
+        return tfvars
 
 
 class AddMicrocephUnitsStep(AddMachineUnitsStep):

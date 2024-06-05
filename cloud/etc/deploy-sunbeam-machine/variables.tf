@@ -41,3 +41,9 @@ variable "machine_model" {
   description = "Name of model to deploy sunbeam-machine into."
   type        = string
 }
+
+variable "endpoint_bindings" {
+  description = "Endpoint bindings for sunbeam-machine"
+  type        = set(map(string))
+  default     = null
+}

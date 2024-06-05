@@ -97,7 +97,7 @@ from sunbeam.jobs.common import (
     run_preflight_checks,
     str_presenter,
 )
-from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment
+from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment, Networks
 from sunbeam.jobs.deployments import DeploymentsConfig, deployment_path
 from sunbeam.jobs.juju import (
     CONTROLLER_MODEL,
@@ -111,7 +111,6 @@ from sunbeam.provider.base import ProviderBase
 from sunbeam.provider.maas.client import (
     MaasClient,
     MaasDeployment,
-    Networks,
     RoleTags,
     get_machine,
     get_network_mapping,
@@ -324,8 +323,6 @@ def bootstrap(
             deployment.controller,
             deployment.juju_account.password,
             manifest.software.juju.bootstrap_args,
-            deployment_preseed=preseed,
-            accept_defaults=accept_defaults,
             proxy_settings=proxy_settings,
         )
     )
@@ -503,6 +500,7 @@ def deploy(
     plan2.append(TerraformInitStep(tfhelper_sunbeam_machine))
     plan2.append(
         DeploySunbeamMachineApplicationStep(
+            deployment,
             client,
             tfhelper_sunbeam_machine,
             jhelper,
@@ -521,15 +519,12 @@ def deploy(
     if k8s_provider == "k8s":
         plan2.append(
             MaasDeployK8SApplicationStep(
+                deployment,
                 client,
                 maas_client,
                 tfhelper_k8s,
                 jhelper,
                 manifest,
-                str(deployment.network_mapping[Networks.PUBLIC.value]),
-                deployment.public_api_label,
-                str(deployment.network_mapping[Networks.INTERNAL.value]),
-                deployment.internal_api_label,
                 deployment.infrastructure_model,
                 preseed,
                 accept_defaults,
@@ -555,15 +550,12 @@ def deploy(
     else:
         plan2.append(
             MaasDeployMicrok8sApplicationStep(
+                deployment,
                 client,
                 maas_client,
                 tfhelper_k8s,
                 jhelper,
                 manifest,
-                str(deployment.network_mapping[Networks.PUBLIC.value]),
-                deployment.public_api_label,
-                str(deployment.network_mapping[Networks.INTERNAL.value]),
-                deployment.internal_api_label,
                 deployment.infrastructure_model,
                 preseed,
                 accept_defaults,
@@ -582,6 +574,7 @@ def deploy(
     plan2.append(TerraformInitStep(tfhelper_microceph))
     plan2.append(
         DeployMicrocephApplicationStep(
+            deployment,
             client,
             tfhelper_microceph,
             jhelper,
@@ -620,6 +613,7 @@ def deploy(
     plan2.append(TerraformInitStep(tfhelper_hypervisor_deploy))
     plan2.append(
         DeployHypervisorApplicationStep(
+            deployment,
             client,
             tfhelper_hypervisor_deploy,
             tfhelper_openstack_deploy,

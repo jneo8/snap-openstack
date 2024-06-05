@@ -25,6 +25,7 @@ from sunbeam.clusterd.service import (
 )
 from sunbeam.commands.terraform import TerraformException, TerraformHelper
 from sunbeam.jobs.common import BaseStep, Result, ResultType, read_config, update_config
+from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import (
     ApplicationNotFoundException,
     JujuHelper,
@@ -41,6 +42,7 @@ class DeployMachineApplicationStep(BaseStep):
 
     def __init__(
         self,
+        deployment: Deployment,
         client: Client,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
@@ -53,6 +55,7 @@ class DeployMachineApplicationStep(BaseStep):
         refresh: bool = False,
     ):
         super().__init__(banner, description)
+        self.deployment = deployment
         self.client = client
         self.tfhelper = tfhelper
         self.jhelper = jhelper

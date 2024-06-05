@@ -45,6 +45,11 @@ def mock_run_sync(mocker):
 
 
 @pytest.fixture()
+def deployment():
+    yield Mock()
+
+
+@pytest.fixture()
 def cclient():
     yield Mock()
 
@@ -71,10 +76,11 @@ def manifest():
 
 
 class TestDeployMachineApplicationStep:
-    def test_is_skip(self, cclient, tfhelper, jhelper, manifest):
+    def test_is_skip(self, deployment, cclient, tfhelper, jhelper, manifest):
         jhelper.get_application.side_effect = ApplicationNotFoundException("not found")
 
         step = DeployMachineApplicationStep(
+            deployment,
             cclient,
             tfhelper,
             jhelper,
@@ -89,9 +95,10 @@ class TestDeployMachineApplicationStep:
         assert result.result_type == ResultType.COMPLETED
 
     def test_is_skip_application_already_deployed(
-        self, cclient, tfhelper, jhelper, manifest
+        self, deployment, cclient, tfhelper, jhelper, manifest
     ):
         step = DeployMachineApplicationStep(
+            deployment,
             cclient,
             tfhelper,
             jhelper,
@@ -105,8 +112,11 @@ class TestDeployMachineApplicationStep:
         jhelper.get_application.assert_called_once()
         assert result.result_type == ResultType.SKIPPED
 
-    def test_is_skip_application_refresh(self, cclient, tfhelper, jhelper, manifest):
+    def test_is_skip_application_refresh(
+        self, deployment, cclient, tfhelper, jhelper, manifest
+    ):
         step = DeployMachineApplicationStep(
+            deployment,
             cclient,
             tfhelper,
             jhelper,
@@ -121,10 +131,13 @@ class TestDeployMachineApplicationStep:
         jhelper.get_application.assert_not_called()
         assert result.result_type == ResultType.COMPLETED
 
-    def test_run_pristine_installation(self, cclient, tfhelper, jhelper, manifest):
+    def test_run_pristine_installation(
+        self, deployment, cclient, tfhelper, jhelper, manifest
+    ):
         jhelper.get_application.side_effect = ApplicationNotFoundException("not found")
 
         step = DeployMachineApplicationStep(
+            deployment,
             cclient,
             tfhelper,
             jhelper,
@@ -139,7 +152,9 @@ class TestDeployMachineApplicationStep:
         tfhelper.update_tfvars_and_apply_tf.assert_called_once()
         assert result.result_type == ResultType.COMPLETED
 
-    def test_run_already_deployed(self, cclient, tfhelper, jhelper, manifest):
+    def test_run_already_deployed(
+        self, deployment, cclient, tfhelper, jhelper, manifest
+    ):
         tfconfig = "tfconfig"
         machines = ["1", "2"]
         model = "model1"
@@ -147,7 +162,7 @@ class TestDeployMachineApplicationStep:
         jhelper.get_application.return_value = application
 
         step = DeployMachineApplicationStep(
-            cclient, tfhelper, jhelper, manifest, tfconfig, "app1", model
+            deployment, cclient, tfhelper, jhelper, manifest, tfconfig, "app1", model
         )
         result = step.run()
 
@@ -160,12 +175,15 @@ class TestDeployMachineApplicationStep:
         )
         assert result.result_type == ResultType.COMPLETED
 
-    def test_run_tf_apply_failed(self, cclient, tfhelper, jhelper, manifest):
+    def test_run_tf_apply_failed(
+        self, deployment, cclient, tfhelper, jhelper, manifest
+    ):
         tfhelper.update_tfvars_and_apply_tf.side_effect = TerraformException(
             "apply failed..."
         )
 
         step = DeployMachineApplicationStep(
+            deployment,
             cclient,
             tfhelper,
             jhelper,
@@ -180,10 +198,13 @@ class TestDeployMachineApplicationStep:
         assert result.result_type == ResultType.FAILED
         assert result.message == "apply failed..."
 
-    def test_run_waiting_timed_out(self, cclient, tfhelper, jhelper, manifest):
+    def test_run_waiting_timed_out(
+        self, deployment, cclient, tfhelper, jhelper, manifest
+    ):
         jhelper.wait_application_ready.side_effect = TimeoutException("timed out")
 
         step = DeployMachineApplicationStep(
+            deployment,
             cclient,
             tfhelper,
             jhelper,

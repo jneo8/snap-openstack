@@ -133,6 +133,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
             ),
             TerraformInitStep(self.deployment.get_tfhelper("sunbeam-machine-plan")),
             DeploySunbeamMachineApplicationStep(
+                self.deployment,
                 self.client,
                 self.deployment.get_tfhelper("sunbeam-machine-plan"),
                 self.jhelper,
@@ -147,6 +148,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
                 [
                     TerraformInitStep(self.deployment.get_tfhelper("k8s-plan")),
                     DeployK8SApplicationStep(
+                        self.deployment,
                         self.client,
                         self.deployment.get_tfhelper("k8s-plan"),
                         self.jhelper,
@@ -161,6 +163,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
                 [
                     TerraformInitStep(self.deployment.get_tfhelper("microk8s-plan")),
                     DeployMicrok8sApplicationStep(
+                        self.deployment,
                         self.client,
                         self.deployment.get_tfhelper("microk8s-plan"),
                         self.jhelper,
@@ -175,6 +178,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
             [
                 TerraformInitStep(self.deployment.get_tfhelper("microceph-plan")),
                 DeployMicrocephApplicationStep(
+                    self.deployment,
                     self.client,
                     self.deployment.get_tfhelper("microceph-plan"),
                     self.jhelper,

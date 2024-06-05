@@ -17,6 +17,7 @@ import logging
 
 from sunbeam.clusterd.client import Client
 from sunbeam.commands.terraform import TerraformHelper
+from sunbeam.jobs.deployment import Deployment, Networks
 from sunbeam.jobs.juju import JujuHelper
 from sunbeam.jobs.manifest import Manifest
 from sunbeam.jobs.steps import (
@@ -39,6 +40,7 @@ class DeploySunbeamMachineApplicationStep(DeployMachineApplicationStep):
 
     def __init__(
         self,
+        deployment: Deployment,
         client: Client,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
@@ -48,6 +50,7 @@ class DeploySunbeamMachineApplicationStep(DeployMachineApplicationStep):
         proxy_settings: dict = {},
     ):
         super().__init__(
+            deployment,
             client,
             tfhelper,
             jhelper,
@@ -66,11 +69,14 @@ class DeploySunbeamMachineApplicationStep(DeployMachineApplicationStep):
 
     def extra_tfvars(self) -> dict:
         return {
+            "endpoint_bindings": [
+                {"space": self.deployment.get_space(Networks.MANAGEMENT)},
+            ],
             "charm_config": {
                 "http_proxy": self.proxy_settings.get("HTTP_PROXY", ""),
                 "https_proxy": self.proxy_settings.get("HTTPS_PROXY", ""),
                 "no_proxy": self.proxy_settings.get("NO_PROXY", ""),
-            }
+            },
         }
 
 

@@ -20,11 +20,11 @@ import pytest
 from maas.client.bones import CallError
 
 import sunbeam.provider.maas.steps as maas_steps
+from sunbeam.jobs.deployment import Networks
 from sunbeam.jobs.deployments import DeploymentsConfig
 from sunbeam.jobs.juju import ControllerNotFoundException
 from sunbeam.provider.maas.deployment import (
     MaasDeployment,
-    Networks,
     NicTags,
     RoleTags,
     StorageTags,
@@ -1100,67 +1100,75 @@ class TestMaasConfigureMicrocephOSDStep:
         assert result.message == "Unit not found"
 
 
+@pytest.fixture()
+def deployment_k8s():
+    dep = Mock()
+    dep.public_api_label = "public_api"
+    dep.internal_api_label = "internal_api"
+
+    def get_space(network):
+        if network == Networks.PUBLIC:
+            return "public_space"
+        elif network == Networks.INTERNAL:
+            return "internal_space"
+        return "data"
+
+    dep.get_space.side_effect = get_space
+    yield dep
+
+
 class TestMaasDeployK8SApplicationStep:
-    def test_extra_tfvars_with_ranges(self):
+    def test_extra_tfvars_with_ranges(self, deployment_k8s):
         step = MaasDeployK8SApplicationStep(
+            deployment_k8s,
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
-            "public_space",
-            "public_api",
-            "internal_space",
-            "internal_api",
             "test-model",
         )
         step.ranges = "10.0.0.0/28"
-        expected_tfvars = {}
+        expected_tfvars = {"endpoint_bindings": [{"space": "data"}]}
         assert step.extra_tfvars() == expected_tfvars
 
-    def test_is_skip_with_public_ranges_error(self, mocker):
+    def test_is_skip_with_public_ranges_error(self, mocker, deployment_k8s):
         mocker.patch(
             "sunbeam.provider.maas.client.get_ip_ranges_from_space",
             side_effect=ValueError("Failed to get ip ranges"),
         )
         step = MaasDeployK8SApplicationStep(
+            deployment_k8s,
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
-            "public_space",
-            "public_api",
-            "internal_space",
-            "internal_api",
             "test-model",
         )
         result = step.is_skip()
         assert result.result_type == ResultType.FAILED
         assert result.message == "Failed to get ip ranges"
 
-    def test_is_skip_with_no_public_ranges(self, mocker):
+    def test_is_skip_with_no_public_ranges(self, mocker, deployment_k8s):
         mocker.patch(
             "sunbeam.provider.maas.client.get_ip_ranges_from_space",
             return_value={},
         )
         step = MaasDeployK8SApplicationStep(
+            deployment_k8s,
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
-            "public_space",
-            "public_api",
-            "internal_space",
-            "internal_api",
             "test-model",
         )
         result = step.is_skip()
         assert result.result_type == ResultType.FAILED
         assert result.message == "No public ip range found"
 
-    def test_is_skip_with_internal_ranges_error(self, mocker):
+    def test_is_skip_with_internal_ranges_error(self, mocker, deployment_k8s):
         mocker.patch(
             "sunbeam.provider.maas.client.get_ip_ranges_from_space",
             side_effect=[
@@ -1177,22 +1185,19 @@ class TestMaasDeployK8SApplicationStep:
             ],
         )
         step = MaasDeployK8SApplicationStep(
+            deployment_k8s,
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
-            "public_space",
-            "public_api",
-            "internal_space",
-            "internal_api",
             "test-model",
         )
         result = step.is_skip()
         assert result.result_type == ResultType.FAILED
         assert result.message == "Failed to get ip ranges"
 
-    def test_is_skip_with_no_internal_ranges(self, mocker):
+    def test_is_skip_with_no_internal_ranges(self, mocker, deployment_k8s):
         mocker.patch(
             "sunbeam.provider.maas.client.get_ip_ranges_from_space",
             side_effect=[
@@ -1209,15 +1214,12 @@ class TestMaasDeployK8SApplicationStep:
             ],
         )
         step = MaasDeployK8SApplicationStep(
+            deployment_k8s,
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
-            "public_space",
-            "public_api",
-            "internal_space",
-            "internal_api",
             "test-model",
         )
         result = step.is_skip()

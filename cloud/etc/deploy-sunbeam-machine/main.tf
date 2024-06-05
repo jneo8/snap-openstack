@@ -40,5 +40,6 @@ resource "juju_application" "sunbeam-machine" {
   }
 
   config = var.charm_config
+  endpoint_bindings = var.endpoint_bindings
 
 }

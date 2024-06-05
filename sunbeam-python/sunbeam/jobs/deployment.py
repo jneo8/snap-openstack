@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import copy
+import enum
 import logging
 import pathlib
 import shutil
@@ -61,6 +62,20 @@ class MissingTerraformInfoException(Exception):
     """An Exception raised when terraform information is missing in manifest"""
 
     pass
+
+
+class Networks(enum.Enum):
+    PUBLIC = "public"
+    STORAGE = "storage"
+    STORAGE_CLUSTER = "storage-cluster"
+    INTERNAL = "internal"
+    DATA = "data"
+    MANAGEMENT = "management"
+
+    @classmethod
+    def values(cls) -> list[str]:
+        """Return list of tag values."""
+        return [tag.value for tag in cls]
 
 
 class Deployment(pydantic.BaseModel):
@@ -263,3 +278,7 @@ class Deployment(pydantic.BaseModel):
             return tfhelper
 
         raise ValueError(f"{tfplan} not found in tfhelpers")
+
+    def get_space(self, network: Networks) -> str:
+        """Get space associated to network."""
+        return NotImplemented

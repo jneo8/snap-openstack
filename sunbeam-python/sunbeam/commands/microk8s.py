@@ -27,6 +27,7 @@ from sunbeam.commands.juju import JujuStepHelper
 from sunbeam.commands.terraform import TerraformHelper
 from sunbeam.jobs import questions
 from sunbeam.jobs.common import BaseStep, Result, ResultType, read_config, update_config
+from sunbeam.jobs.deployment import Deployment, Networks
 from sunbeam.jobs.juju import (
     ActionFailedException,
     ApplicationNotFoundException,
@@ -91,6 +92,7 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
 
     def __init__(
         self,
+        deployment: Deployment,
         client: Client,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
@@ -101,6 +103,7 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
         refresh: bool = False,
     ):
         super().__init__(
+            deployment,
             client,
             tfhelper,
             jhelper,
@@ -160,6 +163,13 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
             return False
 
         return True
+
+    def extra_tfvars(self) -> dict:
+        return {
+            "endpoint_bindings": [
+                {"space": self.deployment.get_space(Networks.MANAGEMENT)},
+            ]
+        }
 
 
 class AddMicrok8sUnitsStep(AddMachineUnitsStep):

@@ -37,14 +37,14 @@ from sunbeam.commands.configure import (
     user_questions,
 )
 from sunbeam.commands.k8s import K8S_ADDONS_CONFIG_KEY, k8s_addons_questions
-from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.microceph import CONFIG_DISKS_KEY, microceph_questions
 from sunbeam.commands.microk8s import (
     MICROK8S_ADDONS_CONFIG_KEY,
     microk8s_addons_questions,
 )
+from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.proxy import proxy_questions
-from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment
+from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment, Networks
 from sunbeam.jobs.juju import JujuAccount, JujuAccountNotFound, JujuController
 from sunbeam.jobs.plugin import PluginManager
 from sunbeam.jobs.questions import QuestionBank, load_answers, show_questions
@@ -256,3 +256,10 @@ class LocalDeployment(Deployment):
         proxy_configs = ["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"]
         proxy = {p: v.strip("\"'") for p in proxy_configs if (v := current_env.get(p))}
         return proxy
+
+    def get_space(self, network: Networks) -> str:
+        """Get space associated to network.
+
+        Local deployment only supports management space as of now.
+        """
+        return "management"
