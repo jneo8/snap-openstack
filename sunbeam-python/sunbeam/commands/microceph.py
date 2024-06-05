@@ -302,6 +302,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
 
     def run(self, status: Optional[Status] = None) -> Result:
         """Configure local disks on microceph."""
+        failed = False
         try:
             unit = run_sync(
                 self.jhelper.get_unit_from_machine(
@@ -320,9 +321,29 @@ class ConfigureMicrocephOSDStep(BaseStep):
                 )
             )
             LOG.debug(f"Result after running action add-osd: {action_result}")
-        except (UnitNotFoundException, ActionFailedException) as e:
+        except UnitNotFoundException as e:
+            message = f"Microceph Adding disks {self.disks} failed: {str(e)}"
+            failed = True
+        except ActionFailedException as e:
             message = f"Microceph Adding disks {self.disks} failed: {str(e)}"
             LOG.debug(message)
+            try:
+                error = ast.literal_eval(str(e))
+                results = ast.literal_eval(error.get("result"))
+                for result in results:
+                    if result.get("status") == "failure":
+                        # disk already added to microceph, ignore the error
+                        if "entry already exists" in result.get("message"):
+                            disk = result.get("spec")
+                            LOG.debug(f"Disk {disk} already added")
+                            continue
+                        else:
+                            failed = True
+            except Exception as ex:
+                LOG.debug(f"Exception in eval action output: {str(ex)}")
+                return Result(ResultType.FAILED, message)
+
+        if failed:
             return Result(ResultType.FAILED, message)
 
         return Result(ResultType.COMPLETED)

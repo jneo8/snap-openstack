@@ -77,6 +77,21 @@ class TestConfigureMicrocephOSDStep:
         assert result.result_type == ResultType.FAILED
         assert result.message == expected_message
 
+    def test_run_with_already_added_disks(self, cclient, jhelper):
+        error_msg = (
+            "[{'spec': '/dev/sdb', 'status': 'failure', 'message': 'Error: failed"
+            'to record disk: This "disks" entry already exists\\n\'}]'
+        )
+        error_result = {"result": error_msg, "return-code": 0}
+        jhelper.run_action.side_effect = ActionFailedException(error_result)
+
+        step = ConfigureMicrocephOSDStep(cclient, "test-0", jhelper, "test-model")
+        step.disks = "/dev/sdb"
+        result = step.run()
+
+        jhelper.run_action.assert_called_once()
+        assert result.result_type == ResultType.COMPLETED
+
 
 class TestSetCephMgrPoolSizeStep:
     def test_is_skip(self, cclient, jhelper):
