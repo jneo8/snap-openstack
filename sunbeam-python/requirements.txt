@@ -46,3 +46,6 @@ pydantic
 
 # maas
 python-libmaas
+
+# Faillible management
+tenacity

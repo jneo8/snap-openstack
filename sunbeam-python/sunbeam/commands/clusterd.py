@@ -18,6 +18,8 @@ import logging
 import re
 from typing import List, Optional, Union
 
+from rich.console import Console
+
 import sunbeam.versions as versions
 from sunbeam import utils
 from sunbeam.clusterd.client import Client
@@ -35,12 +37,7 @@ from sunbeam.clusterd.service import (
 )
 from sunbeam.commands.juju import BOOTSTRAP_CONFIG_KEY, JujuStepHelper
 from sunbeam.jobs import questions
-from sunbeam.jobs.common import (
-    BaseStep,
-    Result,
-    ResultType,
-    Status,
-)
+from sunbeam.jobs.common import BaseStep, Result, ResultType, Status
 from sunbeam.jobs.juju import (
     ApplicationNotFoundException,
     JujuController,
@@ -59,18 +56,29 @@ SUNBEAM_CLUSTERD_APP_TIMEOUT = (
 CLUSTERD_PORT = 7000
 
 
+def bootstrap_questions():
+    return {
+        "management_cidr": questions.PromptQuestion(
+            "Management networks shared by hosts (CIDRs, separated by comma)",
+            default_value=utils.get_local_cidr_by_default_route(),
+        ),
+    }
+
+
 class ClusterInitStep(BaseStep):
     """Bootstrap clustering on sunbeam clusterd."""
 
-    def __init__(self, client: Client, role: List[str], machineid: int):
+    def __init__(
+        self, client: Client, role: list[str], machineid: int, management_cidr: str
+    ):
         super().__init__("Bootstrap Cluster", "Bootstrapping Sunbeam cluster")
 
         self.port = CLUSTERD_PORT
         self.role = role
         self.machineid = machineid
         self.client = client
+        self.management_cidr = management_cidr
         self.fqdn = utils.get_fqdn()
-        self.ip = utils.get_local_ip_by_default_route()
 
     def is_skip(self, status: Optional[Status] = None) -> Result:
         """Determines if the step should be skipped or not.
@@ -95,18 +103,127 @@ class ClusterInitStep(BaseStep):
     def run(self, status: Optional[Status] = None) -> Result:
         """Bootstrap sunbeam cluster"""
         try:
+            ip = utils.get_local_ip_by_cidr(self.management_cidr)
+        except ValueError as e:
+            LOG.debug("Failed to determine host IP address", exc_info=True)
+            return Result(ResultType.FAILED, str(e))
+        address = f"{ip}:{self.port}"
+        try:
             self.client.cluster.bootstrap(
                 name=self.fqdn,
-                address=f"{self.ip}:{self.port}",
+                address=address,
                 role=self.role,
                 machineid=self.machineid,
             )
+            LOG.debug("Bootstrapped clusterd on %s", address)
             return Result(ResultType.COMPLETED)
         except ClusterAlreadyBootstrappedException:
             LOG.debug("Cluster already bootstrapped")
             return Result(ResultType.COMPLETED)
         except Exception as e:
             return Result(ResultType.FAILED, str(e))
+
+
+class AskManagementCidrStep(BaseStep):
+    """Determine the management CIDR."""
+
+    _CONFIG = BOOTSTRAP_CONFIG_KEY
+
+    def __init__(
+        self,
+        client: Client,
+        deployment_preseed: dict | None = None,
+        accept_defaults: bool = False,
+    ):
+        super().__init__("Management CIDR", "Determining management CIDR")
+        self.client = client
+        self.preseed = deployment_preseed or {}
+        self.accept_defaults = accept_defaults
+        self.variables = {}
+
+    def prompt(self, console: Console | None = None) -> None:
+        """Determines if the step can take input from the user.
+
+        Prompts are used by Steps to gather the necessary input prior to
+        running the step. Steps should not expect that the prompt will be
+        available and should provide a reasonable default where possible.
+        """
+        try:
+            self.variables = questions.load_answers(self.client, self._CONFIG)
+            if self.variables.get("bootstrap", {}).get("management_cidr"):
+                # This step will always be called before the clusterd bootstrap
+                # And it *might* be called afterwards
+                # We don't allow updating it
+                return
+        except ClusterServiceUnavailableException:
+            self.variables = {}
+        self.variables.setdefault("bootstrap", {})
+
+        bootstrap_bank = questions.QuestionBank(
+            questions=bootstrap_questions(),
+            console=console,  # type: ignore
+            preseed=self.preseed.get("bootstrap"),
+            previous_answers=self.variables.get("bootstrap", {}),
+            accept_defaults=self.accept_defaults,
+        )
+
+        self.variables["bootstrap"][
+            "management_cidr"
+        ] = bootstrap_bank.management_cidr.ask()
+
+    def has_prompts(self) -> bool:
+        """Returns true if the step has prompts that it can ask the user.
+
+        :return: True if the step can ask the user for prompts,
+                 False otherwise
+        """
+        return True
+
+    def run(self, status: Optional[Status] = None) -> Result:
+        """Determine the management CIDR."""
+        return Result(
+            ResultType.COMPLETED, self.variables["bootstrap"]["management_cidr"]
+        )
+
+
+class SaveManagementCidrStep(BaseStep):
+    """Save the management CIDR in clusterd."""
+
+    _CONFIG = BOOTSTRAP_CONFIG_KEY
+
+    def __init__(self, client: Client, management_cidr: str):
+        super().__init__("Save Management CIDR", "Saving management CIDR in clusterd")
+
+        self.client = client
+        self.management_cidr = management_cidr
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                 ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        try:
+            self.variables = questions.load_answers(self.client, self._CONFIG)
+        except ClusterServiceUnavailableException as e:
+            LOG.debug("Failed to load management cidr from clusterd", exc_info=True)
+            return Result(ResultType.FAILED, str(e))
+        current_cidr = self.variables.get("bootstrap", {}).get("management_cidr")
+        if current_cidr == self.management_cidr:
+            return Result(ResultType.SKIPPED)
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None = None) -> Result:
+        """Save the management CIDR in clusterd."""
+        bootstrap = self.variables.get("bootstrap", {})
+        bootstrap["management_cidr"] = self.management_cidr
+        self.variables["bootstrap"] = bootstrap
+        try:
+            questions.write_answers(self.client, self._CONFIG, self.variables)
+        except ClusterServiceUnavailableException as e:
+            LOG.debug("Failed to save management cidr in clusterd", exc_info=True)
+            return Result(ResultType.FAILED, str(e))
+        return Result(ResultType.COMPLETED)
 
 
 class ClusterAddNodeStep(BaseStep):

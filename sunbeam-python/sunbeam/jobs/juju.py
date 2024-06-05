@@ -34,6 +34,7 @@ from juju.errors import (
     JujuAgentError,
     JujuAPIError,
     JujuAppError,
+    JujuError,
     JujuMachineError,
     JujuUnitError,
 )
@@ -1046,3 +1047,63 @@ class JujuHelper:
             }
         }
         return credentials
+
+    async def get_spaces(self, model: str) -> list[dict]:
+        """Get spaces in model."""
+        model_impl = await self.get_model(model)
+        spaces = await model_impl.get_spaces()
+        return [json.loads(space.to_json()) for space in spaces]
+
+    async def add_space(self, model: str, space: str, subnets: list[str]):
+        """Add a space to the model."""
+        model_impl = await self.get_model(model)
+        try:
+            await model_impl.add_space(space, subnets)
+        except JujuAPIError as e:
+            raise JujuException(f"Failed to add space {space!r}: {str(e)}") from e
+
+    async def get_application_bindings(self, model: str, application: str) -> dict:
+        """Get endpoint bindings for an application."""
+        app = await self.get_application(application, model)
+        facade = app._facade()
+        try:
+            app_config = await facade.Get(application=app.name)
+        except JujuError as e:
+            raise JujuException(
+                f"Failed to get bindings for application {app.name!r}: {str(e)}"
+            ) from e
+        return app_config.endpoint_bindings
+
+    async def merge_bindings(
+        self, model: str, application: str, bindings: dict[str, str]
+    ):
+        """Update endpoint bindings for an application."""
+        app = await self.get_application(application, model)
+        app_bindings = await self.get_application_bindings(model, application)
+
+        # Check bindings provided are valid
+        charm_endpoints = set(app_bindings.keys())
+        unknown_endpoints = set(bindings.keys()) - charm_endpoints
+        if unknown_endpoints:
+            raise JujuException(
+                f"Bindings contain unknown endpoints: {', '.join(unknown_endpoints)}"
+            )
+        # Check spaces are valid
+        spaces = await self.get_spaces(model)
+        unknown_spaces = set(bindings.values()) - set(space["name"] for space in spaces)
+        if unknown_spaces:
+            raise JujuException(
+                f"Bindings contain unknown spaces: {', '.join(unknown_spaces)}"
+            )
+
+        request = [
+            {
+                "application-tag": app.tag,
+                "bindings": bindings,
+            }
+        ]
+        facade = app._facade()
+        try:
+            await facade.MergeBindings(request)
+        except JujuError as e:
+            raise JujuException(f"Failed to merge bindings: {str(e)}") from e

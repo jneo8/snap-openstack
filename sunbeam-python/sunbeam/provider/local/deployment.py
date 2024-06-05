@@ -25,14 +25,17 @@ from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
 )
-from sunbeam.commands.clusterd import CLUSTERD_PORT
+from sunbeam.commands.clusterd import (
+    BOOTSTRAP_CONFIG_KEY,
+    CLUSTERD_PORT,
+    bootstrap_questions,
+)
 from sunbeam.commands.configure import (
     CLOUD_CONFIG_SECTION,
     ext_net_questions,
     ext_net_questions_local_only,
     user_questions,
 )
-from sunbeam.commands.juju import BOOTSTRAP_CONFIG_KEY, bootstrap_questions
 from sunbeam.commands.k8s import K8S_ADDONS_CONFIG_KEY, k8s_addons_questions
 from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.microceph import CONFIG_DISKS_KEY, microceph_questions

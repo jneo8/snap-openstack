@@ -28,6 +28,7 @@ from sunbeam.commands import refresh as refresh_cmds
 from sunbeam.commands import resize as resize_cmds
 from sunbeam.commands.bootstrap_state import SetBootstrapped
 from sunbeam.commands.clusterd import (
+    AskManagementCidrStep,
     ClusterAddJujuUserStep,
     ClusterAddNodeStep,
     ClusterInitStep,
@@ -36,6 +37,7 @@ from sunbeam.commands.clusterd import (
     ClusterRemoveNodeStep,
     ClusterUpdateJujuControllerStep,
     ClusterUpdateNodeStep,
+    SaveManagementCidrStep,
 )
 from sunbeam.commands.configure import (
     DemoSetup,
@@ -53,7 +55,9 @@ from sunbeam.commands.hypervisor import (
 from sunbeam.commands.juju import (
     AddCloudJujuStep,
     AddJujuMachineStep,
+    AddJujuSpaceStep,
     BackupBootstrapUserStep,
+    BindJujuApplicationStep,
     BootstrapJujuStep,
     CreateJujuUserStep,
     JujuGrantModelAccessStep,
@@ -61,6 +65,7 @@ from sunbeam.commands.juju import (
     RegisterJujuUserStep,
     RemoveJujuMachineStep,
     SaveJujuUserLocallyStep,
+    UpdateJujuModelConfigStep,
 )
 from sunbeam.commands.k8s import (
     AddK8SCloudStep,
@@ -273,10 +278,16 @@ def bootstrap(
 
     run_preflight_checks(preflight_checks, console)
 
+    cidr_plan = []
+    cidr_plan.append(AskManagementCidrStep(client, preseed, accept_defaults))
+    results = run_plan(cidr_plan, console)
+    management_cidr = get_step_message(results, AskManagementCidrStep)
+
     plan = []
     plan.append(JujuLoginStep(deployment.juju_account))
     # bootstrapped node is always machine 0 in controller model
-    plan.append(ClusterInitStep(client, roles_to_str_list(roles), 0))
+    plan.append(ClusterInitStep(client, roles_to_str_list(roles), 0, management_cidr))
+    plan.append(SaveManagementCidrStep(client, management_cidr))
     plan.append(AddManifestStep(client, manifest_path))
     plan.append(
         PromptForProxyStep(
@@ -297,8 +308,6 @@ def bootstrap(
             cloud_type,
             CONTROLLER,
             bootstrap_args=juju_bootstrap_args,
-            accept_defaults=accept_defaults,
-            deployment_preseed=preseed,
             proxy_settings=proxy_settings,
         )
     )
@@ -323,7 +332,35 @@ def bootstrap(
     deployment.reload_juju_credentials()
     jhelper = JujuHelper(deployment.get_connected_controller())
     plan4 = []
-
+    plan4.append(
+        AddJujuSpaceStep(
+            jhelper,
+            deployment.infrastructure_model,
+            "management",
+            [management_cidr],
+        )
+    )
+    plan4.append(
+        UpdateJujuModelConfigStep(
+            jhelper,
+            deployment.infrastructure_model,
+            {
+                "default-space": "management",
+            },
+        )
+    )
+    plan4.append(
+        # TODO(gboutry): fix when LP#2067617 is released
+        # This should be replaced by a juju controller set config
+        # when the previous bug is fixed
+        # Binding controller's endpoints to the management space
+        BindJujuApplicationStep(
+            jhelper,
+            deployment.infrastructure_model,
+            "controller",
+            "management",
+        )
+    )
     plan4.append(PromptRegionStep(client, preseed, accept_defaults))
     # Deploy sunbeam machine charm
     sunbeam_machine_tfhelper = deployment.get_tfhelper("sunbeam-machine-plan")

@@ -417,3 +417,103 @@ class TestScaleJujuStep:
 
         assert mock_run.call_count == 2
         assert result.result_type == ResultType.COMPLETED
+
+
+@pytest.fixture
+def add_juju_space_step() -> juju.AddJujuSpaceStep:
+    jhelper = AsyncMock()
+    model = "test-model"
+    space = "test-space"
+    subnets = ["10.0.0.0/24", "192.168.0.0/24"]
+    return juju.AddJujuSpaceStep(jhelper, model, space, subnets)
+
+
+class TestAddJujuSpaceStep:
+    def test_is_skip_when_spaces_are_populated(
+        self, add_juju_space_step: juju.AddJujuSpaceStep
+    ):
+        add_juju_space_step._wait_for_spaces = Mock(
+            return_value=({"test-space": ["10.0.0.0/24", "192.168.0.0/24"]})
+        )
+        result = add_juju_space_step.is_skip()
+        assert result.result_type == ResultType.SKIPPED
+
+    def test_is_skip_when_request_subnet_does_not_exist(
+        self, add_juju_space_step: juju.AddJujuSpaceStep
+    ):
+        add_juju_space_step._wait_for_spaces = Mock(
+            return_value=({"test-space": ["192.168.0.0/24"]})
+        )
+        result = add_juju_space_step.is_skip()
+        assert result.result_type == ResultType.FAILED
+
+    def test_is_skip_when_spaces_are_not_populated(
+        self, add_juju_space_step: juju.AddJujuSpaceStep
+    ):
+        add_juju_space_step._wait_for_spaces = Mock(return_value=({}))
+        result = add_juju_space_step.is_skip()
+        assert result.result_type == ResultType.FAILED
+
+    def test_is_skip_when_subnets_are_already_in_use(
+        self, add_juju_space_step: juju.AddJujuSpaceStep
+    ):
+        add_juju_space_step._wait_for_spaces = Mock(
+            return_value=({"space1": ["10.0.0.0/24", "192.168.0.0/24"]})
+        )
+        result = add_juju_space_step.is_skip()
+        assert result.result_type == ResultType.FAILED
+
+    def test_run(self, add_juju_space_step: juju.AddJujuSpaceStep):
+        result = add_juju_space_step.run()
+        assert result.result_type == ResultType.COMPLETED
+        add_juju_space_step.jhelper.add_space.assert_called_once_with(
+            "test-model", "test-space", ["10.0.0.0/24", "192.168.0.0/24"]
+        )
+
+
+@pytest.fixture
+def bind_juju_application_step() -> juju.BindJujuApplicationStep:
+    jhelper = AsyncMock()
+    model = "test-model"
+    app = "test-app"
+    space = "test-space"
+    return juju.BindJujuApplicationStep(jhelper, model, app, space)
+
+
+class TestBindJujuApplicationStep:
+    def test_is_skip_when_bindings_are_different(
+        self, bind_juju_application_step: juju.BindJujuApplicationStep
+    ):
+        step = bind_juju_application_step
+        current_bindings = {"endpoint1": "test-space", "endpoint2": "other-space"}
+        step.jhelper.get_application_bindings.return_value = current_bindings
+        result = step.is_skip()
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_is_skip_when_no_change_to_make(
+        self, bind_juju_application_step: juju.BindJujuApplicationStep
+    ):
+        step = bind_juju_application_step
+        current_bindings = {"endpoint1": "test-space", "endpoint2": "test-space"}
+        step.jhelper.get_application_bindings.return_value = current_bindings
+        result = step.is_skip()
+        step.jhelper.get_application_bindings.assert_called_once_with(
+            "test-model", "test-app"
+        )
+        assert result.result_type == ResultType.SKIPPED
+
+    def test_run(self, bind_juju_application_step: juju.BindJujuApplicationStep):
+        step = bind_juju_application_step
+        step._bindings = {"endpoint1": "test-space", "endpoint2": "test-space"}
+        step.run()
+
+    def test_run_when_merge_bindings_fails(
+        self, bind_juju_application_step: juju.BindJujuApplicationStep
+    ):
+        step = bind_juju_application_step
+        step.jhelper.merge_bindings.side_effect = juju.JujuException(
+            "Failed to merge bindings"
+        )
+        step._bindings = {"endpoint1": "test-space", "endpoint2": "test-space"}
+        result = step.run()
+        assert result.result_type == ResultType.FAILED

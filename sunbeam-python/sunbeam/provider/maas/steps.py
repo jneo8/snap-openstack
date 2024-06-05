@@ -903,9 +903,7 @@ class MaasBootstrapJujuStep(BootstrapJujuStep):
         controller: str,
         password: str,
         bootstrap_args: list[str] | None = None,
-        deployment_preseed: dict | None = None,
         proxy_settings: dict | None = None,
-        accept_defaults: bool = False,
     ):
         bootstrap_args = bootstrap_args or []
         bootstrap_args.extend(
@@ -941,9 +939,7 @@ class MaasBootstrapJujuStep(BootstrapJujuStep):
             cloud_type,
             controller,
             bootstrap_args=bootstrap_args,
-            deployment_preseed=deployment_preseed,
             proxy_settings=proxy_settings,
-            accept_defaults=accept_defaults,
         )
         self.maas_client = maas_client
 

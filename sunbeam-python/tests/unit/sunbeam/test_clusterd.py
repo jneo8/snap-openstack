@@ -30,6 +30,7 @@ from sunbeam.commands.clusterd import (
     ClusterUpdateJujuControllerStep,
     ClusterUpdateNodeStep,
     DeploySunbeamClusterdApplicationStep,
+    SaveManagementCidrStep,
 )
 from sunbeam.jobs.common import ResultType
 from sunbeam.jobs.juju import ApplicationNotFoundException
@@ -48,11 +49,14 @@ def model():
 class TestClusterdSteps:
     """Unit tests for sunbeam clusterd steps."""
 
-    def test_init_step(self, cclient):
+    def test_init_step(self, cclient, mocker):
         role = "control"
-        init_step = ClusterInitStep(cclient, [role], 0)
+        init_step = ClusterInitStep(cclient, [role], 0, "10.0.0.0/16")
         init_step.client = MagicMock()
-        result = init_step.run()
+        with mocker.patch(
+            "sunbeam.utils.get_local_ip_by_cidr", return_value="10.0.0.2"
+        ):
+            result = init_step.run()
         assert result.result_type == ResultType.COMPLETED
         init_step.client.cluster.bootstrap.assert_called_once()
 
@@ -641,3 +645,42 @@ class TestDeploySunbeamClusterdApplicationStep:
         step._get_controller_machines = MagicMock(return_value=["1", "2", "3"])
         result = step.run()
         assert result.result_type == ResultType.COMPLETED
+
+
+class TestSaveManagementCidrStep:
+    def test_is_skip_when_management_cidr_already_saved(self):
+        client = Mock()
+        client.cluster.get_config.return_value = """{
+            "bootstrap": {
+                "management_cidr": "10.0.0.0/24"
+            }
+        }"""
+        step = SaveManagementCidrStep(client, "10.0.0.0/24")
+        result = step.is_skip()
+        assert result.result_type == ResultType.SKIPPED
+
+    def test_is_skip_when_management_cidr_not_saved(self):
+        client = Mock()
+        client.cluster.get_config.side_effect = service.ConfigItemNotFoundException
+        step = SaveManagementCidrStep(client, "10.0.0.0/24")
+        step.variables = {"bootstrap": {"management_cidr": "10.0.0.1/24"}}
+        result = step.is_skip()
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_run_successfully_saves_management_cidr(self):
+        client = Mock()
+        client.cluster.update_config.side_effect = lambda x, y: None
+        step = SaveManagementCidrStep(client, "10.0.0.0/24")
+        step.variables = {"bootstrap": {}}
+        result = step.run()
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_run_handles_cluster_service_unavailable_exception(self):
+        client = Mock()
+        client.cluster.update_config.side_effect = (
+            service.ClusterServiceUnavailableException("Cluster service is unavailable")
+        )
+        step = SaveManagementCidrStep(client, "10.0.0.0/24")
+        step.variables = {"bootstrap": {}}
+        result = step.run()
+        assert result.result_type == ResultType.FAILED
