@@ -53,6 +53,7 @@ class TestClusterdSteps:
         role = "control"
         init_step = ClusterInitStep(cclient, [role], 0, "10.0.0.0/16")
         init_step.client = MagicMock()
+        init_step.fqdn = "node1"
         with mocker.patch(
             "sunbeam.utils.get_local_ip_by_cidr", return_value="10.0.0.2"
         ):
@@ -69,7 +70,11 @@ class TestClusterdSteps:
 
     def test_join_node_step(self, cclient):
         join_node_step = ClusterJoinNodeStep(
-            cclient, token="TESTTOKEN", role=["control"]
+            cclient,
+            token="TESTTOKEN",
+            host_address="10.0.0.3",
+            fqdn="node1",
+            role=["control"],
         )
         join_node_step.client = MagicMock()
         result = join_node_step.run()

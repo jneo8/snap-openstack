@@ -258,9 +258,6 @@ def bootstrap(
     cloud_type = snap.config.get("juju.cloud.type")
     cloud_name = snap.config.get("juju.cloud.name")
     k8s_provider = snap.config.get("k8s.provider")
-    cloud_definition = JujuHelper.manual_cloud(
-        cloud_name, utils.get_local_ip_by_default_route()
-    )
     juju_bootstrap_args = manifest.software.juju.bootstrap_args
     data_location = snap.paths.user_data
 
@@ -282,6 +279,10 @@ def bootstrap(
     cidr_plan.append(AskManagementCidrStep(client, preseed, accept_defaults))
     results = run_plan(cidr_plan, console)
     management_cidr = get_step_message(results, AskManagementCidrStep)
+
+    cloud_definition = JujuHelper.manual_cloud(
+        cloud_name, utils.get_local_ip_by_cidr(management_cidr)
+    )
 
     plan = []
     plan.append(JujuLoginStep(deployment.juju_account))
@@ -597,7 +598,6 @@ def join(
 
     # Register juju user with same name as Node fqdn
     name = utils.get_fqdn()
-    ip = utils.get_local_ip_by_default_route()
 
     roles_str = roles_to_str_list(roles)
     pretty_roles = ", ".join(role_.name.lower() for role_ in roles)
@@ -620,6 +620,17 @@ def join(
 
     run_preflight_checks(preflight_checks, console)
 
+    try:
+        management_cidr = utils.get_local_cidr_matching_token(token)
+        ip = utils.get_local_ip_by_cidr(management_cidr)
+    except ValueError:
+        LOG.debug(
+            "Failed to find local address matching join token addresses"
+            ", picking local address from default route",
+            exc_info=True,
+        )
+        ip = utils.get_local_cidr_by_default_route()
+
     controller = CONTROLLER
     deployment: LocalDeployment = ctx.obj
     data_location = Snap().paths.user_data
@@ -627,7 +638,7 @@ def join(
 
     plan1 = [
         JujuLoginStep(deployment.juju_account),
-        ClusterJoinNodeStep(client, token, roles_str),
+        ClusterJoinNodeStep(client, token, ip, name, roles_str),
         SaveJujuUserLocallyStep(name, data_location),
         RegisterJujuUserStep(client, name, controller, data_location),
         AddJujuMachineStep(ip),
@@ -837,7 +848,7 @@ def configure_cmd(
     manifest_path: Path | None = None,
     accept_defaults: bool = False,
 ) -> None:
-    deployment: Deployment = ctx.obj
+    deployment: LocalDeployment = ctx.obj
     client = deployment.get_client()
     preflight_checks = []
     preflight_checks.append(DaemonGroupCheck())
@@ -851,7 +862,7 @@ def configure_cmd(
     LOG.debug(f"Manifest used for deployment - software: {manifest.software}")
     preseed = manifest.deployment
 
-    name = utils.get_fqdn()
+    name = utils.get_fqdn(deployment.get_management_cidr())
     jhelper = JujuHelper(deployment.get_connected_controller())
     try:
         run_sync(jhelper.get_model(OPENSTACK_MODEL))
