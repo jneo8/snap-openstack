@@ -40,12 +40,13 @@ resource "juju_application" "microceph" {
     name     = "microceph"
     channel  = var.charm_microceph_channel
     revision = var.charm_microceph_revision
-    base    = "ubuntu@22.04"
+    base     = "ubuntu@22.04"
   }
 
   config = merge({
     snap-channel = var.microceph_channel
   }, var.charm_microceph_config)
+  endpoint_bindings = var.endpoint_bindings
 }
 
 # juju_offer.microceph_offer will be created

@@ -41,3 +41,9 @@ variable "machine_model" {
   description = "Model to deploy to"
   type        = string
 }
+
+variable "endpoint_bindings" {
+  description = "Endpoint bindings for k8s"
+  type        = set(map(string))
+  default     = null
+}

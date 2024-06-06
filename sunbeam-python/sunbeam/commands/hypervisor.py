@@ -30,6 +30,7 @@ from sunbeam.commands.openstack import OPENSTACK_MODEL
 from sunbeam.commands.openstack_api import guests_on_hypervisor, remove_hypervisor
 from sunbeam.commands.terraform import TerraformException, TerraformHelper
 from sunbeam.jobs.common import BaseStep, Result, ResultType, read_config, update_config
+from sunbeam.jobs.deployment import Deployment, Networks
 from sunbeam.jobs.juju import (
     ApplicationNotFoundException,
     JujuHelper,
@@ -55,6 +56,7 @@ class DeployHypervisorApplicationStep(DeployMachineApplicationStep):
 
     def __init__(
         self,
+        deployment: Deployment,
         client: Client,
         tfhelper: TerraformHelper,
         openstack_tfhelper: TerraformHelper,
@@ -63,6 +65,7 @@ class DeployHypervisorApplicationStep(DeployMachineApplicationStep):
         model: str,
     ):
         super().__init__(
+            deployment,
             client,
             tfhelper,
             jhelper,
@@ -82,6 +85,49 @@ class DeployHypervisorApplicationStep(DeployMachineApplicationStep):
             "openstack_model": self.openstack_model,
             "openstack-state-backend": self.openstack_tfhelper.backend,
             "openstack-state-config": openstack_backend_config,
+            "endpoint_bindings": [
+                {"space": self.deployment.get_space(Networks.MANAGEMENT)},
+                {
+                    "endpoint": "ceph-access",
+                    "space": self.deployment.get_space(Networks.STORAGE),
+                },
+                {
+                    "endpoint": "migration",
+                    "space": self.deployment.get_space(Networks.DATA),
+                },
+                {
+                    "endpoint": "amqp",
+                    "space": self.deployment.get_space(Networks.INTERNAL),
+                },
+                {
+                    "endpoint": "ceilometer-service",
+                    "space": self.deployment.get_space(Networks.INTERNAL),
+                },
+                {
+                    "endpoint": "certificates",
+                    "space": self.deployment.get_space(Networks.INTERNAL),
+                },
+                {
+                    "endpoint": "cos-agent",
+                    "space": self.deployment.get_space(Networks.INTERNAL),
+                },
+                {
+                    "endpoint": "identity-credentials",
+                    "space": self.deployment.get_space(Networks.INTERNAL),
+                },
+                {
+                    "endpoint": "nova-service",
+                    "space": self.deployment.get_space(Networks.INTERNAL),
+                },
+                {
+                    "endpoint": "ovsdb-cms",
+                    "space": self.deployment.get_space(Networks.INTERNAL),
+                },
+                {
+                    "endpoint": "receive-ca-cert",
+                    "space": self.deployment.get_space(Networks.INTERNAL),
+                },
+            ],
         }
 
     def get_application_timeout(self) -> int:

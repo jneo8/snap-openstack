@@ -57,6 +57,7 @@ from sunbeam.jobs.common import (
     Result,
     ResultType,
 )
+from sunbeam.jobs.deployment import Networks
 from sunbeam.jobs.deployments import DeploymentsConfig
 from sunbeam.jobs.juju import (
     ActionFailedException,
@@ -255,7 +256,7 @@ class MachineNetworkCheck(DiagnosticsCheck):
         """Check machine has access to required networks."""
         network_to_space_mapping = maas_client.get_network_mapping(self.deployment)
         spaces = network_to_space_mapping.values()
-        if len(spaces) != len(maas_deployment.Networks.values()) or not all(spaces):
+        if len(spaces) != len(Networks.values()) or not all(spaces):
             return DiagnosticsResult.fail(
                 self.name,
                 "network mapping is incomplete",
@@ -278,7 +279,7 @@ class MachineNetworkCheck(DiagnosticsCheck):
             )
         assigned_spaces = self.machine["spaces"]
         LOG.debug(f"{self.machine['hostname']=!r} assigned spaces: {assigned_spaces!r}")
-        required_networks: set[maas_deployment.Networks] = set()
+        required_networks: set[Networks] = set()
         for role in assigned_roles:
             required_networks.update(
                 maas_deployment.ROLE_NETWORK_MAPPING[maas_deployment.RoleTags(role)]
@@ -735,12 +736,8 @@ class IpRangesCheck(DiagnosticsCheck):
     ) -> DiagnosticsResult:
         """Check Public and Internal ip ranges are set."""
 
-        public_space = self.deployment.network_mapping.get(
-            maas_deployment.Networks.PUBLIC.value
-        )
-        internal_space = self.deployment.network_mapping.get(
-            maas_deployment.Networks.INTERNAL.value
-        )
+        public_space = self.deployment.network_mapping.get(Networks.PUBLIC.value)
+        internal_space = self.deployment.network_mapping.get(Networks.INTERNAL.value)
         if public_space is None or internal_space is None:
             return DiagnosticsResult.fail(
                 self.name,
@@ -772,7 +769,7 @@ class IpRangesCheck(DiagnosticsCheck):
                 "Public IP ranges are not set",
                 self._missing_range_diagnostic.format(
                     space=public_space,
-                    network=maas_deployment.Networks.PUBLIC.value,
+                    network=Networks.PUBLIC.value,
                     label=self.deployment.public_api_label,
                 ),
             )
@@ -783,7 +780,7 @@ class IpRangesCheck(DiagnosticsCheck):
                 "Internal IP ranges are not set",
                 self._missing_range_diagnostic.format(
                     space=internal_space,
-                    network=maas_deployment.Networks.INTERNAL.value,
+                    network=Networks.INTERNAL.value,
                     label=self.deployment.internal_api_label,
                 ),
             )
@@ -883,7 +880,7 @@ class NetworkMappingCompleteCheck(Check):
         """Check network mapping is complete."""
         network_to_space_mapping = self.deployment.network_mapping
         spaces = network_to_space_mapping.values()
-        if len(spaces) != len(maas_deployment.Networks.values()) or not all(spaces):
+        if len(spaces) != len(Networks.values()) or not all(spaces):
             self.message = (
                 "A complete map of networks to spaces is required to proceed."
                 " Complete network mapping to using `sunbeam deployment space map...`."
@@ -1503,22 +1500,22 @@ class MaasConfigureMicrocephOSDStep(BaseStep):
 class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
     """Deploy Microk8s application using Terraform"""
 
+    deployment: maas_deployment.MaasDeployment
+
     def __init__(
         self,
+        deployment: maas_deployment.MaasDeployment,
         client: Client,
         maas_client: maas_client.MaasClient,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
         manifest: Manifest,
-        public_space: str,
-        public_label: str,
-        internal_space: str,
-        internal_label: str,
         model: str,
         deployment_preseed: dict | None = None,
         accept_defaults: bool = False,
     ):
         super().__init__(
+            deployment,
             client,
             tfhelper,
             jhelper,
@@ -1528,16 +1525,18 @@ class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
             accept_defaults,
         )
         self.maas_client = maas_client
-        self.public_space = public_space
-        self.public_label = public_label
-        self.internal_space = internal_space
-        self.internal_label = internal_label
         self.ranges = None
 
     def extra_tfvars(self) -> dict:
         if self.ranges is None:
             raise ValueError("No ip ranges found")
-        return {"addons": {"dns": "", "hostpath-storage": "", "metallb": self.ranges}}
+        tfvars = super().extra_tfvars()
+        tfvars.update(
+            {
+                "addons": {"dns": "", "hostpath-storage": "", "metallb": self.ranges},
+            }
+        )
+        return tfvars
 
     def prompt(self, console: Console | None = None) -> None:
         """Determines if the step can take input from the user.
@@ -1571,24 +1570,26 @@ class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
 
     def is_skip(self, status: Status | None = None):
         """Determines if the step should be skipped or not."""
+        public_space = self.deployment.get_space(Networks.PUBLIC)
+        internal_space = self.deployment.get_space(Networks.INTERNAL)
         try:
             public_ranges = maas_client.get_ip_ranges_from_space(
-                self.maas_client, self.public_space
+                self.maas_client, public_space
             )
             LOG.debug("Public ip ranges: %r", public_ranges)
         except ValueError as e:
             LOG.debug(
-                "Failed to ip ranges for space: %r", self.public_space, exc_info=True
+                "Failed to find ip ranges for space: %r", public_space, exc_info=True
             )
             return Result(ResultType.FAILED, str(e))
         try:
             public_metallb_range = self._to_joined_range(
-                public_ranges, self.public_label
+                public_ranges, self.deployment.public_api_label
             )
         except ValueError:
             LOG.debug(
                 "No iprange with label %r found",
-                self.public_label,
+                self.deployment.public_api_label,
                 exc_info=True,
             )
             return Result(ResultType.FAILED, "No public ip range found")
@@ -1596,24 +1597,24 @@ class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
 
         try:
             internal_ranges = maas_client.get_ip_ranges_from_space(
-                self.maas_client, self.internal_space
+                self.maas_client, internal_space
             )
             LOG.debug("Internal ip ranges: %r", internal_ranges)
         except ValueError as e:
             LOG.debug(
-                "Failed to ip ranges for space: %r", self.internal_space, exc_info=True
+                "Failed to ip ranges for space: %r", internal_space, exc_info=True
             )
             return Result(ResultType.FAILED, str(e))
         try:
             # TODO(gboutry): use this range when cni (or sunbeam) easily supports
             # using different ip pools
             internal_metallb_range = self._to_joined_range(  # noqa
-                internal_ranges, self.internal_label
+                internal_ranges, self.deployment.internal_api_label
             )
         except ValueError:
             LOG.debug(
                 "No iprange with label %r found",
-                self.internal_label,
+                self.deployment.internal_api_label,
                 exc_info=True,
             )
             return Result(ResultType.FAILED, "No internal ip range found")
@@ -1624,22 +1625,22 @@ class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
 class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
     """Deploy K8S application using Terraform"""
 
+    deployment: maas_deployment.MaasDeployment
+
     def __init__(
         self,
+        deployment: maas_deployment.MaasDeployment,
         client: Client,
         maas_client: maas_client.MaasClient,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
         manifest: Manifest,
-        public_space: str,
-        public_label: str,
-        internal_space: str,
-        internal_label: str,
         model: str,
         deployment_preseed: dict | None = None,
         accept_defaults: bool = False,
     ):
         super().__init__(
+            deployment,
             client,
             tfhelper,
             jhelper,
@@ -1649,14 +1650,7 @@ class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
             accept_defaults,
         )
         self.maas_client = maas_client
-        self.public_space = public_space
-        self.public_label = public_label
-        self.internal_space = internal_space
-        self.internal_label = internal_label
         self.ranges = None
-
-    def extra_tfvars(self) -> dict:
-        return {}
 
     def prompt(self, console: Console | None = None) -> None:
         """Determines if the step can take input from the user.
@@ -1690,24 +1684,26 @@ class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
 
     def is_skip(self, status: Status | None = None):
         """Determines if the step should be skipped or not."""
+        public_space = self.deployment.get_space(Networks.PUBLIC)
+        internal_space = self.deployment.get_space(Networks.INTERNAL)
         try:
             public_ranges = maas_client.get_ip_ranges_from_space(
-                self.maas_client, self.public_space
+                self.maas_client, public_space
             )
             LOG.debug("Public ip ranges: %r", public_ranges)
         except ValueError as e:
             LOG.debug(
-                "Failed to ip ranges for space: %r", self.public_space, exc_info=True
+                "Failed to find ip ranges for space: %r", public_space, exc_info=True
             )
             return Result(ResultType.FAILED, str(e))
         try:
             public_metallb_range = self._to_joined_range(
-                public_ranges, self.public_label
+                public_ranges, self.deployment.public_api_label
             )
         except ValueError:
             LOG.debug(
                 "No iprange with label %r found",
-                self.public_label,
+                self.deployment.public_api_label,
                 exc_info=True,
             )
             return Result(ResultType.FAILED, "No public ip range found")
@@ -1715,24 +1711,24 @@ class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
 
         try:
             internal_ranges = maas_client.get_ip_ranges_from_space(
-                self.maas_client, self.internal_space
+                self.maas_client, internal_space
             )
             LOG.debug("Internal ip ranges: %r", internal_ranges)
         except ValueError as e:
             LOG.debug(
-                "Failed to ip ranges for space: %r", self.internal_space, exc_info=True
+                "Failed to ip ranges for space: %r", internal_space, exc_info=True
             )
             return Result(ResultType.FAILED, str(e))
         try:
             # TODO(gboutry): use this range when cni (or sunbeam) easily supports
             # using different ip pools
             internal_metallb_range = self._to_joined_range(  # noqa
-                internal_ranges, self.internal_label
+                internal_ranges, self.deployment.internal_api_label
             )
         except ValueError:
             LOG.debug(
                 "No iprange with label %r found",
-                self.internal_label,
+                self.deployment.internal_api_label,
                 exc_info=True,
             )
             return Result(ResultType.FAILED, "No internal ip range found")

@@ -56,3 +56,9 @@ variable "addons" {
     metallb          = "10.20.21.1-10.20.21.10"
   }
 }
+
+variable "endpoint_bindings" {
+  description = "Endpoint bindings for microk8s"
+  type        = set(map(string))
+  default     = null
+}

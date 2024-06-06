@@ -27,25 +27,11 @@ from sunbeam.commands.configure import (
 )
 from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.proxy import proxy_questions
-from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment
+from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment, Networks
 from sunbeam.jobs.plugin import PluginManager
 from sunbeam.jobs.questions import Question, QuestionBank, load_answers, show_questions
 
 MAAS_TYPE = "maas"
-
-
-class Networks(enum.Enum):
-    PUBLIC = "public"
-    STORAGE = "storage"
-    STORAGE_CLUSTER = "storage-cluster"
-    INTERNAL = "internal"
-    DATA = "data"
-    MANAGEMENT = "management"
-
-    @classmethod
-    def values(cls) -> list[str]:
-        """Return list of tag values."""
-        return [tag.value for tag in cls]
 
 
 class RoleTags(enum.Enum):
@@ -262,6 +248,13 @@ class MaasDeployment(Deployment):
         subnets_cidr = (subnet.get("cidr") for subnet in subnets if subnet.get("cidr"))
         no_proxy = ",".join(subnets_cidr)
         return {"HTTP_PROXY": proxy, "HTTPS_PROXY": proxy, "NO_PROXY": no_proxy}
+
+    def get_space(self, network: Networks) -> str:
+        """Return space by name."""
+        space = self.network_mapping.get(network.value)
+        if space is None:
+            raise ValueError(f"Space for network {network.value} not set.")
+        return space
 
 
 def is_maas_deployment(deployment: Deployment) -> TypeGuard[MaasDeployment]:

@@ -50,4 +50,5 @@ resource "juju_application" "microk8s" {
     kubelet_serialize_image_pulls = false
     skip_verify                   = true
   }, var.charm_microk8s_config)
+  endpoint_bindings = var.endpoint_bindings
 }

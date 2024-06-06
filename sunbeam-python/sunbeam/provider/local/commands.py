@@ -128,7 +128,7 @@ from sunbeam.jobs.common import (
     run_preflight_checks,
     validate_roles,
 )
-from sunbeam.jobs.deployment import Deployment
+from sunbeam.jobs.deployment import Deployment, Networks
 from sunbeam.jobs.juju import CONTROLLER, JujuHelper, ModelNotFoundException, run_sync
 from sunbeam.jobs.manifest import AddManifestStep
 from sunbeam.provider.base import ProviderBase
@@ -336,7 +336,7 @@ def bootstrap(
         AddJujuSpaceStep(
             jhelper,
             deployment.infrastructure_model,
-            "management",
+            deployment.get_space(Networks.MANAGEMENT),
             [management_cidr],
         )
     )
@@ -345,7 +345,7 @@ def bootstrap(
             jhelper,
             deployment.infrastructure_model,
             {
-                "default-space": "management",
+                "default-space": deployment.get_space(Networks.MANAGEMENT),
             },
         )
     )
@@ -358,7 +358,7 @@ def bootstrap(
             jhelper,
             deployment.infrastructure_model,
             "controller",
-            "management",
+            deployment.get_space(Networks.MANAGEMENT),
         )
     )
     plan4.append(PromptRegionStep(client, preseed, accept_defaults))
@@ -367,6 +367,7 @@ def bootstrap(
     plan4.append(TerraformInitStep(sunbeam_machine_tfhelper))
     plan4.append(
         DeploySunbeamMachineApplicationStep(
+            deployment,
             client,
             sunbeam_machine_tfhelper,
             jhelper,
@@ -387,6 +388,7 @@ def bootstrap(
         plan4.append(TerraformInitStep(k8s_tfhelper))
         plan4.append(
             DeployK8SApplicationStep(
+                deployment,
                 client,
                 k8s_tfhelper,
                 jhelper,
@@ -411,6 +413,7 @@ def bootstrap(
         plan4.append(TerraformInitStep(k8s_tfhelper))
         plan4.append(
             DeployMicrok8sApplicationStep(
+                deployment,
                 client,
                 k8s_tfhelper,
                 jhelper,
@@ -433,6 +436,7 @@ def bootstrap(
     plan4.append(TerraformInitStep(microceph_tfhelper))
     plan4.append(
         DeployMicrocephApplicationStep(
+            deployment,
             client,
             microceph_tfhelper,
             jhelper,
@@ -489,6 +493,7 @@ def bootstrap(
     plan5.append(TerraformInitStep(hypervisor_tfhelper))
     plan5.append(
         DeployHypervisorApplicationStep(
+            deployment,
             client,
             hypervisor_tfhelper,
             openstack_tfhelper,

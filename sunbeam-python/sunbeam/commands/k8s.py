@@ -40,6 +40,7 @@ from sunbeam.jobs.common import (
     read_config,
     update_config,
 )
+from sunbeam.jobs.deployment import Deployment, Networks
 from sunbeam.jobs.juju import (
     ActionFailedException,
     ApplicationNotFoundException,
@@ -100,6 +101,7 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
 
     def __init__(
         self,
+        deployment: Deployment,
         client: Client,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
@@ -110,6 +112,7 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
         refresh: bool = False,
     ):
         super().__init__(
+            deployment,
             client,
             tfhelper,
             jhelper,
@@ -164,6 +167,13 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
 
     def get_application_timeout(self) -> int:
         return K8S_APP_TIMEOUT
+
+    def extra_tfvars(self) -> dict:
+        return {
+            "endpoint_bindings": [
+                {"space": self.deployment.get_space(Networks.MANAGEMENT)},
+            ]
+        }
 
 
 class AddK8SUnitsStep(AddMachineUnitsStep):

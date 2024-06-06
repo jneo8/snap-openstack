@@ -93,6 +93,7 @@ def _update_proxy(proxy: dict, deployment: Deployment):
     plan = []
     plan.append(
         DeploySunbeamMachineApplicationStep(
+            deployment,
             client,
             deployment.get_tfhelper("sunbeam-machine-plan"),
             jhelper,
