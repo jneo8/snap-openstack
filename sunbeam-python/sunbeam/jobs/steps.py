@@ -226,6 +226,10 @@ class AddMachineUnitsStep(BaseStep):
         tfvars.update({"machine_ids": sorted(machine_ids)})
         update_config(self.client, self.config, tfvars)
 
+    def get_accepted_unit_status(self) -> dict[str, list[str]]:
+        """Accepted status to pass wait_units_ready function."""
+        return {"agent": ["idle"], "workload": ["active"]}
+
     def run(self, status: Optional[Status] = None) -> Result:
         """Add unit to machine application on Juju model."""
         try:
@@ -239,6 +243,7 @@ class AddMachineUnitsStep(BaseStep):
                 self.jhelper.wait_units_ready(
                     units,
                     self.model,
+                    accepted_status=self.get_accepted_unit_status(),
                     timeout=self.get_unit_timeout(),
                 )
             )

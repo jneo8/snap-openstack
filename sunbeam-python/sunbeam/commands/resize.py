@@ -57,6 +57,7 @@ def resize(ctx: click.Context, topology: str, force: bool = False) -> None:
             [
                 TerraformInitStep(microceph_tfhelper),
                 DeployMicrocephApplicationStep(
+                    deployment,
                     client,
                     microceph_tfhelper,
                     jhelper,
