@@ -13,9 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import base64
 import collections.abc
 import glob
 import ipaddress
+import json
 import logging
 import re
 import socket
@@ -70,7 +72,7 @@ def get_hypervisor_hostname() -> str:
     return hostname
 
 
-def get_fqdn() -> str:
+def get_fqdn(cidr: str | None = None) -> str:
     """Get FQDN of the machine"""
     # If the fqdn returned by this function and from libvirt are different,
     # the hypervisor name and the one registered in OVN will be different
@@ -83,7 +85,10 @@ def get_fqdn() -> str:
 
     # Deviation from libvirt logic
     # Try to get fqdn from IP address as a last resort
-    ip = get_local_ip_by_default_route()
+    if cidr:
+        ip = get_local_ip_by_cidr(cidr)
+    else:
+        ip = get_local_ip_by_default_route()
     try:
         fqdn = socket.getfqdn(socket.gethostbyaddr(ip)[0])
         if fqdn != "localhost":
@@ -174,6 +179,27 @@ def get_ifaddresses_by_default_route() -> dict:
 def get_local_ip_by_default_route() -> str:
     """Get IP address of host associated with default gateway."""
     return get_ifaddresses_by_default_route()["addr"]
+
+
+def get_local_cidr_from_ip_address(
+    ip_address: str | ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> str:
+    """Find the local CIDR matching the IP address.
+
+    If the IP address is not a local ip address, it should still
+    try to return a matching cidr.
+    """
+    if isinstance(ip_address, str):
+        ip_address = ipaddress.ip_address(ip_address)
+    with NDB() as ndb:
+        for parsed_address in ndb.addresses.values():
+            network = ipaddress.ip_network(
+                parsed_address["address"] + "/" + str(parsed_address["prefixlen"]),
+                strict=False,
+            )
+            if ip_address in network:
+                return str(network)
+    raise ValueError(f"No local CIDR found for IP address {ip_address}")
 
 
 def get_local_ip_by_cidr(cidr: str) -> str:
@@ -313,3 +339,17 @@ def merge_dict(d: dict, u: dict) -> dict:
                 d[k] = v
 
     return d
+
+
+def get_local_cidr_matching_token(token: str) -> str:
+    """Look up a local ip matching addresses in the join token."""
+    token_dict = json.loads(base64.b64decode(token))
+    join_addresses = token_dict["join_addresses"]
+    LOG.debug("Join addresses: %s", join_addresses)
+    for join_address in join_addresses:
+        try:
+            ip_address = join_address.rsplit(":", 1)[0]
+            return get_local_cidr_from_ip_address(ip_address)
+        except ValueError:
+            pass
+    raise ValueError("No local networks found matching join token addresses.")

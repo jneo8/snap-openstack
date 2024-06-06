@@ -78,7 +78,6 @@ class ClusterInitStep(BaseStep):
         self.machineid = machineid
         self.client = client
         self.management_cidr = management_cidr
-        self.fqdn = utils.get_fqdn()
 
     def is_skip(self, status: Optional[Status] = None) -> Result:
         """Determines if the step should be skipped or not.
@@ -86,6 +85,7 @@ class ClusterInitStep(BaseStep):
         :return: ResultType.SKIPPED if the Step should be skipped,
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
+        self.fqdn = utils.get_fqdn(self.management_cidr)
         try:
             members = self.client.cluster.get_cluster_members()
             LOG.info(members)
@@ -277,15 +277,22 @@ class ClusterAddNodeStep(BaseStep):
 class ClusterJoinNodeStep(BaseStep):
     """Join node to the sunbeam cluster."""
 
-    def __init__(self, client: Client, token: str, role: List[str]):
+    def __init__(
+        self,
+        client: Client,
+        token: str,
+        host_address: str,
+        fqdn: str,
+        role: list[str],
+    ):
         super().__init__("Join node to Cluster", "Adding node to Sunbeam cluster")
 
         self.port = CLUSTERD_PORT
         self.client = client
         self.token = token
         self.role = role
-        self.fqdn = utils.get_fqdn()
-        self.ip = utils.get_local_ip_by_default_route()
+        self.ip = host_address
+        self.fqdn = fqdn
 
     def is_skip(self, status: Optional[Status] = None) -> Result:
         """Determines if the step should be skipped or not.

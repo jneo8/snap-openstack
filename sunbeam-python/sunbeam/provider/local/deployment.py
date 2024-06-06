@@ -58,6 +58,7 @@ class LocalDeployment(Deployment):
     url: str = "local"
     type: str = LOCAL_TYPE
     _client: Client | None = pydantic.PrivateAttr(default=None)
+    _management_cidr: str | None = pydantic.PrivateAttr(default=None)
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -100,15 +101,30 @@ class LocalDeployment(Deployment):
             self._client = Client.from_socket()
         return self._client
 
+    def get_management_cidr(self) -> str:
+        """Return the management CIDR."""
+        if self._management_cidr is not None:
+            return self._management_cidr
+        bootstrap_config = load_answers(self.get_client(), BOOTSTRAP_CONFIG_KEY)
+        management_cidr = bootstrap_config.get("bootstrap", {}).get("management_cidr")
+        if management_cidr is None:
+            raise ValueError("Management CIDR not found in bootstrap config")
+        self._management_cidr = management_cidr
+        return management_cidr
+
     def get_clusterd_http_address(self) -> str:
         """Return the address of the clusterd server."""
-        local_ip = utils.get_local_ip_by_default_route()
+        local_ip = utils.get_local_ip_by_cidr(self.get_management_cidr())
         address = f"https://{local_ip}:{CLUSTERD_PORT}"
         return address
 
     def generate_preseed(self, console: Console) -> str:
         """Generate preseed for deployment."""
-        fqdn = utils.get_fqdn()
+        try:
+            management_cidr = self.get_management_cidr()
+        except ValueError:
+            management_cidr = None
+        fqdn = utils.get_fqdn(management_cidr)
         client = self.get_client()
         preseed_content = ["deployment:"]
         try:
