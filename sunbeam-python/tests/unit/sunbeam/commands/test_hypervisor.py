@@ -202,6 +202,7 @@ class TestReapplyHypervisorTerraformPlanStep(unittest.TestCase):
 
     def setUp(self):
         self.client = Mock()
+        self.client.cluster.list_nodes_by_role.return_value = []
         self.read_config.start()
         self.tfhelper = Mock()
         self.jhelper = AsyncMock()
@@ -211,6 +212,7 @@ class TestReapplyHypervisorTerraformPlanStep(unittest.TestCase):
         self.read_config.stop()
 
     def test_is_skip(self):
+        self.client.cluster.list_nodes_by_role.return_value = ["node-1"]
         step = ReapplyHypervisorTerraformPlanStep(
             self.client, self.tfhelper, self.jhelper, self.manifest, "test-model"
         )

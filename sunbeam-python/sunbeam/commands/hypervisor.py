@@ -153,6 +153,14 @@ class AddHypervisorUnitsStep(AddMachineUnitsStep):
             "Adding Openstack Hypervisor unit to machine(s)",
         )
 
+    def get_accepted_unit_status(self) -> dict[str, list[str]]:
+        """Accepted status to pass wait_units_ready function."""
+        workload_statuses = ["active"]
+        if len(self.client.cluster.list_nodes_by_role("storage")) < 1:
+            LOG.debug("No storage nodes found, allowing hypervisor waiting status")
+            workload_statuses.append("waiting")
+        return {"agent": ["idle"], "workload": workload_statuses}
+
     def get_unit_timeout(self) -> int:
         return HYPERVISOR_UNIT_TIMEOUT
 
@@ -307,6 +315,10 @@ class ReapplyHypervisorTerraformPlanStep(BaseStep):
 
     def run(self, status: Optional[Status] = None) -> Result:
         """Apply terraform configuration to deploy hypervisor"""
+        statuses = ["active", "unknown"]
+        if len(self.client.cluster.list_nodes_by_role("storage")) < 1:
+            LOG.debug("No storage nodes found, allowing hypervisor waiting status")
+            statuses.append("waiting")
         try:
             self.tfhelper.update_tfvars_and_apply_tf(
                 self.client,
@@ -322,7 +334,7 @@ class ReapplyHypervisorTerraformPlanStep(BaseStep):
                 self.jhelper.wait_application_ready(
                     APPLICATION,
                     self.model,
-                    accepted_status=["active", "unknown"],
+                    accepted_status=statuses,
                     timeout=HYPERVISOR_APP_TIMEOUT,
                 )
             )
