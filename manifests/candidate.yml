@@ -58,3 +58,5 @@ software:
       channel: 2024.1/candidate
     microceph:
       channel: reef/candidate
+      config:
+        snap-channel: reef/candidate

@@ -58,3 +58,5 @@ software:
       channel: 2024.1/edge
     microceph:
       channel: reef/edge
+      config:
+        snap-channel: reef/edge
