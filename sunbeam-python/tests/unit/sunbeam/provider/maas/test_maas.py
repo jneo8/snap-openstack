@@ -1,4 +1,4 @@
-# Copyright 2023 Canonical Ltd.
+# Copyright (c) 2023 Canonical Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -129,7 +129,7 @@ class TestAddMaasDeployment:
         mocker.patch(
             "sunbeam.provider.maas.client.MaasClient",
             side_effect=CallError(
-                request=dict(method="GET", uri="http://localhost:5240/MAAS"),
+                request={"method": "GET", "uri": "http://localhost:5240/MAAS"},
                 response=Mock(status=401, reason="unauthorized"),
                 content=b"",
                 call=None,

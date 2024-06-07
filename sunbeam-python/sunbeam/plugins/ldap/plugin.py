@@ -56,7 +56,7 @@ APPLICATION_REMOVE_TIMEOUT = 300  # 5 minutes
 
 
 class DisableLDAPDomainStep(BaseStep, JujuStepHelper):
-    """Generic step to enable OpenStack application using Terraform"""
+    """Generic step to enable OpenStack application using Terraform."""
 
     def __init__(
         self,
@@ -82,7 +82,7 @@ class DisableLDAPDomainStep(BaseStep, JujuStepHelper):
         self.tfhelper = self.plugin.deployment.get_tfhelper(self.plugin.tfplan)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Apply terraform configuration to deploy openstack application"""
+        """Apply terraform configuration to deploy openstack application."""
         config_key = self.plugin.get_tfvar_config_key()
 
         try:
@@ -149,7 +149,7 @@ class UpdateLDAPDomainStep(BaseStep, JujuStepHelper):
         self.tfhelper = self.plugin.deployment.get_tfhelper(self.plugin.tfplan)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Apply terraform configuration to deploy openstack application"""
+        """Apply terraform configuration to deploy openstack application."""
         config_key = self.plugin.get_tfvar_config_key()
 
         try:
@@ -189,7 +189,7 @@ class UpdateLDAPDomainStep(BaseStep, JujuStepHelper):
 
 
 class AddLDAPDomainStep(BaseStep, JujuStepHelper):
-    """Generic step to enable OpenStack application using Terraform"""
+    """Generic step to enable OpenStack application using Terraform."""
 
     def __init__(
         self,
@@ -215,7 +215,7 @@ class AddLDAPDomainStep(BaseStep, JujuStepHelper):
         self.tfhelper = self.plugin.deployment.get_tfhelper(self.plugin.tfplan)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Apply terraform configuration to deploy openstack application"""
+        """Apply terraform configuration to deploy openstack application."""
         config_key = self.plugin.get_tfvar_config_key()
 
         try:
@@ -264,7 +264,7 @@ class LDAPPlugin(OpenStackControlPlanePlugin):
         self.config_flags = None
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             charms={
                 "keystone-ldap-k8s": CharmManifest(channel=OPENSTACK_CHANNEL),

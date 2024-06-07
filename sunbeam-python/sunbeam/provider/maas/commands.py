@@ -156,7 +156,7 @@ console = Console()
 @click.group("cluster", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
 @click.pass_context
 def cluster(ctx):
-    """Manage the Sunbeam Cluster"""
+    """Manage the Sunbeam Cluster."""
 
 
 @click.group("machine", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
@@ -189,6 +189,7 @@ def network(ctx):
 
 class MaasProvider(ProviderBase):
     def register_add_cli(self, add: click.Group) -> None:
+        """Register to cli add commands."""
         add.add_command(add_maas)
 
     def register_cli(
@@ -197,6 +198,7 @@ class MaasProvider(ProviderBase):
         configure: click.Group,
         deployment: click.Group,
     ):
+        """Register to main cli maas commands."""
         init.add_command(cluster)
         cluster.add_command(bootstrap)
         cluster.add_command(deploy)
@@ -218,6 +220,7 @@ class MaasProvider(ProviderBase):
         deployment.add_command(validate_deployment_cmd)
 
     def deployment_type(self) -> Tuple[str, Type[Deployment]]:
+        """Return the deployment type."""
         return MAAS_TYPE, MaasDeployment
 
 
@@ -240,7 +243,6 @@ def bootstrap(
 
     Initialize the sunbeam cluster.
     """
-
     deployment: MaasDeployment = ctx.obj
     # Validate manifest file
     manifest = deployment.get_manifest(manifest_path)
@@ -659,7 +661,6 @@ def configure_cmd(
     manifest_path: Path | None = None,
     accept_defaults: bool = False,
 ) -> None:
-
     deployment: Deployment = ctx.obj
     client = deployment.get_client()
     maas_client = MaasClient.from_deployment(deployment)
@@ -863,7 +864,7 @@ def _zones_roles_table(zone_machines: dict[str, list[dict]]) -> Table:
     table = Table(padding=(0, 0), show_header=False)
 
     zone_table = Table(
-        title="\u00A0",  # non-breaking space to have zone same height as roles
+        title="\u00a0",  # non-breaking space to have zone same height as roles
         show_edge=False,
         show_header=False,
         expand=True,

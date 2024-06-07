@@ -87,6 +87,7 @@ class LocalDeployment(Deployment):
             return None
 
     def reload_juju_credentials(self):
+        """Refresh instance juju credentials."""
         self.juju_account = self._load_juju_account()
         self.juju_controller = self._load_juju_controller()
 
@@ -263,7 +264,7 @@ class LocalDeployment(Deployment):
         return preseed_content_final
 
     def get_default_proxy_settings(self) -> dict:
-        """Return default proxy settings"""
+        """Return default proxy settings."""
         with open("/etc/environment", mode="r", encoding="utf-8") as file:
             current_env = dict(
                 line.strip().split("=", 1) for line in file if "=" in line

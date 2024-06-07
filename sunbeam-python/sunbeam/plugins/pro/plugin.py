@@ -47,7 +47,7 @@ UNIT_TIMEOUT = 1200  # 15 minutes, adding / removing units can take a long time
 
 
 class EnableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
-    """Enable Ubuntu Pro application using Terraform"""
+    """Enable Ubuntu Pro application using Terraform."""
 
     def __init__(
         self,
@@ -79,7 +79,7 @@ class EnableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Apply terraform configuration to deploy ubuntu-pro"""
+        """Apply terraform configuration to deploy ubuntu-pro."""
         extra_tfvars = {"token": self.token}
         try:
             self.tfhelper.update_tfvars_and_apply_tf(
@@ -125,7 +125,7 @@ class EnableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
 
 
 class DisableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
-    """Disable Ubuntu Pro application using Terraform"""
+    """Disable Ubuntu Pro application using Terraform."""
 
     def __init__(
         self,
@@ -151,7 +151,7 @@ class DisableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Apply terraform configuration to disable ubuntu-pro"""
+        """Apply terraform configuration to disable ubuntu-pro."""
         extra_tfvars = {"token": ""}
         try:
             self.tfhelper.update_tfvars_and_apply_tf(
@@ -179,6 +179,7 @@ class ProPlugin(EnableDisablePlugin):
 
     @property
     def manifest(self) -> Manifest:
+        """Return the manifest."""
         if self._manifest:
             return self._manifest
 
@@ -186,7 +187,7 @@ class ProPlugin(EnableDisablePlugin):
         return self._manifest
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             terraform={
                 self.tfplan: TerraformManifest(
@@ -196,6 +197,7 @@ class ProPlugin(EnableDisablePlugin):
         )
 
     def run_enable_plans(self):
+        """Run the enablement plans."""
         if self.token is None:
             raise ValueError("Token is required to enable Ubuntu Pro")
         tfhelper = self.deployment.get_tfhelper(self.tfplan)
@@ -221,6 +223,7 @@ class ProPlugin(EnableDisablePlugin):
         click.echo("Ubuntu Pro enabled.")
 
     def run_disable_plans(self):
+        """Run the disablement plans."""
         tfhelper = self.deployment.get_tfhelper(self.tfplan)
         plan = [
             TerraformInitStep(tfhelper),
@@ -253,4 +256,5 @@ class ProPlugin(EnableDisablePlugin):
 
     @click.command()
     def disable_plugin(self) -> None:
+        """Disable Ubuntu Pro across deployment."""
         super().disable_plugin()

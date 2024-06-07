@@ -56,7 +56,7 @@ class DnsPlugin(OpenStackControlPlanePlugin):
         self.nameservers = None
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             charms={
                 "designate-k8s": CharmManifest(channel=OPENSTACK_CHANNEL),
@@ -174,7 +174,6 @@ class DnsPlugin(OpenStackControlPlanePlugin):
     @click.command()
     def dns_address(self) -> None:
         """Retrieve DNS service address."""
-
         with console.status("Retrieving IP address from DNS service ... "):
             bind_address = run_sync(self.bind_address())
 
@@ -207,6 +206,7 @@ class DnsPlugin(OpenStackControlPlanePlugin):
 
     @property
     def k8s_application_data(self):
+        """K8s application data."""
         return {
             "designate": ApplicationChannelData(
                 channel=OPENSTACK_CHANNEL,
@@ -220,4 +220,5 @@ class DnsPlugin(OpenStackControlPlanePlugin):
 
     @property
     def tfvars_channel_var(self):
+        """Terrform variable channel var."""
         return "designate-channel"

@@ -55,7 +55,6 @@ class Check:
         Return True if check is Ok.
         Otherwise update self.message and return False.
         """
-
         return True
 
 
@@ -75,6 +74,7 @@ class DiagnosticsResult:
         self.details = details
 
     def to_dict(self) -> dict:
+        """Return the result as a dictionary."""
         result = {
             "name": self.name,
             "passed": self.passed,
@@ -94,6 +94,7 @@ class DiagnosticsResult:
         diagnostics: str | None = None,
         **details: dict,
     ):
+        """Helper to create a failed result."""
         return cls(name, False, message, diagnostics, **details)
 
     @classmethod
@@ -104,6 +105,7 @@ class DiagnosticsResult:
         diagnostics: str | None = None,
         **details: dict,
     ):
+        """Helper to create a successful result."""
         return cls(name, True, message, diagnostics, **details)
 
 
@@ -136,7 +138,6 @@ class JujuSnapCheck(Check):
 
     def run(self) -> bool:
         """Check for juju-bin content."""
-
         snap = Snap()
         juju_content = snap.paths.snap / "juju"
         if not juju_content.exists():
@@ -158,7 +159,6 @@ class SshKeysConnectedCheck(Check):
 
     def run(self) -> bool:
         """Check for ssh-keys interface."""
-
         snap = Snap()
         snap_ctl = SnapCtl()
         connect = f"sudo snap connect {snap.name}:ssh-keys"
@@ -192,6 +192,11 @@ class DaemonGroupCheck(Check):
         )
 
     def run(self) -> bool:
+        """Return false if user is not member of group.
+
+        Checks:
+            - User has access to clusterd socket
+        """
         if not os.access(self.clusterd_socket, os.W_OK):
             self.message = (
                 "Insufficient permissions to run sunbeam commands\n"
@@ -247,6 +252,17 @@ class VerifyFQDNCheck(Check):
         self.fqdn = fqdn
 
     def run(self) -> bool:
+        """Return false if FQDN is not valid.
+
+        Checks:
+            - FQDN is not empty
+            - FQDN is not longer than 255 characters
+            - FQDN has at least one label
+            - FQDN labels are not empty
+            - FQDN labels are not longer than 63 characters
+            - FQDN labels do not start or end with hyphen
+            - FQDN labels contain only alphanumeric characters and hyphens
+        """
         if not self.fqdn:
             self.message = "FQDN cannot be an empty string"
             return False
@@ -305,6 +321,7 @@ class VerifyHypervisorHostnameCheck(Check):
         self.hypervisor_hostname = hypervisor_hostname
 
     def run(self) -> bool:
+        """Verify if Hypervisor Hostname is same as FQDN."""
         if self.fqdn == self.hypervisor_hostname:
             return True
 
@@ -325,6 +342,12 @@ class SystemRequirementsCheck(Check):
         )
 
     def run(self) -> bool:
+        """Validate system requirements.
+
+        Checks:
+            - Host has enough RAM
+            - Host has at least 4 cores
+        """
         host_total_ram = get_host_total_ram()
         host_total_cores = get_host_total_cores()
         if host_total_ram < RAM_16_GB_IN_KB or host_total_cores < 4:
@@ -347,6 +370,11 @@ class VerifyBootstrappedCheck(Check):
         self.client = client
 
     def run(self) -> bool:
+        """Validate deployment has been bootstrapped.
+
+        Checks:
+            - Clusterd config key bootstrap is True
+        """
         bootstrapped = self.client.cluster.check_sunbeam_bootstrapped()
         if bootstrapped:
             return True
@@ -369,12 +397,17 @@ class VerifyClusterdNotBootstrappedCheck(Check):
         self.client = Client.from_socket()
 
     def run(self) -> bool:
+        """Verify local instance of clusterd is not bootstrapped.
+
+        Checks:
+            - any key returns ClusterServiceUnavailableException
+        """
         try:
             self.client.cluster.get_config("any")
         except ClusterServiceUnavailableException:
             return True
         except Exception:
-            pass
+            LOG.debug("Failed to check if clusterd is bootstrapped", exc_info=True)
 
         self.message = (
             "Local deployment has already been bootstrapped,"
@@ -395,6 +428,15 @@ class TokenCheck(Check):
         self.token = token
 
     def run(self) -> bool:
+        """Return false if the token provided is not valid.
+
+        Checks:
+            - Token is a valid base64 string
+            - Token content is a valid JSON object
+            - Token contains the required fields
+            - Token 'name' matches the hostname
+            - Token 'join_addresses' is a list and not empty
+        """
         if not self.token:
             self.message = "Join token cannot be an empty string"
             return False

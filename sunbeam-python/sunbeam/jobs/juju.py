@@ -28,7 +28,7 @@ import yaml
 from juju import utils as juju_utils
 from juju.application import Application
 from juju.charmhub import CharmHub
-from juju.client import client as jujuClient
+from juju.client import client as juju_client
 from juju.controller import Controller
 from juju.errors import (
     JujuAgentError,
@@ -111,7 +111,7 @@ class LeaderNotFoundException(JujuException):
 
 
 class TimeoutException(JujuException):
-    """Raised when a query timed out"""
+    """Raised when a query timed out."""
 
     pass
 
@@ -159,10 +159,12 @@ class JujuAccount(pydantic.BaseModel):
     password: str
 
     def to_dict(self):
-        return self.dict()
+        """Return self as dict."""
+        return self.model_dump()
 
     @classmethod
     def load(cls, data_location: Path) -> "JujuAccount":
+        """Load account from file."""
         data_file = data_location / ACCOUNT_FILE
         try:
             with data_file.open() as file:
@@ -174,6 +176,7 @@ class JujuAccount(pydantic.BaseModel):
             ) from e
 
     def write(self, data_location: Path):
+        """Dump self to file."""
         data_file = data_location / ACCOUNT_FILE
         if not data_file.exists():
             data_file.touch()
@@ -187,14 +190,17 @@ class JujuController(pydantic.BaseModel):
     ca_cert: str
 
     def to_dict(self):
-        return self.dict()
+        """Return self as dict."""
+        return self.model_dump()
 
     @classmethod
     def load(cls, client: Client) -> "JujuController":
+        """Load controller from clusterd."""
         controller = client.cluster.get_config(JUJU_CONTROLLER_KEY)
         return JujuController(**json.loads(controller))
 
     def write(self, client: Client):
+        """Dump self to clusterd."""
         client.cluster.update_config(JUJU_CONTROLLER_KEY, json.dumps(self.to_dict()))
 
     def to_controller(self, juju_account: JujuAccount) -> Controller:
@@ -218,6 +224,7 @@ class JujuHelper:
         self.controller = controller
 
     async def get_clouds(self) -> dict:
+        """Return clouds available on controller."""
         clouds = await self.controller.clouds()
         return clouds.clouds
 
@@ -253,13 +260,13 @@ class JujuHelper:
             os.environ["HOME"] = old_home
 
     async def get_model_name_with_owner(self, model: str) -> str:
-        """Get juju model full name along with owner"""
+        """Get juju model full name along with owner."""
         model_impl = await self.get_model(model)
         owner = model_impl.info.owner_tag.removeprefix(OWNER_TAG_PREFIX)
         return f"{owner}/{model_impl.info.name}"
 
     async def get_model_status_full(self, model: str) -> Dict:
-        """Get juju status for the model"""
+        """Get juju status for the model."""
         model_impl = await self.get_model(model)
         status = await model_impl.get_status()
         return status
@@ -309,7 +316,7 @@ class JujuHelper:
         to: list[str] | None = None,
         config: dict | None = None,
     ):
-        """Deploy an application"""
+        """Deploy an application."""
         options = {}
         if to:
             options["to"] = to
@@ -328,7 +335,7 @@ class JujuHelper:
         )
 
     async def add_machine(self, name: str, model: str) -> Machine:
-        """Add machines to model"""
+        """Add machines to model."""
         model_impl = await self.get_model(model)
         machine: Machine = await model_impl.add_machine(
             spec=model_impl.uuid + ":" + name, series="jammy"
@@ -339,7 +346,8 @@ class JujuHelper:
         """Fetch an application's unit in model.
 
         :name: Name of the unit to wait for, name format is application/id
-        :model: Name of the model where the unit is located"""
+        :model: Name of the model where the unit is located
+        """
         self._validate_unit(name)
         model_impl = await self.get_model(model)
 
@@ -358,7 +366,8 @@ class JujuHelper:
 
         :application: application name of the unit to look for
         :machine_id: Id of machine unit is on
-        :model: Name of the model where the unit is located"""
+        :model: Name of the model where the unit is located
+        """
         model_impl = await self.get_model(model)
         application = model_impl.applications.get(application)
         unit = None
@@ -388,7 +397,6 @@ class JujuHelper:
         :model: Name of the model where the application is located
         :machine: Machine ID to place the unit on, optional
         """
-
         application = await self.get_application(name, model)
         if machine is None or isinstance(machine, str):
             count = 1
@@ -471,7 +479,6 @@ class JujuHelper:
         :timeout: Timeout in seconds
         :returns: Command results
         """
-
         unit = await self.get_unit(name, model)
         pebble = " ".join(
             [
@@ -492,7 +499,7 @@ class JujuHelper:
     async def run_action(
         self, name: str, model: str, action_name: str, action_params={}
     ) -> Dict:
-        """Run action and return the response
+        """Run action and return the response.
 
         :name: Unit name
         :model: Name of the model where the application is located
@@ -514,7 +521,7 @@ class JujuHelper:
         return action_obj.results
 
     async def scp_from(self, name: str, model: str, source: str, destination: str):
-        """scp files from unit to local
+        """Scp files from unit to local.
 
         :name: Unit name
         :model: Name of the model where the application is located
@@ -528,6 +535,7 @@ class JujuHelper:
     async def add_k8s_cloud(
         self, cloud_name: str, credential_name: str, kubeconfig: dict
     ):
+        """Add k8s cloud to controller."""
         contexts = {v["name"]: v["context"] for v in kubeconfig["contexts"]}
         clusters = {v["name"]: v["cluster"] for v in kubeconfig["clusters"]}
         users = {v["name"]: v["user"] for v in kubeconfig["users"]}
@@ -537,15 +545,17 @@ class JujuHelper:
         user = users.get(ctx.get("user"))
 
         ep = cluster["server"]
-        caCert = base64.b64decode(cluster["certificate-authority-data"]).decode("utf-8")
+        ca_cert = base64.b64decode(cluster["certificate-authority-data"]).decode(
+            "utf-8"
+        )
 
         try:
-            cloud = jujuClient.Cloud(
+            cloud = juju_client.Cloud(
                 auth_types=["oauth2", "clientcertificate"],
-                ca_certificates=[caCert],
+                ca_certificates=[ca_cert],
                 endpoint=ep,
                 host_cloud_region="k8s/localhost",
-                regions=[jujuClient.CloudRegion(endpoint=ep, name="localhost")],
+                regions=[juju_client.CloudRegion(endpoint=ep, name="localhost")],
                 type_="kubernetes",
             )
             cloud = await self.controller.add_cloud(cloud_name, cloud)
@@ -554,19 +564,19 @@ class JujuHelper:
                 raise e
 
         if "token" in user:
-            cred = jujuClient.CloudCredential(
+            cred = juju_client.CloudCredential(
                 auth_type="oauth2", attrs={"Token": user["token"]}
             )
         elif "client-certificate-data" in user and "client-key-data" in user:
-            clientCertificateData = base64.b64decode(
+            client_certificate_data = base64.b64decode(
                 user["client-certificate-data"]
             ).decode("utf-8")
-            clientKeyData = base64.b64decode(user["client-key-data"]).decode("utf-8")
-            cred = jujuClient.CloudCredential(
+            client_key_data = base64.b64decode(user["client-key-data"]).decode("utf-8")
+            cred = juju_client.CloudCredential(
                 auth_type="clientcertificate",
                 attrs={
-                    "ClientCertificateData": clientCertificateData,
-                    "ClientKeyData": clientKeyData,
+                    "ClientCertificateData": client_certificate_data,
+                    "ClientKeyData": client_key_data,
                 },
             )
         else:
@@ -587,8 +597,9 @@ class JujuHelper:
         accepted_status: Optional[List[str]] = None,
         timeout: Optional[int] = None,
     ):
-        """Block execution until application is ready
-        The function early exits if the application is missing from the model
+        """Block execution until application is ready.
+
+        The function early exits if the application is missing from the model.
 
         :name: Name of the application to wait for
         :model: Name of the model where the application is located
@@ -630,7 +641,7 @@ class JujuHelper:
         model: str,
         timeout: Optional[int] = None,
     ):
-        """Block execution until application is gone
+        """Block execution until application is gone.
 
         :names: List of application to wait for departure
         :model: Name of the model where the application is located
@@ -656,7 +667,7 @@ class JujuHelper:
         model: str,
         timeout: Optional[int] = None,
     ):
-        """Block execution until model is gone
+        """Block execution until model is gone.
 
         :model: Name of the model
         :timeout: Waiting timeout in seconds
@@ -680,8 +691,9 @@ class JujuHelper:
         accepted_status: Optional[Dict[str, List[str]]] = None,
         timeout: Optional[int] = None,
     ):
-        """Block execution until unit is ready
-        The function early exits if the unit is missing from the model
+        """Block execution until unit is ready.
+
+        The function early exits if the unit is missing from the model.
 
         :units: Name of the units or Unit objects to wait for,
             name format is application/id
@@ -689,7 +701,6 @@ class JujuHelper:
         :accepted status: map of accepted statuses for "workload" and "agent"
         :timeout: Waiting timeout in seconds
         """
-
         if accepted_status is None:
             accepted_status = {}
 
@@ -717,7 +728,7 @@ class JujuHelper:
             )
 
         def condition() -> bool:
-            """Computes readiness for unit"""
+            """Computes readiness for unit."""
             for unit in unit_list:
                 unit: Unit = model_impl.units[unit.name]
                 agent_ready = unit.agent_status in agent_accepted_status
@@ -744,8 +755,9 @@ class JujuHelper:
         accepted_status: Optional[Dict[str, List[str]]] = None,
         timeout: Optional[int] = None,
     ):
-        """Block execution until unit is ready
-        The function early exits if the unit is missing from the model
+        """Block execution until unit is ready.
+
+        The function early exits if the unit is missing from the model.
 
         :unit: Name of the unit or Unit object to wait for,
             name format is application/id
@@ -786,11 +798,10 @@ class JujuHelper:
         :model: Name of the model to wait for readiness
         :timeout: Waiting timeout in seconds
         """
-
         model_impl = await self.get_model(model)
 
         def condition() -> bool:
-            """Computes readiness for unit"""
+            """Computes readiness for unit."""
             machines = model_impl.machines
             for machine in machines.values():
                 if machine is None or machine.status_message != "Deployed":
@@ -813,7 +824,7 @@ class JujuHelper:
         apps: Optional[list] = None,
         timeout: Optional[int] = None,
     ) -> None:
-        """Wait for all agents in model to reach idle status
+        """Wait for all agents in model to reach idle status.
 
         :model: Name of the model to wait for readiness
         :timeout: Waiting timeout in seconds
@@ -841,7 +852,7 @@ class JujuHelper:
         status: list = ["active"],
         timeout: int = 10 * 60,
     ) -> None:
-        """Wait for all agents in model to reach desired status
+        """Wait for all agents in model to reach desired status.
 
         :model: Name of the model to wait for readiness
         :apps: Applications to check the status for
@@ -919,7 +930,7 @@ class JujuHelper:
             ) from e
 
     async def set_application_config(self, model: str, app: str, config: dict):
-        """Update application configuration
+        """Update application configuration.
 
         :model: Name of the model to wait for readiness
         :application: Application to update
@@ -934,7 +945,7 @@ class JujuHelper:
         updates: Dict[str, ChannelUpdate],
         timeout: Optional[int] = None,
     ):
-        """Upgrade charm to new channel
+        """Upgrade charm to new channel.
 
         :model: Name of the model to wait for readiness
         :application: Application to update
@@ -952,7 +963,7 @@ class JujuHelper:
         await asyncio.gather(*coros)
 
         def condition() -> bool:
-            """Computes readiness for unit"""
+            """Computes readiness for unit."""
             statuses = {}
             for app_name, config in updates.items():
                 _app = model_impl.applications.get(
@@ -1004,7 +1015,7 @@ class JujuHelper:
     async def get_available_charm_revision(
         self, model: str, charm_name: str, channel: str
     ) -> int:
-        """Find the latest available revision of a charm in a given channel
+        """Find the latest available revision of a charm in a given channel.
 
         :param model: Name of model
         :param charm_name: Name of charm to look up
@@ -1090,7 +1101,7 @@ class JujuHelper:
             )
         # Check spaces are valid
         spaces = await self.get_spaces(model)
-        unknown_spaces = set(bindings.values()) - set(space["name"] for space in spaces)
+        unknown_spaces = set(bindings.values()) - {space["name"] for space in spaces}
         if unknown_spaces:
             raise JujuException(
                 f"Bindings contain unknown spaces: {', '.join(unknown_spaces)}"

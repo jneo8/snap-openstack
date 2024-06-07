@@ -82,6 +82,8 @@ More on assigning tags: https://maas.io/docs/how-to-use-machine-tags
 
 
 class AddMaasDeployment(BaseStep):
+    """Perform various checks and add MAAS-backed deployment."""
+
     def __init__(
         self,
         deployments_config: DeploymentsConfig,
@@ -96,7 +98,6 @@ class AddMaasDeployment(BaseStep):
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Check if deployment is already added."""
-
         try:
             self.deployments_config.get_deployment(self.deployment.name)
             return Result(
@@ -222,6 +223,8 @@ class MachineRolesCheck(DiagnosticsCheck):
         self.machine = machine
 
     def run(self) -> DiagnosticsResult:
+        """List machines roles, fail if machine is missing roles."""
+        super().run
         assigned_roles = self.machine["roles"]
         LOG.debug(f"{self.machine['hostname']=!r} assigned roles: {assigned_roles!r}")
         if not assigned_roles:
@@ -735,7 +738,6 @@ class IpRangesCheck(DiagnosticsCheck):
         self,
     ) -> DiagnosticsResult:
         """Check Public and Internal ip ranges are set."""
-
         public_space = self.deployment.network_mapping.get(Networks.PUBLIC.value)
         internal_space = self.deployment.network_mapping.get(Networks.INTERNAL.value)
         if public_space is None or internal_space is None:
@@ -804,7 +806,7 @@ class DeploymentTopologyCheck(DiagnosticsCheck):
         self.machines = machines
 
     def run(self) -> list[DiagnosticsResult]:
-        """Run a sequence of checks to validate deployment topology.""" ""
+        """Run a sequence of checks to validate deployment topology."""
         machines_by_zone = maas_client._group_machines_by_zone(self.machines)
         checks = []
         checks.append(
@@ -1295,7 +1297,7 @@ class MaasDeployMachinesStep(BaseStep):
 
 
 class MaasConfigureMicrocephOSDStep(BaseStep):
-    """Configure Microceph OSD disks"""
+    """Configure Microceph OSD disks."""
 
     def __init__(
         self,
@@ -1474,7 +1476,6 @@ class MaasConfigureMicrocephOSDStep(BaseStep):
 
     def run(self, status: Status | None = None) -> Result:
         """Configure local disks on microceph."""
-
         for unit, disks in self.disks_to_configure.items():
             try:
                 LOG.debug("Running action add-osd on %r", unit)
@@ -1498,7 +1499,7 @@ class MaasConfigureMicrocephOSDStep(BaseStep):
 
 
 class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
-    """Deploy Microk8s application using Terraform"""
+    """Deploy Microk8s application using Terraform."""
 
     deployment: maas_deployment.MaasDeployment
 
@@ -1528,6 +1529,7 @@ class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
         self.ranges = None
 
     def extra_tfvars(self) -> dict:
+        """Extra terraform vars to pass to terraform apply."""
         if self.ranges is None:
             raise ValueError("No ip ranges found")
         tfvars = super().extra_tfvars()
@@ -1623,7 +1625,7 @@ class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
 
 
 class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
-    """Deploy K8S application using Terraform"""
+    """Deploy K8S application using Terraform."""
 
     deployment: maas_deployment.MaasDeployment
 
@@ -1737,6 +1739,8 @@ class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
 
 
 class MaasEnableK8SFeatures(k8s.EnableK8SFeatures):
+    """Enable specific features on the K8S cluster."""
+
     def __init__(
         self,
         client: Client,
@@ -1798,6 +1802,8 @@ class MaasEnableK8SFeatures(k8s.EnableK8SFeatures):
 
 
 class MaasSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
+    """Configure hypervisor settings on the machines."""
+
     def __init__(
         self,
         client: Client,
@@ -1883,6 +1889,7 @@ class MaasUserQuestions(BaseStep):
         self.preseed = deployment_preseed or {}
 
     def has_prompts(self) -> bool:
+        """Returns true if the step has prompts that it can ask the user."""
         return True
 
     def prompt(self, console: Console | None = None) -> None:
@@ -1945,13 +1952,13 @@ class MaasUserQuestions(BaseStep):
             "external_network"
         ]["physical_network"]
 
-        self.variables["external_network"][
-            "network_type"
-        ] = ext_net_bank.network_type.ask()
+        self.variables["external_network"]["network_type"] = (
+            ext_net_bank.network_type.ask()
+        )
         if self.variables["external_network"]["network_type"] == "vlan":
-            self.variables["external_network"][
-                "segmentation_id"
-            ] = ext_net_bank.segmentation_id.ask()
+            self.variables["external_network"]["segmentation_id"] = (
+                ext_net_bank.segmentation_id.ask()
+            )
         else:
             self.variables["external_network"]["segmentation_id"] = 0
 
@@ -1961,16 +1968,17 @@ class MaasUserQuestions(BaseStep):
             self.variables["user"]["username"] = user_bank.username.ask()
             self.variables["user"]["password"] = user_bank.password.ask()
             self.variables["user"]["cidr"] = user_bank.cidr.ask()
-            self.variables["user"][
-                "dns_nameservers"
-            ] = user_bank.nameservers.ask().split()
-            self.variables["user"][
-                "security_group_rules"
-            ] = user_bank.security_group_rules.ask()
+            self.variables["user"]["dns_nameservers"] = (
+                user_bank.nameservers.ask().split()
+            )
+            self.variables["user"]["security_group_rules"] = (
+                user_bank.security_group_rules.ask()
+            )
 
         sunbeam.jobs.questions.write_answers(
             self.client, CLOUD_CONFIG_SECTION, self.variables
         )
 
     def run(self, status: Status | None = None) -> Result:
+        """Run the step to completion."""
         return Result(ResultType.COMPLETED)

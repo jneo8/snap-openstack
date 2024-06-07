@@ -36,7 +36,7 @@ SUNBEAM_MACHINE_UNIT_TIMEOUT = (
 
 
 class DeploySunbeamMachineApplicationStep(DeployMachineApplicationStep):
-    """Deploy openstack-hyervisor application using Terraform cloud"""
+    """Deploy openstack-hyervisor application using Terraform cloud."""
 
     def __init__(
         self,
@@ -65,9 +65,11 @@ class DeploySunbeamMachineApplicationStep(DeployMachineApplicationStep):
         self.proxy_settings = proxy_settings
 
     def get_application_timeout(self) -> int:
+        """Return application timeout."""
         return SUNBEAM_MACHINE_APP_TIMEOUT
 
     def extra_tfvars(self) -> dict:
+        """Extra terraform vars to pass to terraform apply."""
         return {
             "endpoint_bindings": [
                 {"space": self.deployment.get_space(Networks.MANAGEMENT)},
@@ -102,6 +104,7 @@ class AddSunbeamMachineUnitsStep(AddMachineUnitsStep):
         )
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return SUNBEAM_MACHINE_UNIT_TIMEOUT
 
 
@@ -121,4 +124,5 @@ class RemoveSunbeamMachineStep(RemoveMachineUnitStep):
         )
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return SUNBEAM_MACHINE_UNIT_TIMEOUT

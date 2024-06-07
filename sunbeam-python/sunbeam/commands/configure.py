@@ -236,7 +236,7 @@ def retrieve_admin_credentials(jhelper: JujuHelper, model: str) -> dict:
 
 
 class SetHypervisorCharmConfigStep(BaseStep):
-    """Update openstack-hypervisor charm config"""
+    """Update openstack-hypervisor charm config."""
 
     IPVANYNETWORK_UNSET = "0.0.0.0/0"
 
@@ -257,6 +257,7 @@ class SetHypervisorCharmConfigStep(BaseStep):
         self.charm_config = {}
 
     def has_prompts(self) -> bool:
+        """Returns true if the step has prompts that it can ask the user."""
         return False
 
     def run(self, status: Optional["Status"] = None) -> Result:
@@ -343,6 +344,7 @@ class UserOpenRCStep(BaseStep):
             return Result(ResultType.SKIPPED)
 
     def run(self, status: Optional["Status"] = None) -> Result:
+        """Fetch openrc from terraform state."""
         try:
             tf_output = self.tfhelper.output(hide_output=True)
             # Mask any passwords before printing process.stdout
@@ -353,7 +355,7 @@ class UserOpenRCStep(BaseStep):
             return Result(ResultType.FAILED, str(e))
 
     def _print_openrc(self, tf_output: dict) -> None:
-        """Print openrc to console and save to disk using provided information"""
+        """Print openrc to console and save to disk using provided information."""
         _openrc = f"""# openrc for {tf_output["OS_USERNAME"]}
 export OS_AUTH_URL={self.auth_url}
 export OS_USERNAME={tf_output["OS_USERNAME"]}
@@ -395,6 +397,7 @@ class UserQuestions(BaseStep):
         self.answer_file = answer_file
 
     def has_prompts(self) -> bool:
+        """Returns true if the step has prompts that it can ask the user."""
         return True
 
     def prompt(self, console: Optional[Console] = None) -> None:
@@ -419,9 +422,9 @@ class UserQuestions(BaseStep):
             previous_answers=self.variables.get("user"),
             accept_defaults=self.accept_defaults,
         )
-        self.variables["user"][
-            "remote_access_location"
-        ] = user_bank.remote_access_location.ask()
+        self.variables["user"]["remote_access_location"] = (
+            user_bank.remote_access_location.ask()
+        )
         # External Network Configuration
         if self.variables["user"]["remote_access_location"] == utils.LOCAL_ACCESS:
             ext_net_bank = sunbeam.jobs.questions.QuestionBank(
@@ -471,13 +474,13 @@ class UserQuestions(BaseStep):
             "external_network"
         ]["physical_network"]
 
-        self.variables["external_network"][
-            "network_type"
-        ] = ext_net_bank.network_type.ask()
+        self.variables["external_network"]["network_type"] = (
+            ext_net_bank.network_type.ask()
+        )
         if self.variables["external_network"]["network_type"] == "vlan":
-            self.variables["external_network"][
-                "segmentation_id"
-            ] = ext_net_bank.segmentation_id.ask()
+            self.variables["external_network"]["segmentation_id"] = (
+                ext_net_bank.segmentation_id.ask()
+            )
         else:
             self.variables["external_network"]["segmentation_id"] = 0
 
@@ -487,18 +490,19 @@ class UserQuestions(BaseStep):
             self.variables["user"]["username"] = user_bank.username.ask()
             self.variables["user"]["password"] = user_bank.password.ask()
             self.variables["user"]["cidr"] = user_bank.cidr.ask()
-            self.variables["user"][
-                "dns_nameservers"
-            ] = user_bank.nameservers.ask().split()
-            self.variables["user"][
-                "security_group_rules"
-            ] = user_bank.security_group_rules.ask()
+            self.variables["user"]["dns_nameservers"] = (
+                user_bank.nameservers.ask().split()
+            )
+            self.variables["user"]["security_group_rules"] = (
+                user_bank.security_group_rules.ask()
+            )
 
         sunbeam.jobs.questions.write_answers(
             self.client, CLOUD_CONFIG_SECTION, self.variables
         )
 
     def run(self, status: Optional[Status] = None) -> Result:
+        """Run the step to completion."""
         return Result(ResultType.COMPLETED)
 
 
@@ -594,6 +598,7 @@ class SetHypervisorUnitsOptionsStep(BaseStep):
         self.nics: dict[str, str | None] = {}
 
     def run(self, status: Optional[Status] = None) -> Result:
+        """Apply individual hypervisor settings."""
         app = "openstack-hypervisor"
         action_cmd = "set-hypervisor-local-settings"
         for name in self.names:

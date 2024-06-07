@@ -88,7 +88,7 @@ def get_outstanding_certificate_requests(
 
 
 class ConfigureCAStep(BaseStep):
-    """Configure CA certificates"""
+    """Configure CA certificates."""
 
     _CONFIG = "PluginCACertificatesConfig"
 
@@ -111,6 +111,7 @@ class ConfigureCAStep(BaseStep):
         self.process_certs = {}
 
     def has_prompts(self) -> bool:
+        """Returns true if the step has prompts that it can ask the user."""
         return True
 
     def prompt(self, console: Optional[Console] = None) -> None:
@@ -245,7 +246,7 @@ class CaTlsPlugin(TlsPluginGroup):
         self.endpoints = []
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             charms={"manual-tls-certificates": CharmManifest(channel="latest/stable")}
         )
@@ -304,6 +305,7 @@ class CaTlsPlugin(TlsPluginGroup):
         help="Base64 encoded CA certificate",
     )
     def enable_plugin(self, ca: str, ca_chain: str, endpoints: List[str]):
+        """Enable CA plugin."""
         self.ca = ca
         self.ca_chain = ca_chain
         self.endpoints = endpoints
@@ -311,6 +313,7 @@ class CaTlsPlugin(TlsPluginGroup):
 
     @click.command()
     def disable_plugin(self):
+        """Disable CA plugin."""
         super().disable_plugin()
         console.print("CA plugin disabled")
 
@@ -358,7 +361,7 @@ class CaTlsPlugin(TlsPluginGroup):
         help="Output format",
     )
     def list_outstanding_csrs(self, format: str) -> None:
-        """List outstanding CSRs"""
+        """List outstanding CSRs."""
         app = CA_APP_NAME
         model = OPENSTACK_MODEL
         action_cmd = "get-outstanding-certificate-requests"
@@ -420,6 +423,7 @@ class CaTlsPlugin(TlsPluginGroup):
         click.echo("CA certs configured")
 
     def commands(self) -> dict:
+        """Return the commands for the plugin."""
         try:
             enabled = self.enabled
         except ClusterServiceUnavailableException:

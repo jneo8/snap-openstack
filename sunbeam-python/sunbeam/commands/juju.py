@@ -67,7 +67,7 @@ class JujuStepHelper:
         return str(juju_binary)
 
     def _juju_cmd(self, *args):
-        """Runs the specified juju command line command
+        """Runs the specified juju command line command.
 
         The command will be run using the json formatter. Invoking functions
         do not need to worry about the format or the juju command that should
@@ -107,7 +107,7 @@ class JujuStepHelper:
             return False
 
     def get_clouds(self, cloud_type: str, local: bool = False) -> list:
-        """Get clouds based on cloud type"""
+        """Get clouds based on cloud type."""
         clouds = []
         cmd = ["clouds"]
         if local:
@@ -135,7 +135,7 @@ class JujuStepHelper:
         return self._juju_cmd(*cmd)
 
     def get_controllers(self, clouds: list) -> list:
-        """Get controllers hosted on given clouds"""
+        """Get controllers hosted on given clouds."""
         existing_controllers = []
 
         controllers = self._juju_cmd("controllers")
@@ -535,7 +535,6 @@ class ScaleJujuStep(BaseStep, JujuStepHelper):
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
-
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Status | None = None) -> Result:
@@ -1055,7 +1054,7 @@ class RemoveJujuMachineStep(BaseStep, JujuStepHelper):
 
 
 class BackupBootstrapUserStep(BaseStep, JujuStepHelper):
-    """Backup bootstrap user credentials"""
+    """Backup bootstrap user credentials."""
 
     def __init__(self, name: str, data_location: Path):
         super().__init__("Backup Bootstrap User", "Saving bootstrap user credentials")
@@ -1132,7 +1131,6 @@ class SaveJujuUserLocallyStep(BaseStep):
 
         :return:
         """
-
         password = pwgen.pwgen(12)
 
         juju_account = JujuAccount(
@@ -1262,7 +1260,7 @@ class WriteCharmLogStep(BaseStep, JujuStepHelper):
 
 
 class JujuLoginStep(BaseStep, JujuStepHelper):
-    """Login to Juju Controller"""
+    """Login to Juju Controller."""
 
     def __init__(self, juju_account: JujuAccount | None):
         super().__init__(
@@ -1369,7 +1367,7 @@ class AddInfrastructureModelStep(BaseStep):
 
 
 class UpdateJujuModelConfigStep(BaseStep):
-    """Update Model Config for the given models"""
+    """Update Model Config for the given models."""
 
     def __init__(self, jhelper: JujuHelper, model: str, model_configs: dict):
         super().__init__("Update Model Config", f"Updating model config for {model}")
@@ -1394,7 +1392,7 @@ class UpdateJujuModelConfigStep(BaseStep):
 
 
 class DownloadJujuControllerCharmStep(BaseStep, JujuStepHelper):
-    """Download Juju Controller Charm"""
+    """Download Juju Controller Charm."""
 
     def __init__(self, proxy_settings: dict | None = None):
         super().__init__(

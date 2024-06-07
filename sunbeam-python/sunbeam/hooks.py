@@ -1,4 +1,4 @@
-# Copyright 2023 Canonical Ltd.
+# Copyright (c) 2023 Canonical Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ DEFAULT_CONFIG = {
     "deployment.risk": "stable",
 }
 
-OPTION_KEYS = set(k.split(".")[0] for k in DEFAULT_CONFIG.keys())
+OPTION_KEYS = {k.split(".")[0] for k in DEFAULT_CONFIG.keys()}
 
 
 def _update_default_config(snap: Snap) -> None:

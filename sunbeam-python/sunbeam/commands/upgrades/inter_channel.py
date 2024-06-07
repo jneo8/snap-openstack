@@ -178,6 +178,7 @@ class UpgradeControlPlane(BaseUpgrade):
         self.config = OPENSTACK_CONFIG_KEY
 
     def upgrade_tasks(self, status: Optional[Status] = None) -> Result:
+        """Perform the upgrade tasks."""
         # Step 1: Upgrade mysql charms
         LOG.debug("Upgrading Mysql charms")
         charms = list(MYSQL_CHARMS_K8S.keys())
@@ -263,6 +264,7 @@ class UpgradeMachineCharm(BaseUpgrade):
         self.timeout = timeout
 
     def upgrade_tasks(self, status: Optional[Status] = None) -> Result:
+        """Perform the upgrade tasks."""
         apps = self.get_apps_filter_by_charms(self.model, self.charms)
         result = self.upgrade_applications(
             apps,

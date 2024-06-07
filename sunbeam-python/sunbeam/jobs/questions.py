@@ -21,7 +21,7 @@ from typing import Any, Callable, Optional
 
 import yaml
 from rich.console import Console
-from rich.prompt import Confirm, DefaultType, Prompt
+from rich.prompt import Confirm, Prompt
 from rich.text import Text
 
 from sunbeam.clusterd.client import Client
@@ -34,7 +34,7 @@ PASSWORD_MASK = "*" * 8
 class PasswordPrompt(Prompt):
     """Prompt that asks for a password."""
 
-    def render_default(self, default: DefaultType) -> Text:
+    def render_default(self, default: str) -> Text:
         """Turn the supplied default in to a Text instance.
 
         Args:
@@ -53,15 +53,18 @@ class StreamWrapper:
         self.write_stream = write_stream
 
     def readline(self):
+        """Wrap readline, return empty string instead of None."""
         value = self.read_stream.readline()
         if value == "\n":
             return ""
         return value
 
     def flush(self):
+        """Wrap flush, do nothing."""
         self.read_stream.flush()
 
     def write(self, s: str):
+        """Write to the stream."""
         self.write_stream.write(s)
 
 
@@ -106,6 +109,7 @@ class Question:
 
     @property
     def question_function(self):
+        """Allow subclasses to define the question function."""
         raise NotImplementedError
 
     def calculate_default(self, new_default: Any = None) -> Any:
@@ -177,6 +181,7 @@ class PromptQuestion(Question):
 
     @property
     def question_function(self):
+        """Use default prompt function."""
         return Prompt.ask
 
 
@@ -185,6 +190,7 @@ class PasswordPromptQuestion(Question):
 
     @property
     def question_function(self):
+        """Use password prompt function."""
         return PasswordPrompt.ask
 
 
@@ -193,12 +199,12 @@ class ConfirmQuestion(Question):
 
     @property
     def question_function(self):
+        """Use confirm prompt function."""
         return Confirm.ask
 
 
 class QuestionBank:
     """A bank of questions.
-
 
     For example:
 
@@ -263,6 +269,7 @@ class QuestionBank:
                     self.questions[key].previous_answer = value
 
     def __getattr__(self, attr):
+        """Return a question from the bank."""
         return self.questions[attr]
 
 

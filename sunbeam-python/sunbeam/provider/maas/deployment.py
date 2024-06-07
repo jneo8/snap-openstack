@@ -114,7 +114,7 @@ class MaasDeployment(Deployment):
         return self.resource_pool + "-internal-api"
 
     @pydantic.validator("type")
-    def type_validator(cls, v: str, values: dict) -> str:
+    def type_validator(cls, v: str, values: dict) -> str:  # noqa N805
         if v != MAAS_TYPE:
             raise ValueError("Deployment type must be MAAS.")
         return v
@@ -235,7 +235,7 @@ class MaasDeployment(Deployment):
         return preseed_content_final
 
     def get_default_proxy_settings(self) -> dict:
-        """Return default proxy settings"""
+        """Return default proxy settings."""
         # to avoid circular import
         from sunbeam.provider.maas.client import MaasClient
 

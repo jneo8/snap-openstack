@@ -110,11 +110,11 @@ class MaasClient:
         return ip_ranges
 
     def get_dns_servers(self) -> list[str]:
-        """Get configured upstream dns"""
+        """Get configured upstream dns."""
         return self._client.maas.get_upstream_dns()  # type: ignore
 
     def get_http_proxy(self) -> str | None:
-        """Get configured http proxy"""
+        """Get configured http proxy."""
         return self._client.maas.get_http_proxy()  # type: ignore
 
     @classmethod

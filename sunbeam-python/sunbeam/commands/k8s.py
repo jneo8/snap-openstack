@@ -95,7 +95,7 @@ def k8s_addons_questions():
 
 
 class DeployK8SApplicationStep(DeployMachineApplicationStep):
-    """Deploy K8S application using Terraform"""
+    """Deploy K8S application using Terraform."""
 
     _ADDONS_CONFIG = K8S_ADDONS_CONFIG_KEY
 
@@ -146,9 +146,9 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
             previous_answers=self.variables.get("k8s-addons", {}),
             accept_defaults=self.accept_defaults,
         )
-        self.variables["k8s-addons"][
-            "loadbalancer"
-        ] = k8s_addons_bank.loadbalancer.ask()
+        self.variables["k8s-addons"]["loadbalancer"] = (
+            k8s_addons_bank.loadbalancer.ask()
+        )
 
         LOG.debug(self.variables)
         write_answers(self.client, self._ADDONS_CONFIG, self.variables)
@@ -166,9 +166,11 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
         return True
 
     def get_application_timeout(self) -> int:
+        """Return application timeout."""
         return K8S_APP_TIMEOUT
 
     def extra_tfvars(self) -> dict:
+        """Extra terraform vars to pass to terraform apply."""
         return {
             "endpoint_bindings": [
                 {"space": self.deployment.get_space(Networks.MANAGEMENT)},
@@ -198,6 +200,7 @@ class AddK8SUnitsStep(AddMachineUnitsStep):
         )
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return K8S_UNIT_TIMEOUT
 
 
@@ -223,11 +226,12 @@ class RemoveK8SUnitStep(RemoveMachineUnitStep):
         )
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return K8S_UNIT_TIMEOUT
 
 
 class EnableK8SFeatures(BaseStep):
-    """Enable K8S Features"""
+    """Enable K8S Features."""
 
     _ADDONS_CONFIG = K8S_ADDONS_CONFIG_KEY
 
@@ -355,7 +359,6 @@ class EnableK8SFeatures(BaseStep):
 
 
 class AddK8SCloudStep(BaseStep, JujuStepHelper):
-
     _KUBECONFIG = K8S_KUBECONFIG_KEY
 
     def __init__(self, client: Client, jhelper: JujuHelper):
@@ -450,6 +453,7 @@ class K8SHelper:
 
     @classmethod
     def get_provider(cls) -> str:
+        """Return k8s provider from snap settings."""
         provider = Snap().config.get("k8s.provider")
         if provider not in SUPPORTED_K8S_PROVIDERS:
             raise click.ClickException(
@@ -460,6 +464,7 @@ class K8SHelper:
 
     @classmethod
     def get_cloud(cls) -> str:
+        """Return cloud name matching provider."""
         match cls.get_provider():
             case "k8s":
                 return K8S_CLOUD
@@ -468,6 +473,7 @@ class K8SHelper:
 
     @classmethod
     def get_default_storageclass(cls) -> str:
+        """Return storageclass matching provider."""
         match cls.get_provider():
             case "k8s":
                 return K8S_DEFAULT_STORAGECLASS
@@ -476,6 +482,7 @@ class K8SHelper:
 
     @classmethod
     def get_kubeconfig_key(cls) -> str:
+        """Return kubeconfig key matching provider."""
         match cls.get_provider():
             case "k8s":
                 return K8S_KUBECONFIG_KEY
@@ -484,6 +491,7 @@ class K8SHelper:
 
     @classmethod
     def get_loadbalancer_annotation(cls) -> str:
+        """Return loadbalancer annotation matching provider."""
         match cls.get_provider():
             case "k8s":
                 return SERVICE_LB_ANNOTATION

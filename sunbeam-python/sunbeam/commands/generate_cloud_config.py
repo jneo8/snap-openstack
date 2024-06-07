@@ -98,6 +98,7 @@ class GenerateCloudConfigStep(BaseStep):
             return Result(ResultType.SKIPPED)
 
     def run(self, status: Optional["Status"] = None) -> Result:
+        """Generate cloud-config yaml for cloud access."""
         try:
             if self.is_admin:
                 # pass emptydictionary for tf_output

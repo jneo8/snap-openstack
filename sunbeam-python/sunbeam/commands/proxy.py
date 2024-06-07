@@ -137,7 +137,7 @@ def _update_proxy(proxy: dict, deployment: Deployment):
 )
 @click.pass_context
 def show(ctx: click.Context, format: str) -> None:
-    """Show proxy configuration"""
+    """Show proxy configuration."""
     deployment: Deployment = ctx.obj
     _preflight_checks(deployment)
 
@@ -161,7 +161,7 @@ def show(ctx: click.Context, format: str) -> None:
 @click.option("--http-proxy", type=str, prompt=True, help="HTTP_PROXY configuration")
 @click.pass_context
 def set(ctx: click.Context, http_proxy: str, https_proxy: str, no_proxy: str) -> None:
-    """Update proxy configuration"""
+    """Update proxy configuration."""
     deployment: Deployment = ctx.obj
 
     if not (http_proxy and https_proxy and no_proxy):
@@ -185,7 +185,7 @@ def set(ctx: click.Context, http_proxy: str, https_proxy: str, no_proxy: str) ->
 @click.command()
 @click.pass_context
 def clear(ctx: click.Context) -> None:
-    """Clear proxy configuration"""
+    """Clear proxy configuration."""
     deployment: Deployment = ctx.obj
 
     variables = {"proxy": {}}

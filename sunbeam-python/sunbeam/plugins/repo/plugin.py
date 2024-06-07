@@ -110,7 +110,7 @@ class PluginClassNotLoadedException(Exception):
 
 
 class ExternalRepo:
-    """External repo helper functions"""
+    """External repo helper functions."""
 
     def __init__(
         self,
@@ -225,6 +225,7 @@ class RepoPlugin(BasePlugin):
         super().__init__(self.name, deployment)
 
     def commands(self) -> dict:
+        """Return the commands for the plugin."""
         return {
             "init": [{"name": self.name, "command": self.repo}],
             "init.repo": [
@@ -393,7 +394,7 @@ class AddPluginRepoStep(BaseStep):
         self.plugin = plugin
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Clone and validate the repo"""
+        """Clone and validate the repo."""
         try:
             LOG.debug(f"Cloning the repo {self.repo.git_repo}")
             self.repo.clone_repo()
@@ -428,8 +429,7 @@ class RemovePluginRepoStep(BaseStep):
         self.plugin = plugin
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Remove the repo if no plugins are enabled"""
-
+        """Remove the repo if no plugins are enabled."""
         enabled_plugins = PluginManager.enabled_plugins(
             self.deployment, [self.repo_name]
         )
