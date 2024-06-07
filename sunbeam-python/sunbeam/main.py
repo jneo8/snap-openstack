@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import logging
+import sys
 from pathlib import Path
 
 import click
@@ -98,6 +99,7 @@ def main():
     snap = Snap()
     logfile = log.prepare_logfile(snap.paths.user_common / "logs", "sunbeam")
     log.setup_root_logging(logfile)
+    LOG.debug("command: %s", " ".join(sys.argv))
     cli.add_command(prepare_node_cmds.prepare_node_script)
     cli.add_command(configure_cmds.configure)
     cli.add_command(generate_cloud_config_cmds.cloud_config)
