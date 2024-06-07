@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -38,6 +39,7 @@ from sunbeam.jobs.common import (
     read_config,
     run_plan,
     update_config,
+    update_status_background,
 )
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
@@ -174,17 +176,23 @@ class UpdateLDAPDomainStep(BaseStep, JujuStepHelper):
         charm_name = "keystone-ldap-{}".format(self.charm_config["domain-name"])
         apps = ["keystone", charm_name]
         LOG.debug(f"Application monitored for readiness: {apps}")
+        queue = asyncio.queues.Queue(maxsize=len(apps))
+        task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
                 self.jhelper.wait_until_active(
                     self.model,
                     apps,
                     timeout=APPLICATION_DEPLOY_TIMEOUT,
+                    queue=queue,
                 )
             )
         except (JujuWaitException, TimeoutException) as e:
             LOG.warning(str(e))
             return Result(ResultType.FAILED, str(e))
+        finally:
+            if not task.done():
+                task.cancel()
         return Result(ResultType.COMPLETED)
 
 
@@ -237,17 +245,23 @@ class AddLDAPDomainStep(BaseStep, JujuStepHelper):
         charm_name = "keystone-ldap-{}".format(self.charm_config["domain-name"])
         apps = ["keystone", charm_name]
         LOG.debug(f"Application monitored for readiness: {apps}")
+        queue = asyncio.queues.Queue(maxsize=len(apps))
+        task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
                 self.jhelper.wait_until_active(
                     self.model,
                     apps,
                     timeout=APPLICATION_DEPLOY_TIMEOUT,
+                    queue=queue,
                 )
             )
         except (JujuWaitException, TimeoutException) as e:
             LOG.warning(str(e))
             return Result(ResultType.FAILED, str(e))
+        finally:
+            if not task.done():
+                task.cancel()
 
         return Result(ResultType.COMPLETED)
 

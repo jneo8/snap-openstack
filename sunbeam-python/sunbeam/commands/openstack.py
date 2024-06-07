@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -248,13 +249,15 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
         if not extra_tfvars.get("enable-ceph") and "cinder-ceph" in apps:
             apps.remove("cinder-ceph")
         LOG.debug(f"Application monitored for readiness: {apps}")
-        task = run_sync(update_status_background(self, apps, status))
+        queue = asyncio.queues.Queue(maxsize=len(apps))
+        task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
                 self.jhelper.wait_until_active(
                     self.model,
                     apps,
                     timeout=OPENSTACK_DEPLOY_TIMEOUT,
+                    queue=queue,
                 )
             )
         except (JujuWaitException, TimeoutException) as e:
@@ -364,13 +367,15 @@ class ReapplyOpenStackTerraformPlanStep(BaseStep, JujuStepHelper):
         if not storage_nodes and "cinder-ceph" in apps:
             apps.remove("cinder-ceph")
         LOG.debug(f"Application monitored for readiness: {apps}")
-        task = run_sync(update_status_background(self, apps, status))
+        queue = asyncio.queues.Queue(maxsize=len(apps))
+        task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
                 self.jhelper.wait_until_active(
                     self.model,
                     apps,
                     timeout=OPENSTACK_DEPLOY_TIMEOUT,
+                    queue=queue,
                 )
             )
         except (JujuWaitException, TimeoutException) as e:

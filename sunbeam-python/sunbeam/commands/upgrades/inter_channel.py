@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import logging
 from typing import List, Optional
 
@@ -127,8 +128,8 @@ class BaseUpgrade(BaseStep, JujuStepHelper):
         except TerraformException as e:
             LOG.exception("Error upgrading cloud")
             return Result(ResultType.FAILED, str(e))
-
-        task = run_sync(update_status_background(self, apps, status))
+        queue = asyncio.queues.Queue(maxsize=len(apps))
+        task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
                 self.jhelper.wait_until_desired_status(
@@ -136,6 +137,7 @@ class BaseUpgrade(BaseStep, JujuStepHelper):
                     apps,
                     expected_wls,
                     timeout=timeout,
+                    queue=queue,
                 )
             )
         except (JujuWaitException, TimeoutException) as e:

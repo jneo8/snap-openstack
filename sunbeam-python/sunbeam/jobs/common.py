@@ -24,7 +24,6 @@ from typing import Any, List, Optional, Type
 import click
 import yaml
 from click import decorators
-from juju.client.client import FullStatus
 from rich.console import Console
 from rich.status import Status
 from snaphelpers import Snap, UnknownConfigKey
@@ -352,36 +351,46 @@ def delete_config(client: Client, key: str):
 
 
 async def update_status_background(
-    step, applications: List[str], status: Optional[Status]
-):
-    async def _update_status_background_coro():
-        if status is not None:
-            model = await step.jhelper.get_model(step.model)
-            active_units = {}
-            while True:
-                nb_units = 0
-                full_status: FullStatus = await model.get_status(applications)
-                for app in full_status.applications.values():
-                    if app is None or app.status is None:
-                        continue
-                    nb_units += app.int_ or 0
-                    for unit, unit_status in app.units.items():
-                        if unit_status is None or unit_status.workload_status is None:
-                            continue
-                        if unit_status.workload_status.status == "active":
-                            active_units[unit] = active_units.get(unit, 0) + 1
-                        else:
-                            active_units[unit] = 0
+    step,
+    applications: list[str],
+    queue: asyncio.queues.Queue,
+    status: Status | None = None,
+) -> asyncio.Task:
+    """Update status in the background.
 
-                # Consider unit active if it has been active for at least 2 periods
-                nb_active_units = len(
-                    list(filter(lambda unit: unit >= 2, active_units.values()))
-                )
+    If status is None, return a no-op task.
+    """
+    if status is None:
+        return asyncio.create_task(asyncio.sleep(0))
+    apps = {app: False for app in applications}
+    nb_apps = len(applications)
+    message = (
+        step.status + "waiting for services to come online ({nb_active_apps}/{nb_apps})"
+    )
+
+    async def _update_status_background_coro():
+        nb_active_apps = 0
+        status.update(message.format(nb_active_apps=nb_active_apps, nb_apps=nb_apps))
+        while nb_active_apps < nb_apps:
+            try:
+                app = await queue.get()
+                if app not in apps:
+                    LOG.debug("Received an unexpected app %s", app)
+                    queue.task_done()
+                    continue
+                apps[app] = True
+                nb_active_apps = sum(apps.values())
                 status.update(
-                    step.status + "waiting for services to come online "
-                    f"({nb_active_units}/{nb_units})"
+                    message.format(nb_active_apps=nb_active_apps, nb_apps=nb_apps)
                 )
-                await asyncio.sleep(20)
+                queue.task_done()
+            except asyncio.CancelledError:
+                LOG.debug(
+                    "Cancelling status update, not ready applications: %s",
+                    ", ".join(app for app, ready in apps.items() if not ready),
+                )
+                break
+        status.update(step.status + "all services are online")
 
     return asyncio.create_task(_update_status_background_coro())
 

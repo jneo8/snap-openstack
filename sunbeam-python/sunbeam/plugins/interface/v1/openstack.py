@@ -14,6 +14,7 @@
 # limitations under the License.
 
 
+import asyncio
 import logging
 from abc import abstractmethod
 from enum import Enum
@@ -375,8 +376,8 @@ class UpgradeOpenStackApplicationStep(BaseStep, JujuStepHelper):
         except TerraformException as e:
             LOG.exception(f"Error upgrading plugin {self.plugin.name}")
             return Result(ResultType.FAILED, str(e))
-
-        task = run_sync(update_status_background(self, apps, status))
+        queue = asyncio.queues.Queue(maxsize=len(apps))
+        task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
                 self.jhelper.wait_until_desired_status(
@@ -384,6 +385,7 @@ class UpgradeOpenStackApplicationStep(BaseStep, JujuStepHelper):
                     apps,
                     expected_wls,
                     timeout=timeout,
+                    queue=queue,
                 )
             )
         except (JujuWaitException, TimeoutException) as e:
@@ -437,17 +439,23 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
 
         apps = self.plugin.set_application_names()
         LOG.debug(f"Application monitored for readiness: {apps}")
+        queue = asyncio.queues.Queue(maxsize=len(apps))
+        task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
                 self.jhelper.wait_until_active(
                     self.model,
                     apps,
                     timeout=self.plugin.set_application_timeout_on_enable(),
+                    queue=queue,
                 )
             )
         except (JujuWaitException, TimeoutException) as e:
             LOG.warning(str(e))
             return Result(ResultType.FAILED, str(e))
+        finally:
+            if not task.done():
+                task.cancel()
 
         return Result(ResultType.COMPLETED)
 

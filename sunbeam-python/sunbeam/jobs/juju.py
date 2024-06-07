@@ -14,13 +14,24 @@
 # limitations under the License.
 
 import asyncio
+import asyncio.queues
 import base64
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Awaitable, Dict, List, Optional, Sequence, TypedDict, TypeVar, cast
+from typing import (
+    Awaitable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    TypedDict,
+    TypeVar,
+    cast,
+)
 
 import pydantic
 import pytz
@@ -31,12 +42,8 @@ from juju.charmhub import CharmHub
 from juju.client import client as juju_client
 from juju.controller import Controller
 from juju.errors import (
-    JujuAgentError,
     JujuAPIError,
-    JujuAppError,
     JujuError,
-    JujuMachineError,
-    JujuUnitError,
 )
 from juju.machine import Machine
 from juju.model import Model
@@ -821,113 +828,108 @@ class JujuHelper:
     async def wait_until_active(
         self,
         model: str,
-        apps: Optional[list] = None,
-        timeout: Optional[int] = None,
+        apps: list[str] | None = None,
+        timeout: int = 10 * 60,
+        queue: asyncio.queues.Queue | None = None,
     ) -> None:
         """Wait for all agents in model to reach idle status.
 
         :model: Name of the model to wait for readiness
+        :apps: Name of the appplication to wait for, if None, wait for all apps
         :timeout: Waiting timeout in seconds
+        :queue: Queue to put application names in when they are ready, optional, must
+            be sized for the number of applications
         """
         model_impl = await self.get_model(model)
+        if apps is None:
+            apps = list(model_impl.applications.keys())
+        await self.wait_until_desired_status(model, apps, ["active"], timeout, queue)
 
+    @staticmethod
+    async def _wait_until_status_coroutine(
+        model: Model,
+        app: str,
+        queue: asyncio.queues.Queue | None = None,
+        expected_status: Iterable[str] | None = None,
+    ):
+        """Worker function to wait for application's units workloads to be active."""
+        if expected_status is None:
+            expected_status = {"active"}
+        else:
+            expected_status = set(expected_status)
         try:
-            # Wait for all the unit workload status to active and Agent status to idle
-            await model_impl.wait_for_idle(
-                apps=apps, status="active", timeout=timeout, raise_on_error=False
-            )
-        except (JujuMachineError, JujuAgentError, JujuUnitError, JujuAppError) as e:
-            raise JujuWaitException(
-                f"Error while waiting for model {model!r} to be ready: {str(e)}"
-            ) from e
-        except asyncio.TimeoutError as e:
-            raise TimeoutException(
-                f"Timed out while waiting for model {model!r} to be ready"
-            ) from e
+            while True:
+                status = await model.get_status([app])
+                if app not in status.applications:
+                    raise ValueError(f"Application {app} not found in status")
+                status = {
+                    unit.workload_status.status
+                    for unit in status.applications[app].units.values()
+                }
+                if len(status) > 0 and status.issubset(expected_status):
+                    LOG.debug("Application %r is active", app)
+                    # queue is sized for the number of coroutines,
+                    # it should never throw QueueFull
+                    if queue is not None:
+                        queue.put_nowait(app)
+                    return
+                await asyncio.sleep(15)
+        except asyncio.CancelledError:
+            LOG.debug("Waiting for %r cancelled", app)
 
     async def wait_until_desired_status(
         self,
         model: str,
-        apps: list,
-        status: list = ["active"],
+        apps: list[str],
+        status: list[str] | None = None,
         timeout: int = 10 * 60,
+        queue: asyncio.queues.Queue | None = None,
     ) -> None:
-        """Wait for all agents in model to reach desired status.
+        """Wait for all workloads in model to reach desired status.
 
         :model: Name of the model to wait for readiness
         :apps: Applications to check the status for
         :status: Desired status list
         :timeout: Waiting timeout in seconds
         """
-        check_freq = 0.5
-        idle_period = 15
+        if status is None:
+            wl_status = {"active"}
+        else:
+            wl_status = set(status)
         model_impl = await self.get_model(model)
-
-        timeout = timedelta(seconds=timeout)
-        idle_period = timedelta(seconds=idle_period)
-        start_time = datetime.now()
-
-        idle_times = {}
-        units_ready = set()  # The units that are in the desired state
-        last_log_time = None
-        log_interval = timedelta(seconds=30)
-
+        if queue is not None and queue.maxsize < len(apps):
+            raise ValueError("Queue size should be at least the number of applications")
+        tasks = []
+        for app in apps:
+            tasks.append(
+                asyncio.create_task(
+                    self._wait_until_status_coroutine(
+                        model_impl, app, queue, wl_status
+                    ),
+                    name=app,
+                )
+            )
+        excs = []
         try:
-            while True:
-                busy = []
-                for app_name in apps:
-                    if app_name not in model_impl.applications:
-                        busy.append(app_name + " (missing)")
-                        continue
-                    app = model_impl.applications[app_name]
-                    app_status = await app.get_status()
-
-                    for unit in app.units:
-                        need_to_wait_more_for_a_particular_status = (
-                            unit.workload_status not in status
-                        )
-                        app_is_in_desired_status = app_status in status
-                        if (
-                            not need_to_wait_more_for_a_particular_status
-                            and unit.agent_status == "idle"  # noqa: W503
-                            and app_is_in_desired_status  # noqa: W503
-                        ):
-                            units_ready.add(unit.name)
-                            now = datetime.now()
-                            idle_start = idle_times.setdefault(unit.name, now)
-
-                            if now - idle_start < idle_period:
-                                busy.append(
-                                    f"{unit.name} [{unit.agent_status}] "
-                                    f"{unit.workload_status}: "
-                                    f"{unit.workload_status_message}"
-                                )
-                        else:
-                            idle_times.pop(unit.name, None)
-                            busy.append(
-                                f"{unit.name} [{unit.agent_status}] "
-                                f"{unit.workload_status}: "
-                                f"{unit.workload_status_message}"
-                            )
-
-                if not busy:
-                    break
-                busy = "\n  ".join(busy)
-                if timeout is not None and datetime.now() - start_time > timeout:
-                    raise TimeoutException(
-                        f"Timed out while waiting for model {model!r} to be ready: "
-                        f"{busy}"
-                    )
-                if (
-                    last_log_time is None
-                    or datetime.now() - last_log_time > log_interval  # noqa: W503
-                ):
-                    last_log_time = datetime.now()
-                await asyncio.sleep(check_freq)
-        except (JujuMachineError, JujuAgentError, JujuUnitError, JujuAppError) as e:
-            raise JujuWaitException(
-                f"Error while waiting for model {model!r} to be ready: {str(e)}"
+            await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True), timeout=timeout
+            )
+        except asyncio.TimeoutError as e:
+            raise TimeoutException(
+                f"Timed out while waiting for model {model!r} to be ready"
             ) from e
+        finally:
+            for task in tasks:
+                task.cancel()
+                if task.done() and not task.cancelled() and (ex := task.exception()):
+                    LOG.debug("coroutine %r exception: %s", task.get_name(), str(ex))
+                    excs.append(ex)
+
+        if excs:
+            # python 3.11 use ExceptionGroup
+            raise JujuWaitException(
+                f"Error while waiting for model {model!r} to be ready", excs
+            )
 
     async def set_application_config(self, model: str, app: str, config: dict):
         """Update application configuration.

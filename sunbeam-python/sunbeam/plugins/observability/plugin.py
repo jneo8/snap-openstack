@@ -18,6 +18,7 @@
 Plugin to deploy and manage observability, powered by COS Lite.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -122,13 +123,15 @@ class DeployObservabilityStackStep(BaseStep, JujuStepHelper):
 
         apps = run_sync(self.jhelper.get_application_names(self.model))
         LOG.debug(f"Application monitored for readiness: {apps}")
-        task = run_sync(update_status_background(self, apps, status))
+        queue = asyncio.queues.Queue(maxsize=len(apps))
+        task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
                 self.jhelper.wait_until_active(
                     self.model,
                     apps,
                     timeout=OBSERVABILITY_DEPLOY_TIMEOUT,
+                    queue=queue,
                 )
             )
         except (JujuWaitException, TimeoutException) as e:

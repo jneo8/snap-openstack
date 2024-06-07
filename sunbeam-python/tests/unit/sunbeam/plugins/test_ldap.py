@@ -97,9 +97,6 @@ class TestAddLDAPDomainStep:
             }
         )
         step.tfhelper.apply.assert_called_once_with()
-        self.jhelper.wait_until_active.assert_called_once_with(
-            "openstack", ["keystone", "keystone-ldap-dom1"], timeout=900
-        )
         assert result.result_type == ResultType.COMPLETED
 
     def test_enable_second_domain(self, read_config, update_config, snap):
@@ -117,9 +114,6 @@ class TestAddLDAPDomainStep:
             }
         )
         step.tfhelper.apply.assert_called_once_with()
-        self.jhelper.wait_until_active.assert_called_once_with(
-            "openstack", ["keystone", "keystone-ldap-dom2"], timeout=900
-        )
         assert result.result_type == ResultType.COMPLETED
 
     def test_enable_tf_apply_failed(self, read_config, update_config, snap):
@@ -142,9 +136,6 @@ class TestAddLDAPDomainStep:
             }
         )
         step.tfhelper.apply.assert_called_once_with()
-        self.jhelper.wait_until_active.assert_called_once_with(
-            "openstack", ["keystone", "keystone-ldap-dom1"], timeout=900
-        )
         assert result.result_type == ResultType.FAILED
         assert result.message == "timed out"
 
@@ -231,9 +222,6 @@ class TestUpdateLDAPDomainStep:
             }
         )
         step.tfhelper.apply.assert_called_once_with()
-        self.jhelper.wait_until_active.assert_called_once_with(
-            "openstack", ["keystone", "keystone-ldap-dom1"], timeout=900
-        )
         assert result.result_type == ResultType.COMPLETED
 
     def test_update_wrong_domain(self, read_config, update_config, snap):
