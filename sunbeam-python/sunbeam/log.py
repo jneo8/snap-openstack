@@ -52,7 +52,7 @@ def setup_root_logging(logfile: Optional[Path] = None):
     # Some logging from the Juju (and dependent) libraries are a bit
     # noisy. Let's reduce the logging output from these dependencies.
     # TODO(wolsen) determine if we need to support a -vvv type option
-    for namespace in ["websockets", "kubernetes.client"]:
+    for namespace in ["websockets", "kubernetes.client", "pyroute2"]:
         logging.getLogger(namespace).setLevel(logging.WARNING)
     # Mute juju logging to avoid missing facade warning messages
     for namespace in ["juju"]:
