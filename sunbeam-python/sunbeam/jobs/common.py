@@ -444,8 +444,7 @@ def infer_risk(snap: Snap) -> RiskLevel:
             return RiskLevel.CANDIDATE
         # Beta and edge are considered the same for now
         case "beta":
-            LOG.debug("Beta channel detected, using edge instead.")
-            return RiskLevel.EDGE
+            return RiskLevel.BETA
         case "edge":
             return RiskLevel.EDGE
         case _:
