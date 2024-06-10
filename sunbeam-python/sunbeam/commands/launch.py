@@ -56,7 +56,7 @@ def launch(
     key: str,
     name: Optional[str] = None,
 ) -> None:
-    """Launch an OpenStack instance on demo setup"""
+    """Launch an OpenStack instance on demo setup."""
     snap = Snap()
     data_location = snap.paths.user_data
     deployment: Deployment = ctx.obj

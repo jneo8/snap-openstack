@@ -68,6 +68,7 @@ class TlsPluginGroup(OpenStackControlPlanePlugin):
         """Disable TLS group."""
 
     def commands(self) -> dict:
+        """Return a dictionary of commands for the plugin."""
         return {
             "enable": [{"name": self.group, "command": self.enable_tls}],
             "disable": [{"name": self.group, "command": self.disable_tls}],
@@ -114,7 +115,7 @@ class TlsPluginGroup(OpenStackControlPlanePlugin):
 
 
 class AddCACertsToKeystoneStep(BaseStep):
-    """Transfer CA certificates"""
+    """Transfer CA certificates."""
 
     def __init__(
         self,
@@ -201,7 +202,7 @@ class AddCACertsToKeystoneStep(BaseStep):
 
 
 class RemoveCACertsFromKeystoneStep(BaseStep):
-    """Remove CA certificates"""
+    """Remove CA certificates."""
 
     def __init__(
         self,

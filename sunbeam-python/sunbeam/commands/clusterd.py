@@ -101,7 +101,7 @@ class ClusterInitStep(BaseStep):
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Bootstrap sunbeam cluster"""
+        """Bootstrap sunbeam cluster."""
         try:
             ip = utils.get_local_ip_by_cidr(self.management_cidr)
         except ValueError as e:
@@ -167,9 +167,9 @@ class AskManagementCidrStep(BaseStep):
             accept_defaults=self.accept_defaults,
         )
 
-        self.variables["bootstrap"][
-            "management_cidr"
-        ] = bootstrap_bank.management_cidr.ask()
+        self.variables["bootstrap"]["management_cidr"] = (
+            bootstrap_bank.management_cidr.ask()
+        )
 
     def has_prompts(self) -> bool:
         """Returns true if the step has prompts that it can ask the user.
@@ -264,7 +264,7 @@ class ClusterAddNodeStep(BaseStep):
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Add node to sunbeam cluster"""
+        """Add node to sunbeam cluster."""
         try:
             token = self.client.cluster.add_node(name=self.node_name)
             LOG.info(token)
@@ -315,7 +315,7 @@ class ClusterJoinNodeStep(BaseStep):
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Join node to sunbeam cluster"""
+        """Join node to sunbeam cluster."""
         try:
             self.client.cluster.join_node(
                 name=self.fqdn,
@@ -338,7 +338,7 @@ class ClusterListNodeStep(BaseStep):
         self.client = client
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """List nodes in the sunbeam cluster"""
+        """List nodes in the sunbeam cluster."""
         try:
             members = self.client.cluster.get_cluster_members()
             LOG.debug(f"Members: {members}")
@@ -375,7 +375,7 @@ class ClusterUpdateNodeStep(BaseStep):
         self.machine_id = machine_id
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Update Node info"""
+        """Update Node info."""
         try:
             self.client.cluster.update_node_info(self.name, self.role, self.machine_id)
             return Result(result_type=ResultType.COMPLETED)
@@ -395,7 +395,7 @@ class ClusterRemoveNodeStep(BaseStep):
         self.client = client
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Remove node from sunbeam cluster"""
+        """Remove node from sunbeam cluster."""
         try:
             self.client.cluster.remove_node(self.node_name)
             return Result(result_type=ResultType.COMPLETED)
@@ -442,7 +442,7 @@ class ClusterAddJujuUserStep(BaseStep):
         return Result(ResultType.SKIPPED)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Add node to sunbeam cluster"""
+        """Add node to sunbeam cluster."""
         try:
             self.client.cluster.add_juju_user(self.username, self.token)
             return Result(result_type=ResultType.COMPLETED)
@@ -464,7 +464,7 @@ class ClusterUpdateJujuControllerStep(BaseStep, JujuStepHelper):
         self.controller = controller
 
     def _extract_ip(self, ip) -> Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
-        """Extract ip from ipv4 or ipv6 ip:port"""
+        """Extract ip from ipv4 or ipv6 ip:port."""
         # Check for ipv6 addr
         ipv6_addr = re.match(r"\[(.*?)\]", ip)
         if ipv6_addr:
@@ -474,7 +474,7 @@ class ClusterUpdateJujuControllerStep(BaseStep, JujuStepHelper):
         return ipaddress.ip_address(ip_str)
 
     def filter_ips(self, ips: List[str], network_str: Optional[str]) -> List[str]:
-        """Filter ips missing from specified networks
+        """Filter ips missing from specified networks.
 
         :param ips: list of ips to filter
         :param network_str: network to filter ips from, separated by comma

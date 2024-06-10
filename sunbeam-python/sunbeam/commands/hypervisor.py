@@ -50,7 +50,7 @@ HYPERVISOR_UNIT_TIMEOUT = (
 
 
 class DeployHypervisorApplicationStep(DeployMachineApplicationStep):
-    """Deploy openstack-hyervisor application using Terraform cloud"""
+    """Deploy openstack-hyervisor application using Terraform cloud."""
 
     _CONFIG = CONFIG_KEY
 
@@ -80,6 +80,7 @@ class DeployHypervisorApplicationStep(DeployMachineApplicationStep):
         self.openstack_model = OPENSTACK_MODEL
 
     def extra_tfvars(self) -> dict:
+        """Extra terraform vars to pass to terraform apply."""
         openstack_backend_config = self.openstack_tfhelper.backend_config()
         return {
             "openstack_model": self.openstack_model,
@@ -131,6 +132,7 @@ class DeployHypervisorApplicationStep(DeployMachineApplicationStep):
         }
 
     def get_application_timeout(self) -> int:
+        """Return application timeout in seconds."""
         return HYPERVISOR_APP_TIMEOUT
 
 
@@ -162,6 +164,7 @@ class AddHypervisorUnitsStep(AddMachineUnitsStep):
         return {"agent": ["idle"], "workload": workload_statuses}
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return HYPERVISOR_UNIT_TIMEOUT
 
 
@@ -278,7 +281,7 @@ class RemoveHypervisorUnitStep(BaseStep, JujuStepHelper):
 
 
 class ReapplyHypervisorTerraformPlanStep(BaseStep):
-    """Reapply openstack-hyervisor terraform plan"""
+    """Reapply openstack-hyervisor terraform plan."""
 
     _CONFIG = CONFIG_KEY
 
@@ -314,7 +317,7 @@ class ReapplyHypervisorTerraformPlanStep(BaseStep):
         return Result(ResultType.SKIPPED)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Apply terraform configuration to deploy hypervisor"""
+        """Apply terraform configuration to deploy hypervisor."""
         statuses = ["active", "unknown"]
         if len(self.client.cluster.list_nodes_by_role("storage")) < 1:
             LOG.debug("No storage nodes found, allowing hypervisor waiting status")

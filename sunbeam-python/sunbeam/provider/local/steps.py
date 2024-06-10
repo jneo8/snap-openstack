@@ -60,6 +60,7 @@ class NicPrompt(PromptBase[str]):
 
         Args:
             default (Any, optional): Optional default value.
+            stream (TextIO, optional): Optional stream to write to.
 
         Returns:
             PromptType: Processed value.
@@ -99,6 +100,7 @@ class NicQuestion(sunbeam.jobs.questions.Question):
 
     @property
     def question_function(self):
+        """Override the question function to use the NicPrompt."""
         return NicPrompt.ask
 
 
@@ -132,6 +134,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         self.join_mode = join_mode
 
     def has_prompts(self) -> bool:
+        """Returns true if the step has prompts that it can ask the user."""
         return True
 
     def prompt_for_nic(self) -> None:
@@ -163,6 +166,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         return nic
 
     def prompt(self, console: Optional[Console] = None) -> None:
+        """Determines if the step can take input from the user."""
         # If adding a node before configure step has run then answers will
         # not be populated yet.
         self.variables = sunbeam.jobs.questions.load_answers(

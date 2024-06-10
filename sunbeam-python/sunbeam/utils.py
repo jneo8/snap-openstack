@@ -73,7 +73,7 @@ def get_hypervisor_hostname() -> str:
 
 
 def get_fqdn(cidr: str | None = None) -> str:
-    """Get FQDN of the machine"""
+    """Get FQDN of the machine."""
     # If the fqdn returned by this function and from libvirt are different,
     # the hypervisor name and the one registered in OVN will be different
     # which leads to port binding errors,
@@ -214,7 +214,7 @@ def get_local_ip_by_cidr(cidr: str) -> str:
 
 
 def get_local_cidr_by_default_route() -> str:
-    """Get CIDR of host associated with default gateway"""
+    """Get CIDR of host associated with default gateway."""
     conf = get_ifaddresses_by_default_route()
     ip = conf["addr"]
     netmask = conf["netmask"]
@@ -310,6 +310,7 @@ class CatchGroup(click.Group):
     """Catch exceptions and print them to stderr."""
 
     def __call__(self, *args, **kwargs):
+        """Don't display traceback on exceptions."""
         try:
             return self.main(*args, **kwargs)
         except SunbeamException as e:

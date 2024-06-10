@@ -77,7 +77,7 @@ GRAFANA_AGENT_K8S_CHANNEL = "latest/stable"
 
 
 class DeployObservabilityStackStep(BaseStep, JujuStepHelper):
-    """Deploy Observability Stack using Terraform"""
+    """Deploy Observability Stack using Terraform."""
 
     _CONFIG = COS_CONFIG_KEY
 
@@ -142,7 +142,7 @@ class DeployObservabilityStackStep(BaseStep, JujuStepHelper):
 
 
 class UpdateObservabilityModelConfigStep(BaseStep, JujuStepHelper):
-    """Update Observability Model config  using Terraform"""
+    """Update Observability Model config  using Terraform."""
 
     _CONFIG = COS_CONFIG_KEY
 
@@ -206,6 +206,8 @@ class RemoveSaasApplicationsStep(BaseStep):
         self._remote_app_to_delete = []
 
     def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not."""
+        super().is_skip
         model = run_sync(self.jhelper.get_model(self.model))
         remote_applications = model.remote_applications
         LOG.debug(
@@ -242,7 +244,7 @@ class RemoveSaasApplicationsStep(BaseStep):
 
 
 class DeployGrafanaAgentStep(BaseStep, JujuStepHelper):
-    """Deploy Grafana Agent using Terraform"""
+    """Deploy Grafana Agent using Terraform."""
 
     _CONFIG = GRAFANA_AGENT_CONFIG_KEY
 
@@ -304,7 +306,7 @@ class DeployGrafanaAgentStep(BaseStep, JujuStepHelper):
 
 
 class RemoveObservabilityStackStep(BaseStep, JujuStepHelper):
-    """Remove Observability Stack using Terraform"""
+    """Remove Observability Stack using Terraform."""
 
     def __init__(
         self,
@@ -343,7 +345,7 @@ class RemoveObservabilityStackStep(BaseStep, JujuStepHelper):
 
 
 class RemoveGrafanaAgentStep(BaseStep, JujuStepHelper):
-    """Remove Grafana Agent using Terraform"""
+    """Remove Grafana Agent using Terraform."""
 
     def __init__(
         self,
@@ -403,6 +405,7 @@ class ObservabilityPlugin(OpenStackControlPlanePlugin):
 
     @property
     def manifest(self) -> Manifest:
+        """Return the manifest."""
         if self._manifest:
             return self._manifest
 
@@ -410,7 +413,7 @@ class ObservabilityPlugin(OpenStackControlPlanePlugin):
         return self._manifest
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             charms={
                 "cos-traefik-k8s": CharmManifest(channel=COS_CHANNEL),
@@ -492,6 +495,7 @@ class ObservabilityPlugin(OpenStackControlPlanePlugin):
         }
 
     def update_proxy_model_configs(self) -> None:
+        """Update proxy model configs."""
         try:
             if not self.enabled:
                 LOG.debug("Observability plugin is not enabled, nothing to do")
@@ -543,6 +547,7 @@ class ObservabilityPlugin(OpenStackControlPlanePlugin):
         return {}
 
     def run_enable_plans(self):
+        """Run the enablement plans."""
         jhelper = JujuHelper(self.deployment.get_connected_controller())
 
         tfhelper = self.deployment.get_tfhelper(self.tfplan)
@@ -578,6 +583,7 @@ class ObservabilityPlugin(OpenStackControlPlanePlugin):
         click.echo("Observability enabled.")
 
     def run_disable_plans(self):
+        """Run the disablement plans."""
         jhelper = JujuHelper(self.deployment.get_connected_controller())
         tfhelper = self.deployment.get_tfhelper(self.tfplan)
         tfhelper_cos = self.deployment.get_tfhelper(self.tfplan_cos)

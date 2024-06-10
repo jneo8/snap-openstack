@@ -95,6 +95,7 @@ class SoftwareConfig(pydantic.BaseModel):
     def get_default(
         cls, plugin_softwares: dict[str, "SoftwareConfig"] | None = None
     ) -> "SoftwareConfig":
+        """Load default software config."""
         # TODO(gboutry): Remove Snap instanciation
         snap = Snap()
         charms = {
@@ -127,6 +128,7 @@ class SoftwareConfig(pydantic.BaseModel):
         return SoftwareConfig(charms=charms, terraform=terraform, **extra)
 
     def validate_terraform_keys(self, default_software_config: "SoftwareConfig"):
+        """Validate the terraform keys provided are expected."""
         if self.terraform:
             tf_keys = set(self.terraform.keys())
             all_tfplans = default_software_config.terraform.keys()
@@ -136,6 +138,7 @@ class SoftwareConfig(pydantic.BaseModel):
                 )
 
     def validate_charm_keys(self, default_software_config: "SoftwareConfig"):
+        """Validate the charm keys provided are expected."""
         if self.charms:
             charms_keys = set(self.charms.keys())
             all_charms = default_software_config.charms.keys()
@@ -147,7 +150,7 @@ class SoftwareConfig(pydantic.BaseModel):
     def validate_against_default(
         self, default_software_config: "SoftwareConfig"
     ) -> None:
-        """Validate the software config against the default software config"""
+        """Validate the software config against the default software config."""
         self.validate_terraform_keys(default_software_config)
         self.validate_charm_keys(default_software_config)
 
@@ -167,6 +170,7 @@ class SoftwareConfig(pydantic.BaseModel):
 
     @property
     def extra(self) -> dict:
+        """Allow storing extra data."""
         if self.__pydantic_extra__ is None:
             self.__pydantic_extra__ = {}
         return self.__pydantic_extra__
@@ -181,18 +185,18 @@ class Manifest(pydantic.BaseModel):
         cls,
         plugin_softwares: dict[str, SoftwareConfig] | None = None,
     ) -> "Manifest":
-        """Load manifest and override the default manifest"""
+        """Load manifest and override the default manifest."""
         software_config = SoftwareConfig.get_default(plugin_softwares)
         return Manifest(software=software_config)
 
     @classmethod
     def from_file(cls, file: Path) -> "Manifest":
-        """Load manifest from file"""
+        """Load manifest from file."""
         with file.open() as f:
             return Manifest.model_validate(yaml.safe_load(f))
 
     def merge(self, other: "Manifest") -> "Manifest":
-        """Merge the manifest with the provided manifest"""
+        """Merge the manifest with the provided manifest."""
         deployment = utils.merge_dict(
             copy.deepcopy(self.deployment), copy.deepcopy(other.deployment)
         )
@@ -201,7 +205,7 @@ class Manifest(pydantic.BaseModel):
         return Manifest(deployment=deployment, software=software)
 
     def validate_against_default(self, default_manifest: "Manifest") -> None:
-        """Validate the manifest against the default manifest"""
+        """Validate the manifest against the default manifest."""
         self.software.validate_against_default(default_manifest.software)
 
 
@@ -262,7 +266,7 @@ class AddManifestStep(BaseStep):
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Write manifest to cluster db"""
+        """Write manifest to cluster db."""
         try:
             id = self.client.cluster.add_manifest(
                 data=yaml.safe_dump(self.manifest_content)

@@ -126,7 +126,7 @@ class ExtendedAPIService(service.BaseService):
         return nodes.get("metadata")
 
     def get_node_info(self, name: str) -> dict:
-        """Fetch Node Information from a name"""
+        """Fetch Node Information from a name."""
         return self._get(f"1.0/nodes/{name}").get("metadata")
 
     def remove_node_info(self, name: str) -> None:
@@ -242,17 +242,24 @@ class ClusterService(MicroClusterService, ExtendedAPIService):
     def bootstrap(
         self, name: str, address: str, role: List[str], machineid: int = -1
     ) -> None:
+        """Bootstrap cluster and register node information."""
         self.bootstrap_cluster(name, address)
         self.add_node_info(name, role, machineid)
 
     def add_node(self, name: str) -> str:
+        """Request token for additional node."""
         return self.generate_token(name)
 
     def join_node(self, name: str, address: str, token: str, role: List[str]) -> None:
+        """Join node to cluster and register node information."""
         self.join(name, address, token)
         self.add_node_info(name, role)
 
     def remove_node(self, name) -> None:
+        """Remove node from cluster and database.
+
+        If node is not part of cluster, remove its potential token.
+        """
         members = self.get_cluster_members()
         member_names = [member.get("name") for member in members]
 
@@ -274,7 +281,7 @@ class ClusterService(MicroClusterService, ExtendedAPIService):
         self.update_config(self.SUNBEAM_BOOTSTRAP_KEY, json.dumps("True"))
 
     def check_sunbeam_bootstrapped(self) -> bool:
-        """Check if the sunbeam deployment has been bootstrapped"""
+        """Check if the sunbeam deployment has been bootstrapped."""
         try:
             state = json.loads(self.get_config(self.SUNBEAM_BOOTSTRAP_KEY))
         except service.ConfigItemNotFoundException:

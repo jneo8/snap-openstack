@@ -58,7 +58,6 @@ class ConfigureMySQLStep(BaseStep):
         :return: ResultType.SKIPPED if the Step should be skipped,
                 ResultType.COMPLETED or ResultType.FAILED otherwise
         """
-
         try:
             run_sync(self.jhelper.get_model(OPENSTACK_MODEL))
         except ModelNotFoundException:
@@ -76,7 +75,6 @@ class ConfigureMySQLStep(BaseStep):
 
         :return: ResultType.COMPLETED or ResultType.FAILED
         """
-
         try:
             mysqls = get_mysqls(self.jhelper)
         except JujuException as e:

@@ -43,7 +43,7 @@ FORMAT_YAML = "yaml"
 FORMAT_DEFAULT = "default"
 FORMAT_VALUE = "value"
 
-CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 SHARE_PATH = Path(".local/share/openstack/")
 
 CLICK_OK = "[green]OK[/green]"
@@ -55,7 +55,7 @@ K8S_CLUSTER_POD_CIDR = "10.1.0.0/16"
 
 
 class Role(enum.Enum):
-    """The role that the current node will play
+    """The role that the current node will play.
 
     This determines if the role will be a control plane node, a Compute node,
     or a storage node. The role will help determine which particular services
@@ -114,10 +114,10 @@ class ResultType(enum.Enum):
 
 
 class Result:
-    """The result of running a step"""
+    """The result of running a step."""
 
     def __init__(self, result_type: ResultType, message: Any = ""):
-        """Creates a new result
+        """Creates a new result.
 
         :param result_type:
         :param message:
@@ -170,7 +170,7 @@ class BaseStep:
     """
 
     def __init__(self, name: str, description: str = ""):
-        """Initialise the BaseStep
+        """Initialise the BaseStep.
 
         :param name: the name of the step
         """
@@ -389,15 +389,15 @@ async def update_status_background(
 def str_presenter(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
     """Return multiline string as '|' literal block.
 
-    Ref: https://stackoverflow.com/questions/8640959/how-can-i-control-what-scalar-form-pyyaml-uses-for-my-data # noqa E501
-    """
+    Ref: https://stackoverflow.com/questions/8640959/how-can-i-control-what-scalar-form-pyyaml-uses-for-my-data
+    """  # noqa W505
     if data.count("\n") > 0:
         return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
     return dumper.represent_scalar("tag:yaml.org,2002:str", data)
 
 
 def _get_default_no_proxy_settings() -> set:
-    """Return default no proxy settings"""
+    """Return default no proxy settings."""
     return {
         "127.0.0.1",
         "localhost",

@@ -40,7 +40,7 @@ LOG = logging.getLogger()
 
 # Update the help options to allow -h in addition to --help for
 # triggering the help for various commands
-CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 # Core plugins yaml
 CORE_PLUGINS_YAML = "plugins/plugins.yaml"
@@ -62,13 +62,13 @@ def cli(ctx, quiet, verbose):
 @click.group("manifest", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
 @click.pass_context
 def manifest(ctx):
-    """Manage manifests (read-only commands)"""
+    """Manage manifests (read-only commands)."""
 
 
 @click.group("proxy", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
 @click.pass_context
 def proxy(ctx):
-    """Manage proxy configuration"""
+    """Manage proxy configuration."""
 
 
 @click.group("enable", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
@@ -80,13 +80,13 @@ def proxy(ctx):
 )
 @click.pass_context
 def enable(ctx, manifest: Path | None = None):
-    """Enable plugins"""
+    """Enable plugins."""
 
 
 @click.group("disable", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
 @click.pass_context
 def disable(ctx):
-    """Disable plugins"""
+    """Disable plugins."""
 
 
 @click.group("utils", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)

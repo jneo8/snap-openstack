@@ -40,7 +40,7 @@ class LoadbalancerPlugin(OpenStackControlPlanePlugin):
         )
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             charms={"octavia-k8s": CharmManifest(channel=OPENSTACK_CHANNEL)}
         )

@@ -86,7 +86,7 @@ def microk8s_addons_questions():
 
 
 class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
-    """Deploy Microk8s application using Terraform"""
+    """Deploy Microk8s application using Terraform."""
 
     _ADDONS_CONFIG = MICROK8S_ADDONS_CONFIG_KEY
 
@@ -121,6 +121,7 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
         self.variables = {}
 
     def get_application_timeout(self) -> int:
+        """Return application timeout in seconds."""
         return MICROK8S_APP_TIMEOUT
 
     def prompt(self, console: Optional[Console] = None) -> None:
@@ -165,6 +166,7 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
         return True
 
     def extra_tfvars(self) -> dict:
+        """Extra terraform vars to pass to terraform apply."""
         return {
             "endpoint_bindings": [
                 {"space": self.deployment.get_space(Networks.MANAGEMENT)},
@@ -194,6 +196,7 @@ class AddMicrok8sUnitsStep(AddMachineUnitsStep):
         )
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return MICROK8S_UNIT_TIMEOUT
 
 
@@ -213,6 +216,7 @@ class RemoveMicrok8sUnitStep(RemoveMachineUnitStep):
         )
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return MICROK8S_UNIT_TIMEOUT
 
 

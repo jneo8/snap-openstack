@@ -1,4 +1,4 @@
-# Copyright 2023 Canonical Ltd.
+# Copyright (c) 2023 Canonical Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -410,11 +410,11 @@ class TestEnableDisablePlugin:
     def test_check_plugin_is_automatically_enableable_with_non_automatically_enableable_plugin(  # noqa: E501
         self, deployment
     ):
-        class DummyPlugin_(DummyPlugin):
+        class DummyPluginInner(DummyPlugin):
             def enable_plugin(self, necessary_arg) -> None:
                 return super().enable_plugin()
 
-        required_plugin = DummyPlugin_(name="test_plugin", deployment=deployment)
+        required_plugin = DummyPluginInner(name="test_plugin", deployment=deployment)
 
         plugin = DummyPlugin("test_plugin", deployment)
         with pytest.raises(NotAutomaticPluginError):

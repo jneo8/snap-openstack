@@ -39,7 +39,7 @@ class SecretsPlugin(OpenStackControlPlanePlugin):
         )
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             charms={"barbican-k8s": CharmManifest(channel=OPENSTACK_CHANNEL)}
         )

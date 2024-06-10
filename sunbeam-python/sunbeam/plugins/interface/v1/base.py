@@ -36,7 +36,7 @@ LOG = logging.getLogger(__name__)
 
 
 class PluginError(SunbeamException):
-    """Common plugin exception base class"""
+    """Common plugin exception base class."""
 
 
 class MissingPluginError(PluginError):
@@ -72,6 +72,7 @@ class ClickInstantiator:
         self.client = client
 
     def __call__(self, *args, **kwargs):
+        """Invoke the click command on the instance method."""
         return self.command(self.klass(self.client), *args, **kwargs)
 
 
@@ -275,7 +276,7 @@ class BasePlugin(ABC):
         return Snap().paths.user_common
 
     def validate_commands(self) -> bool:
-        """validate the commands dictionary.
+        """Validate the commands dictionary.
 
         Validate if the dictionary follows the format
         {<group>: [{"name": <command name>, "command": <command function>}]}
@@ -476,6 +477,7 @@ class PluginRequirement(Requirement):
 
     @property
     def klass(self) -> Type["EnableDisablePlugin"]:
+        """Return the plugin class for the requirement."""
         klass = PluginManager().resolve_plugin(self.repo, self.name)
         if klass is None:
             raise InvalidRequirementError(f"Plugin {self.name} not found")
@@ -543,7 +545,6 @@ class EnableDisablePlugin(BasePlugin):
         self, plugin: "EnableDisablePlugin", requirement: PluginRequirement
     ):
         """Check if actual plugin class is compatible with requirements."""
-
         if len(requirement.specifier) == 0:
             # No version requirement, so no need to check version
             return

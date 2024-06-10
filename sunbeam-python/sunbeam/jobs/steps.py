@@ -38,7 +38,7 @@ LOG = logging.getLogger(__name__)
 
 
 class DeployMachineApplicationStep(BaseStep):
-    """Base class to deploy machine application using Terraform cloud"""
+    """Base class to deploy machine application using Terraform cloud."""
 
     def __init__(
         self,
@@ -67,9 +67,11 @@ class DeployMachineApplicationStep(BaseStep):
         self.refresh = refresh
 
     def extra_tfvars(self) -> dict:
+        """Extra terraform vars to pass to terraform apply."""
         return {}
 
     def get_application_timeout(self) -> int:
+        """Application timeout in seconds."""
         return 600
 
     def is_skip(self, status: Optional[Status] = None) -> Result:
@@ -89,7 +91,7 @@ class DeployMachineApplicationStep(BaseStep):
         return Result(ResultType.SKIPPED)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Apply terraform configuration to deploy sunbeam machine"""
+        """Apply terraform configuration to deploy sunbeam machine."""
         machine_ids = []
         try:
             app = run_sync(self.jhelper.get_application(self.application, self.model))
@@ -133,7 +135,7 @@ class DeployMachineApplicationStep(BaseStep):
 
 
 class AddMachineUnitsStep(BaseStep):
-    """Base class to add units of machine application"""
+    """Base class to add units of machine application."""
 
     def __init__(
         self,
@@ -158,6 +160,7 @@ class AddMachineUnitsStep(BaseStep):
         self.to_deploy = set()
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return 600  # 10 minutes
 
     def is_skip(self, status: Optional[Status] = None) -> Result:
@@ -202,7 +205,7 @@ class AddMachineUnitsStep(BaseStep):
                 f"Application {self.application} has not been deployed",
             )
 
-        deployed_units_machine_ids = set(unit.machine.id for unit in app.units)
+        deployed_units_machine_ids = {unit.machine.id for unit in app.units}
         self.to_deploy -= deployed_units_machine_ids
         if len(self.to_deploy) == 0:
             return Result(ResultType.SKIPPED, "No new units to deploy")
@@ -255,7 +258,7 @@ class AddMachineUnitsStep(BaseStep):
 
 
 class RemoveMachineUnitStep(BaseStep):
-    """Base class to remove unit of machine application"""
+    """Base class to remove unit of machine application."""
 
     def __init__(
         self,
@@ -279,6 +282,7 @@ class RemoveMachineUnitStep(BaseStep):
         self.unit = None
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return 600  # 10 minutes
 
     def is_skip(self, status: Optional[Status] = None) -> Result:

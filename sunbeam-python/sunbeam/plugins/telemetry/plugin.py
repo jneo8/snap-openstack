@@ -48,7 +48,7 @@ class TelemetryPlugin(OpenStackControlPlanePlugin):
         )
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             charms={
                 "aodh-k8s": CharmManifest(channel=OPENSTACK_CHANNEL),

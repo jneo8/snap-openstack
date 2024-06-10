@@ -59,7 +59,7 @@ def get_deployment_class(type_: str) -> Type["Deployment"]:
 
 
 class MissingTerraformInfoException(Exception):
-    """An Exception raised when terraform information is missing in manifest"""
+    """An Exception raised when terraform information is missing in manifest."""
 
     pass
 
@@ -110,7 +110,7 @@ class Deployment(pydantic.BaseModel):
         return NotImplemented  # type: ignore
 
     def get_client(self) -> Client:
-        """Return a client instance
+        """Return a client instance.
 
         Raises ValueError when fails to instantiate a client.
         """
@@ -146,6 +146,7 @@ class Deployment(pydantic.BaseModel):
         return plugin_manager
 
     def get_proxy_settings(self) -> dict:
+        """Fetch proxy settings from clusterd, if not available use defaults."""
         proxy = {}
         try:
             # If client does not exist, use detaults
@@ -243,14 +244,14 @@ class Deployment(pydantic.BaseModel):
         env = {}
         if self.juju_controller and self.juju_account:
             env.update(
-                dict(
-                    JUJU_USERNAME=self.juju_account.user,
-                    JUJU_PASSWORD=self.juju_account.password,
-                    JUJU_CONTROLLER_ADDRESSES=",".join(
+                {
+                    "JUJU_USERNAME": self.juju_account.user,
+                    "JUJU_PASSWORD": self.juju_account.password,
+                    "JUJU_CONTROLLER_ADDRESSES": ",".join(
                         self.juju_controller.api_endpoints
                     ),
-                    JUJU_CA_CERT=self.juju_controller.ca_cert,
-                )
+                    "JUJU_CA_CERT": self.juju_controller.ca_cert,
+                }
             )
         env.update(self.get_proxy_settings())
 
@@ -271,6 +272,10 @@ class Deployment(pydantic.BaseModel):
             )
 
     def get_tfhelper(self, tfplan: str) -> TerraformHelper:
+        """Get an instance of TerraformHelper for the given tfplan.
+
+        This method will load every tfhelper on first use.
+        """
         if len(self._tfhelpers) == 0:
             self._load_tfhelpers()
 

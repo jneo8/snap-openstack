@@ -80,7 +80,7 @@ def generate_software_manifest(manifest: Manifest) -> str:
 )
 @click.pass_context
 def list(ctx: click.Context, format: str) -> None:
-    """List manifests"""
+    """List manifests."""
     deployment: Deployment = ctx.obj
     client = deployment.get_client()
     manifests = []

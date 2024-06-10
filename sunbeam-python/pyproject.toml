@@ -1,0 +1,100 @@
+# Copyright (c) 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+# Testing tools configuration
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+log_cli_level = "INFO"
+
+[tool.ruff]
+exclude = [
+    '*egg',
+    '*lib/python*',
+    'releasenotes',
+    'tools',
+    'build',
+    '*.egg_info',
+    'dist',
+    '__pycache__',
+    'venv',
+    '.venv',
+    '.tox',
+    'doc',
+    '.git',
+]
+output-format = "full"
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+preview = true # to enable CPY
+select = [
+    "E", # pycodestyle
+    "W", # pycodestyle
+    "F", # pyflakes
+    "C", # convention
+    "N", # pep8-naming
+    "D", # pydocstyle
+    "S", # bandit
+    "I", # isort
+    "CPY", # flake8-copyright
+]
+ignore = [
+    "F821",
+    "S105", # hardcoded password checks - likely to generate false positives
+    "S107", # same as above
+    "S401", # import subprocess - not necessarily a security issue; this plugin is mainly used for penetration testing workflow
+    "S404", # import subprocess - same as above
+    "S603", # process without shell - not necessarily a security issue; this plugin is mainly used for penetration testing workflow
+    "S606", # same as above
+    "S605", # process with a shell - possible security issue; this should be investigated by the project for possible exploitation
+    "S607", #start process with a partial path - this should be a project level decision
+]
+extend-ignore = ["E203"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/*" = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D107",
+    "D415",
+    "E501",
+    "N802",
+    "N803",
+    "N806",
+    "S",    # Disable bandit rules in tests
+]
+"setup.py" = ["D100"]
+"**/__init__.py" = ["D104"]
+
+"sunbeam/*" = [
+    "D107", # missing docstring in __init__ method
+    "D101", # Missing docstring in public class
+    "D103", # Missing docstring in public function
+    "D100", # Missing docstring in public module
+    "N818", # Exception should be named with an Error suffix
+]
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 88
+max-doc-length = 88
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-copyright]
+author = "Canonical Ltd."
+# don't enforce on empty files
+min-file-size = 1
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15

@@ -67,7 +67,7 @@ TEMPEST_VALIDATION_RESULT = "/var/lib/tempest/workspace/tempest-validation.log"
 VALIDATION_PLUGIN_DEPLOY_TIMEOUT = (
     60 * 60
 )  # 60 minutes in seconds, tempest can take some time to initialized
-SUPPORTED_TEMPEST_CONFIG = set(["schedule"])
+SUPPORTED_TEMPEST_CONFIG = {"schedule"}
 
 
 class Profile(pydantic.BaseModel):
@@ -115,7 +115,7 @@ class Config(pydantic.BaseModel):
     schedule: Optional[str] = None
 
     @pydantic.validator("schedule")
-    def validate_schedule(cls, schedule: str) -> str:
+    def validate_schedule(cls, schedule: str) -> str:  # noqa N805
         """Validate the schedule config option.
 
         Return the valid schedule if valid,
@@ -184,8 +184,7 @@ def validated_config_args(args: Dict[str, str]) -> Config:
 
     Raise a click bad argument error if errors.
     """
-
-    unsupported_options = set(list(args.keys())).difference(SUPPORTED_TEMPEST_CONFIG)
+    unsupported_options = set(args.keys()).difference(SUPPORTED_TEMPEST_CONFIG)
     if unsupported_options:
         raise click.ClickException(
             f"{', '.join(unsupported_options)!r} is not a supported config option"
@@ -253,7 +252,7 @@ class ValidationPlugin(OpenStackControlPlanePlugin):
         )
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             charms={"tempest-k8s": CharmManifest(channel=TEMPEST_CHANNEL)}
         )

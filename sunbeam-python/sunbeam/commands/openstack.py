@@ -67,7 +67,7 @@ def determine_target_topology(client: Client) -> str:
     """
     control_nodes = client.cluster.list_nodes_by_role("control")
     compute_nodes = client.cluster.list_nodes_by_role("compute")
-    combined = set(node["name"] for node in control_nodes + compute_nodes)
+    combined = {node["name"] for node in control_nodes + compute_nodes}
     host_total_ram = get_host_total_ram()
     if len(combined) == 1 and host_total_ram < RAM_32_GB_IN_KB:
         topology = "single"
@@ -102,7 +102,7 @@ def compute_ingress_scale(topology: str, control_nodes: int) -> int:
 
 
 class DeployControlPlaneStep(BaseStep, JujuStepHelper):
-    """Deploy OpenStack using Terraform cloud"""
+    """Deploy OpenStack using Terraform cloud."""
 
     _CONFIG = CONFIG_KEY
 
@@ -324,7 +324,7 @@ class PatchLoadBalancerServicesStep(BaseStep):
 
 
 class ReapplyOpenStackTerraformPlanStep(BaseStep, JujuStepHelper):
-    """Reapply OpenStack Terraform plan"""
+    """Reapply OpenStack Terraform plan."""
 
     _CONFIG = CONFIG_KEY
 
@@ -384,7 +384,7 @@ class ReapplyOpenStackTerraformPlanStep(BaseStep, JujuStepHelper):
 
 
 class UpdateOpenStackModelConfigStep(BaseStep):
-    """Update OpenStack ModelConfig via Terraform plan"""
+    """Update OpenStack ModelConfig via Terraform plan."""
 
     _CONFIG = CONFIG_KEY
 

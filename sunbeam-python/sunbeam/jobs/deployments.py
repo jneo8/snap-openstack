@@ -35,7 +35,7 @@ class DeploymentsConfig(pydantic.BaseModel):
     _path: Path | None = pydantic.PrivateAttr(default=None)
 
     @pydantic.validator("deployments", pre=True, each_item=True)
-    def _validate_deployments(cls, deployment: dict | Deployment) -> Deployment:
+    def _validate_deployments(cls, deployment: dict | Deployment) -> Deployment:  # noqa N805
         if isinstance(deployment, Deployment):
             return deployment
         if isinstance(deployment, dict):

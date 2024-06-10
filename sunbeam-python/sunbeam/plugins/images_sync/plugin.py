@@ -43,7 +43,7 @@ class ImagesSyncPlugin(OpenStackControlPlanePlugin):
         )
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             charms={
                 "openstack-images-sync-k8s": CharmManifest(channel=OPENSTACK_CHANNEL),
@@ -94,6 +94,7 @@ class ImagesSyncPlugin(OpenStackControlPlanePlugin):
 
     @property
     def k8s_application_data(self):
+        """K8s application data."""
         return {
             "images-sync": ApplicationChannelData(
                 channel=OPENSTACK_CHANNEL,
@@ -103,4 +104,5 @@ class ImagesSyncPlugin(OpenStackControlPlanePlugin):
 
     @property
     def tfvars_channel_var(self):
+        """Terraform vars channel variable."""
         return "images-sync-channel"

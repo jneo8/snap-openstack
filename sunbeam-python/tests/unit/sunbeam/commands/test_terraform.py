@@ -1,4 +1,4 @@
-# Copyright 2023 Canonical Ltd.
+# Copyright (c) 2023 Canonical Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -95,9 +95,10 @@ class TestTerraformHelper:
         manifest = deployment.get_manifest()
 
         tfhelper = deployment.get_tfhelper(tfplan)
-        with patch.object(tfhelper, "write_tfvars") as write_tfvars, patch.object(
-            tfhelper, "apply"
-        ) as apply:
+        with (
+            patch.object(tfhelper, "write_tfvars") as write_tfvars,
+            patch.object(tfhelper, "apply") as apply,
+        ):
             tfhelper.update_tfvars_and_apply_tf(
                 client, manifest, "fake-config", extra_tfvars
             )

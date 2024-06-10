@@ -122,6 +122,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
     """Coordinator for refreshing charms in their current channel."""
 
     def get_plan(self) -> list[BaseStep]:
+        """Return the upgrade plan."""
         plan = [
             LatestInChannel(self.jhelper, self.manifest),
             TerraformInitStep(self.deployment.get_tfhelper("openstack-plan")),

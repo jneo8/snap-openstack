@@ -70,7 +70,7 @@ class ApplicationChannelData(TypedDict):
 
 
 class TerraformPlanLocation(Enum):
-    """Enum to define Terraform plan location
+    """Enum to define Terraform plan location.
 
     There are 2 choices - either in sunbeam-terraform repo or
     part of plugin in etc/deploy-<plugin name> directory.
@@ -118,6 +118,7 @@ class OpenStackControlPlanePlugin(EnableDisablePlugin):
 
     @property
     def manifest(self) -> Manifest:
+        """Return the manifest."""
         if self._manifest:
             return self._manifest
 
@@ -396,7 +397,7 @@ class UpgradeOpenStackApplicationStep(BaseStep, JujuStepHelper):
 
 
 class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
-    """Generic step to enable OpenStack application using Terraform"""
+    """Generic step to enable OpenStack application using Terraform."""
 
     def __init__(
         self,
@@ -420,7 +421,7 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
         self.model = OPENSTACK_MODEL
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Apply terraform configuration to deploy openstack application"""
+        """Apply terraform configuration to deploy openstack application."""
         config_key = self.plugin.get_tfvar_config_key()
         extra_tfvars = self.plugin.set_tfvars_on_enable()
 
@@ -452,7 +453,7 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
 
 
 class DisableOpenStackApplicationStep(BaseStep, JujuStepHelper):
-    """Generic step to disable OpenStack application using Terraform"""
+    """Generic step to disable OpenStack application using Terraform."""
 
     def __init__(
         self,
@@ -476,7 +477,7 @@ class DisableOpenStackApplicationStep(BaseStep, JujuStepHelper):
         self.model = OPENSTACK_MODEL
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Apply terraform configuration to remove openstack application"""
+        """Apply terraform configuration to remove openstack application."""
         config_key = self.plugin.get_tfvar_config_key()
 
         try:

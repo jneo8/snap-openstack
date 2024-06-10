@@ -80,7 +80,7 @@ def ceph_replica_scale(storage_nodes: int) -> int:
 
 
 class DeployMicrocephApplicationStep(DeployMachineApplicationStep):
-    """Deploy Microceph application using Terraform"""
+    """Deploy Microceph application using Terraform."""
 
     def __init__(
         self,
@@ -107,9 +107,11 @@ class DeployMicrocephApplicationStep(DeployMachineApplicationStep):
         )
 
     def get_application_timeout(self) -> int:
+        """Return application timeout in seconds."""
         return MICROCEPH_APP_TIMEOUT
 
     def extra_tfvars(self) -> dict:
+        """Extra terraform vars to pass to terraform apply."""
         storage_nodes = self.client.cluster.list_nodes_by_role("storage")
         tfvars: dict[str, Any] = {
             "endpoint_bindings": [
@@ -183,6 +185,7 @@ class AddMicrocephUnitsStep(AddMachineUnitsStep):
         )
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return MICROCEPH_UNIT_TIMEOUT
 
 
@@ -202,11 +205,12 @@ class RemoveMicrocephUnitStep(RemoveMachineUnitStep):
         )
 
     def get_unit_timeout(self) -> int:
+        """Return unit timeout in seconds."""
         return MICROCEPH_UNIT_TIMEOUT
 
 
 class ConfigureMicrocephOSDStep(BaseStep):
-    """Configure Microceph OSD disks"""
+    """Configure Microceph OSD disks."""
 
     _CONFIG = CONFIG_DISKS_KEY
 
@@ -233,6 +237,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
         self.osd_disks = []
 
     def microceph_config_questions(self):
+        """Return questions for configuring microceph."""
         disks_str = None
         if len(self.unpartitioned_disks) > 0:
             disks_str = ",".join(self.unpartitioned_disks)
@@ -243,6 +248,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
         return questions
 
     def get_all_disks(self) -> None:
+        """Get all disks from microceph unit."""
         try:
             node = self.client.cluster.get_node_info(self.node_name)
             self.machine_id = str(node.get("machineid"))
@@ -293,9 +299,9 @@ class ConfigureMicrocephOSDStep(BaseStep):
         )
         if isinstance(osd_devices, list):
             osd_devices_str = ",".join(osd_devices)
-            self.preseed["microceph_config"][self.node_name][
-                "osd_devices"
-            ] = osd_devices_str
+            self.preseed["microceph_config"][self.node_name]["osd_devices"] = (
+                osd_devices_str
+            )
 
         microceph_config_bank = questions.QuestionBank(
             questions=self.microceph_config_questions(),
@@ -393,7 +399,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
 
 
 class SetCephMgrPoolSizeStep(BaseStep):
-    """Configure Microceph pool size for mgr"""
+    """Configure Microceph pool size for mgr."""
 
     def __init__(self, client: Client, jhelper: JujuHelper, model: str):
         super().__init__(

@@ -31,6 +31,7 @@ class SetBootstrapped(BaseStep):
         self.client = client
 
     def run(self, status: Optional[Status] = None) -> Result:
+        """Set deployment as bootstrapped in clusterd."""
         LOG.debug("Setting deployment as bootstrapped")
         self.client.cluster.set_sunbeam_bootstrapped()
         return Result(ResultType.COMPLETED)

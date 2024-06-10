@@ -57,18 +57,19 @@ provider_installation {
 
 
 class TerraformException(Exception):
-    """Terraform related exceptions"""
+    """Terraform related exceptions."""
 
     def __init__(self, message):
         super().__init__()
         self.message = message
 
     def __str__(self) -> str:
+        """Stringify the exception."""
         return self.message
 
 
 class TerraformHelper:
-    """Helper for interaction with Terraform"""
+    """Helper for interaction with Terraform."""
 
     def __init__(
         self,
@@ -91,6 +92,7 @@ class TerraformHelper:
         self.clusterd_address = clusterd_address
 
     def backend_config(self) -> dict:
+        """Get backend configuration for terraform."""
         if self.backend == "http" and self.clusterd_address is not None:
             address = self.clusterd_address
             return {
@@ -105,6 +107,10 @@ class TerraformHelper:
         return {}
 
     def write_backend_tf(self) -> bool:
+        """Write backend configuration to backend.tf file.
+
+        This is injecting clusterd as http backend for the terraform state.
+        """
         backend = self.backend_config()
         if self.backend == "http":
             backend_obj = Template(http_backend_template)
@@ -122,13 +128,13 @@ class TerraformHelper:
         return False
 
     def write_tfvars(self, vars: dict, location: Optional[Path] = None) -> None:
-        """Write terraform variables file"""
+        """Write terraform variables file."""
         filepath = location or (self.path / "terraform.tfvars.json")
         with filepath.open("w") as tfvars:
             tfvars.write(json.dumps(vars))
 
     def write_terraformrc(self) -> None:
-        """Write .terraformrc file"""
+        """Write .terraformrc file."""
         terraform_rc = self.snap.paths.user_data / ".terraformrc"
         with terraform_rc.open(mode="w") as file:
             file.write(
@@ -138,7 +144,7 @@ class TerraformHelper:
             )
 
     def init(self) -> None:
-        """terraform init"""
+        """Terraform init."""
         os_env = os.environ.copy()
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         tf_log = str(self.path / f"terraform-init-{timestamp}.log")
@@ -174,7 +180,7 @@ class TerraformHelper:
             raise TerraformException(str(e))
 
     def apply(self, extra_args: list | None = None):
-        """terraform apply"""
+        """Terraform apply."""
         os_env = os.environ.copy()
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         tf_log = str(self.path / f"terraform-apply-{timestamp}.log")
@@ -208,7 +214,7 @@ class TerraformHelper:
             raise TerraformException(str(e))
 
     def destroy(self):
-        """terraform destroy"""
+        """Terraform destroy."""
         os_env = os.environ.copy()
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         tf_log = str(self.path / f"terraform-destroy-{timestamp}.log")
@@ -239,7 +245,7 @@ class TerraformHelper:
             raise TerraformException(str(e))
 
     def output(self, hide_output: bool = False) -> dict:
-        """terraform output"""
+        """Terraform output."""
         os_env = os.environ.copy()
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         tf_log = str(self.path / f"terraform-output-{timestamp}.log")
@@ -450,7 +456,7 @@ class TerraformInitStep(BaseStep):
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Initialise Terraform configuration from provider mirror,"""
+        """Initialise Terraform configuration from provider mirror,."""
         try:
             self.tfhelper.init()
             return Result(ResultType.COMPLETED)

@@ -1,4 +1,4 @@
-# Copyright 2023 Canonical Ltd.
+# Copyright (c) 2023 Canonical Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -497,10 +497,13 @@ async def test_jhelper_wait_ready(
 async def test_jhelper_wait_application_ready_timeout(
     jhelper: juju.JujuHelper, model: Model, method: str, entity: str, error: str, args
 ):
-    with pytest.raises(
-        juju.TimeoutException,
-        match=f"Timed out while waiting for {error} to be ready",
-    ), patch.object(jhelper, "get_unit", side_effect=_unit_getter):
+    with (
+        pytest.raises(
+            juju.TimeoutException,
+            match=f"Timed out while waiting for {error} to be ready",
+        ),
+        patch.object(jhelper, "get_unit", side_effect=_unit_getter),
+    ):
         await getattr(jhelper, method)(entity, "control-plane", *args)
     assert model.block_until.call_count == 1
     assert model.block_until.result is False

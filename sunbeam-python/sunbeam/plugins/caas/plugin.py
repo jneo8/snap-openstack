@@ -134,7 +134,7 @@ class CaasPlugin(OpenStackControlPlanePlugin):
         self.configure_plan = "caas-setup"
 
     def manifest_defaults(self) -> SoftwareConfig:
-        """Plugin software configuration"""
+        """Plugin software configuration."""
         return SoftwareConfig(
             charms={"magnum-k8s": CharmManifest(channel=OPENSTACK_CHANNEL)},
             terraform={
@@ -168,7 +168,7 @@ class CaasPlugin(OpenStackControlPlanePlugin):
         }
 
     def add_manifest_section(self, software_config: SoftwareConfig) -> None:
-        """Adds manifest section"""
+        """Adds manifest section."""
         caas_config = software_config.extra.get("caas_config")
         if caas_config is None:
             software_config.extra["caas_config"] = CaasConfig()

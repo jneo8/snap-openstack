@@ -264,6 +264,7 @@ class PluginManager:
     def get_all_plugin_manifests(
         cls, deployment: Deployment
     ) -> dict[str, SoftwareConfig]:
+        """Return a dict of all plugin manifest defaults."""
         manifests = {}
         plugins = cls.get_all_plugin_classes()
         for klass in plugins:
@@ -274,6 +275,7 @@ class PluginManager:
 
     @classmethod
     def get_all_plugin_manifest_tfvar_map(cls, deployment: Deployment) -> dict:
+        """Return a dict of all plugin manifest attributes terraformvars map."""
         tfvar_map = {}
         plugins = cls.get_all_plugin_classes()
         for klass in plugins:
@@ -287,6 +289,7 @@ class PluginManager:
     def add_manifest_section(
         cls, deployment: Deployment, software_config: SoftwareConfig
     ) -> None:
+        """Allow every plugin to augment the manifest."""
         plugins = cls.get_all_plugin_classes()
         for klass in plugins:
             plugin = klass(deployment)
@@ -294,6 +297,7 @@ class PluginManager:
 
     @classmethod
     def get_preseed_questions_content(cls, deployment: Deployment) -> list:
+        """Allow every plugin to add preseed questions to the preseed file."""
         content = []
         plugins = cls.get_all_plugin_classes()
         for klass in plugins:
@@ -304,6 +308,7 @@ class PluginManager:
 
     @classmethod
     def get_all_charms_in_openstack_plan(cls, deployment: Deployment) -> list:
+        """Return all charms in openstack-plan from all plugins."""
         charms = []
         plugins = cls.get_all_plugin_classes()
         for klass in plugins:
@@ -318,6 +323,7 @@ class PluginManager:
 
     @classmethod
     def update_proxy_model_configs(cls, deployment: Deployment) -> None:
+        """Make all plugins update proxy model configs."""
         plugins = cls.get_all_plugin_classes()
         for klass in plugins:
             plugin = klass(deployment)

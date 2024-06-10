@@ -23,73 +23,73 @@ LOG = logging.getLogger(__name__)
 
 
 class RemoteException(Exception):
-    """An Exception raised when interacting with the remote microclusterd service"""
+    """An Exception raised when interacting with the remote microclusterd service."""
 
     pass
 
 
 class ClusterAlreadyBootstrappedException(RemoteException):
-    """Raised when cluster service is already bootstrapped"""
+    """Raised when cluster service is already bootstrapped."""
 
     pass
 
 
 class ClusterServiceUnavailableException(RemoteException):
-    """Raised when cluster service is not yet bootstrapped"""
+    """Raised when cluster service is not yet bootstrapped."""
 
     pass
 
 
 class ConfigItemNotFoundException(RemoteException):
-    """Raise when ConfigItem cannot be found on the remote"""
+    """Raise when ConfigItem cannot be found on the remote."""
 
     pass
 
 
 class ManifestItemNotFoundException(RemoteException):
-    """Raise when ManifestItem cannot be found on the remote"""
+    """Raise when ManifestItem cannot be found on the remote."""
 
     pass
 
 
 class NodeAlreadyExistsException(RemoteException):
-    """Raised when the node already exists"""
+    """Raised when the node already exists."""
 
     pass
 
 
 class NodeNotExistInClusterException(RemoteException):
-    """Raised when the node does not exist in cluster"""
+    """Raised when the node does not exist in cluster."""
 
     pass
 
 
 class NodeJoinException(RemoteException):
-    """Raised when the node not able to join cluster"""
+    """Raised when the node not able to join cluster."""
 
     pass
 
 
 class LastNodeRemovalFromClusterException(RemoteException):
-    """Raised when token is already generated for the node"""
+    """Raised when token is already generated for the node."""
 
     pass
 
 
 class TokenAlreadyGeneratedException(RemoteException):
-    """Raised when token is already generated for the node"""
+    """Raised when token is already generated for the node."""
 
     pass
 
 
 class TokenNotFoundException(RemoteException):
-    """Raised when token is not found for the node"""
+    """Raised when token is not found for the node."""
 
     pass
 
 
 class JujuUserNotFoundException(RemoteException):
-    """Raise when jujuuser is not found"""
+    """Raise when jujuuser is not found."""
 
     pass
 
@@ -98,7 +98,7 @@ class BaseService(ABC):
     """BaseService is the base service class for sunbeam clusterd services."""
 
     def __init__(self, session: Session, endpoint: str):
-        """Creates a new BaseService for the sunbeam clusterd API
+        """Creates a new BaseService for the sunbeam clusterd API.
 
         The service class is used to provide convenient APIs for clients to
         use when interacting with the sunbeam clusterd api.
@@ -110,7 +110,7 @@ class BaseService(ABC):
         self.__session = session
         self._endpoint = endpoint
 
-    def _request(self, method, path, **kwargs):
+    def _request(self, method, path, **kwargs):  # noqa: C901 too complex
         if path.startswith("/"):
             path = path[1:]
         netloc = self._endpoint

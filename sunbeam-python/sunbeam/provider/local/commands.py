@@ -143,7 +143,7 @@ console = Console()
 @click.group("cluster", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
 @click.pass_context
 def cluster(ctx):
-    """Manage the Sunbeam Cluster"""
+    """Manage the Sunbeam Cluster."""
 
 
 def remove_trailing_dot(value: str) -> str:
@@ -177,6 +177,7 @@ class LocalProvider(ProviderBase):
         cluster.add_command(refresh_cmds.refresh)
 
     def deployment_type(self) -> Tuple[str, Type[Deployment]]:
+        """Retrieve the deployment type and class."""
         return LOCAL_TYPE, LocalDeployment
 
 
