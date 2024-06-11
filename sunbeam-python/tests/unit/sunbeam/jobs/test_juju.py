@@ -534,35 +534,47 @@ async def test_jhelper_wait_ready_missing_application(
 
 
 @pytest.mark.asyncio
-async def test_jhelper_wait_until_active(jhelper: juju.JujuHelper, model):
+async def test_jhelper_wait_until_active(mocker, jhelper: juju.JujuHelper, model):
+    gather = AsyncMock()
+    mocker.patch("asyncio.gather", gather)
     await jhelper.wait_until_active("control-plane")
-    assert model.wait_for_idle.call_count == 1
+    assert gather.call_count == 1
 
 
 @pytest.mark.asyncio
 async def test_jhelper_wait_until_active_unit_in_error_state(
     jhelper: juju.JujuHelper, model
 ):
-    model.wait_for_idle.side_effect = juju.JujuWaitException("Unit is in error state")
+    jhelper._wait_until_status_coroutine = AsyncMock(
+        side_effect=juju.JujuWaitException("Unit is in error state")
+    )
 
+    model.applications = {"keystone": (), "nova": ()}
     with pytest.raises(
         juju.JujuWaitException,
         match="Unit is in error state",
     ):
         await jhelper.wait_until_active("control-plane")
-    assert model.wait_for_idle.call_count == 1
+    assert jhelper._wait_until_status_coroutine.call_count == 2
 
 
 @pytest.mark.asyncio
-async def test_jhelper_wait_until_active_timed_out(jhelper: juju.JujuHelper, model):
-    model.wait_for_idle.side_effect = juju.TimeoutException("timed out...")
+async def test_jhelper_wait_until_active_timed_out(
+    mocker, jhelper: juju.JujuHelper, model
+):
+    gather = AsyncMock()
+    gather.side_effect = asyncio.TimeoutError("timed out...")
+    mocker.patch("asyncio.gather", gather)
 
+    jhelper._wait_until_status_coroutine = AsyncMock()
+
+    model.applications = {"keystone": (), "nova": ()}
     with pytest.raises(
         juju.TimeoutException,
-        match="timed out...",
+        match="Timed out while waiting for model",
     ):
         await jhelper.wait_until_active("control-plane")
-    assert model.wait_for_idle.call_count == 1
+    assert jhelper._wait_until_status_coroutine.call_count == 2
 
 
 @pytest.mark.asyncio
