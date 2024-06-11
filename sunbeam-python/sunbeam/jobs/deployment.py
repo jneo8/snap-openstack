@@ -92,6 +92,11 @@ class Deployment(pydantic.BaseModel):
         """Return the infrastructure model name."""
         return NotImplemented
 
+    @property
+    def controller(self) -> str:
+        """Return controller name."""
+        return NotImplemented
+
     @classmethod
     def load(cls, deployment: dict) -> "Deployment":
         """Load deployment from dict."""

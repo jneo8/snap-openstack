@@ -45,7 +45,12 @@ from sunbeam.commands.microk8s import (
 from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.proxy import proxy_questions
 from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment, Networks
-from sunbeam.jobs.juju import JujuAccount, JujuAccountNotFound, JujuController
+from sunbeam.jobs.juju import (
+    CONTROLLER,
+    JujuAccount,
+    JujuAccountNotFound,
+    JujuController,
+)
 from sunbeam.jobs.plugin import PluginManager
 from sunbeam.jobs.questions import QuestionBank, load_answers, show_questions
 
@@ -95,6 +100,11 @@ class LocalDeployment(Deployment):
     def infrastructure_model(self) -> str:
         """Return the infrastructure model name."""
         return "controller"
+
+    @property
+    def controller(self) -> str:
+        """Return the controller name."""
+        return CONTROLLER
 
     def get_client(self) -> Client:
         """Return a client for the deployment."""
