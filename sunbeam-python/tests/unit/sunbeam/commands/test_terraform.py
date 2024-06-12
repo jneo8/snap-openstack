@@ -36,6 +36,8 @@ software:
     glance-k8s:
       channel: 2023.1/stable
       revision: 134
+      config:
+        ceph-osd-replication-count: 5
   terraform:
     openstack-plan:
       source: /home/ubuntu/openstack-tf
@@ -78,6 +80,7 @@ class TestTerraformHelper:
         extra_tfvars = {
             "ldap-apps": {"dom2": {"domain-name": "dom2"}},
             "glance-revision": 555,
+            "glance-config": {"ceph-osd-replication-count": 3},
         }
         read_config.return_value = {
             "keystone-channel": OPENSTACK_CHANNEL,
@@ -129,3 +132,7 @@ class TestTerraformHelper:
         # Assert remove keys from read_config if not present in manifest+defaults
         # or override
         assert "neutron-revision" not in applied_tfvars.keys()
+
+        # Below are asserts for charm config parameters
+        # Assert config values coming from extra_tfvars and in manifest
+        assert applied_tfvars.get("glance-config") == {"ceph-osd-replication-count": 5}
