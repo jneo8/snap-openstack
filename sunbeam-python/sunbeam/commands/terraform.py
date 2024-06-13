@@ -379,15 +379,38 @@ class TerraformHelper:
         # NOTE: It is expected for Manifest to contain all previous changes
         # So override tfvars from configdb to defaults if not specified in
         # manifest file
-        updated_tfvars.update(self._get_tfvars(manifest))
+        tfvars_from_manifest = self._get_tfvars(manifest)
+        updated_tfvars.update(tfvars_from_manifest)
+
         if override_tfvars:
+            self._handle_charm_configs_in_override_tfvars(
+                override_tfvars, tfvars_from_manifest
+            )
             updated_tfvars.update(override_tfvars)
+
         if tfvar_config:
             update_config(client, tfvar_config, updated_tfvars)
 
         self.write_tfvars(updated_tfvars)
         LOG.debug(f"Applying plan {self.plan} with tfvars {updated_tfvars}")
         self.apply(tf_apply_extra_args)
+
+    def _handle_charm_configs_in_override_tfvars(
+        self, override_tfvars: dict, tfvars_from_manifest: dict
+    ):
+        # Fetch all tfvar names of charm configs
+        config_tfvars = [
+            per_charm_tfvar_map.get("config")
+            for _, per_charm_tfvar_map in self.tfvar_map.get("charms", {}).items()
+        ]
+
+        # charm configs are dict, so require union of configs from overrides
+        # and manifest with precedence for overrides
+        for override_config in override_tfvars:
+            if override_config in config_tfvars:
+                override_tfvars[override_config].update(
+                    tfvars_from_manifest.get(override_config, {})
+                )
 
     def _get_tfvars(self, manifest: Manifest, charms: Optional[list] = None) -> dict:
         """Get tfvars from the manifest.
