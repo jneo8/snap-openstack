@@ -112,7 +112,22 @@ class DeployMicrocephApplicationStep(DeployMachineApplicationStep):
 
     def extra_tfvars(self) -> dict:
         """Extra terraform vars to pass to terraform apply."""
+        openstack_tfhelper = self.deployment.get_tfhelper("openstack-plan")
+        openstack_tf_output = openstack_tfhelper.output()
+
+        # Retreiving terraform state for non-existing plan using
+        # data.terraform_remote_state errros out with message "No stored state
+        # was found for the given workspace in the given backend".
+        # It is not possible to try/catch this error, see
+        # https://github.com/hashicorp/terraform-provider-google/issues/11035
+        # The Offer URLs are retrieved by running terraform output on
+        # openstack plan and pass them as variables.
+        keystone_endpoints_offer_url = openstack_tf_output.get(
+            "keystone-endpoints-offer-url"
+        )
+        traefik_rgw_offer_url = openstack_tf_output.get("ingress-rgw-offer-url")
         storage_nodes = self.client.cluster.list_nodes_by_role("storage")
+
         tfvars: dict[str, Any] = {
             "endpoint_bindings": [
                 {
@@ -154,11 +169,19 @@ class DeployMicrocephApplicationStep(DeployMachineApplicationStep):
                     "space": self.deployment.get_space(Networks.STORAGE),
                 },
             ],
+            "charm_microceph_config": {"enable-rgw": "*", "namespace-tenants": True},
         }
+
+        if keystone_endpoints_offer_url:
+            tfvars["keystone-endpoints-offer-url"] = keystone_endpoints_offer_url
+
+        if traefik_rgw_offer_url:
+            tfvars["ingress-rgw-offer-url"] = traefik_rgw_offer_url
+
         if len(storage_nodes):
-            tfvars["charm_microceph_config"] = {
-                "default-pool-size": ceph_replica_scale(len(storage_nodes))
-            }
+            tfvars["charm_microceph_config"]["default-pool-size"] = ceph_replica_scale(
+                len(storage_nodes)
+            )
 
         return tfvars
 
@@ -426,9 +449,16 @@ class SetCephMgrPoolSizeStep(BaseStep):
     def run(self, status: Optional[Status] = None) -> Result:
         """Set ceph mgr pool size."""
         try:
+            pools = [
+                ".mgr",
+                ".rgw.root",
+                "default.rgw.log",
+                "default.rgw.control",
+                "default.rgw.meta",
+            ]
             unit = run_sync(self.jhelper.get_leader_unit(APPLICATION, self.model))
             action_params = {
-                "pools": ".mgr",
+                "pools": ",".join(pools),
                 "size": ceph_replica_scale(len(self.storage_nodes)),
             }
             LOG.debug(
@@ -442,14 +472,14 @@ class SetCephMgrPoolSizeStep(BaseStep):
             if result.get("status") is None:
                 return Result(
                     ResultType.FAILED,
-                    "ERROR: Failed to update pool size for .mgr",
+                    f"ERROR: Failed to update pool size for {pools}",
                 )
         except (
             ApplicationNotFoundException,
             LeaderNotFoundException,
             ActionFailedException,
         ) as e:
-            LOG.debug("Failed to update pool size for .mgr", exc_info=True)
+            LOG.debug(f"Failed to update pool size for {pools}", exc_info=True)
             return Result(ResultType.FAILED, str(e))
 
         return Result(ResultType.COMPLETED)

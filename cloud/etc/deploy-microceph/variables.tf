@@ -52,3 +52,15 @@ variable "endpoint_bindings" {
   type        = set(map(string))
   default     = null
 }
+
+variable "keystone-endpoints-offer-url" {
+  description = "Offer URL for openstack keystone endpoints"
+  type        = string
+  default     = null
+}
+
+variable "ingress-rgw-offer-url" {
+  description = "Offer URL for Traefik RGW"
+  type        = string
+  default     = null
+}

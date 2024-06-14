@@ -481,6 +481,17 @@ def bootstrap(
                 proxy_settings=proxy_settings,
             )
         )
+        plan4.append(
+            DeployMicrocephApplicationStep(
+                deployment,
+                client,
+                microceph_tfhelper,
+                jhelper,
+                manifest,
+                deployment.infrastructure_model,
+                refresh=True,
+            )
+        )
 
     run_plan(plan4, console)
 

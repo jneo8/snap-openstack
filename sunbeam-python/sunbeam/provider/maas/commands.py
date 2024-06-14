@@ -610,6 +610,17 @@ def deploy(
             proxy_settings=proxy_settings,
         )
     )
+    plan2.append(
+        DeployMicrocephApplicationStep(
+            deployment,
+            client,
+            tfhelper_microceph,
+            jhelper,
+            manifest,
+            deployment.infrastructure_model,
+            refresh=True,
+        )
+    )
     plan2.append(ConfigureMySQLStep(jhelper))
     plan2.append(PatchLoadBalancerServicesStep(client))
     plan2.append(TerraformInitStep(tfhelper_hypervisor_deploy))
