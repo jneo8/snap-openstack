@@ -129,7 +129,7 @@ from sunbeam.jobs.common import (
     validate_roles,
 )
 from sunbeam.jobs.deployment import Deployment, Networks
-from sunbeam.jobs.juju import CONTROLLER, JujuHelper, ModelNotFoundException, run_sync
+from sunbeam.jobs.juju import JujuHelper, ModelNotFoundException, run_sync
 from sunbeam.jobs.manifest import AddManifestStep
 from sunbeam.provider.base import ProviderBase
 from sunbeam.provider.local.deployment import LOCAL_TYPE, LocalDeployment
@@ -308,7 +308,7 @@ def bootstrap(
             client,
             cloud_name,
             cloud_type,
-            CONTROLLER,
+            deployment.controller,
             bootstrap_args=juju_bootstrap_args,
             proxy_settings=proxy_settings,
         )
@@ -317,7 +317,7 @@ def bootstrap(
 
     plan2 = []
     plan2.append(CreateJujuUserStep(fqdn))
-    plan2.append(ClusterUpdateJujuControllerStep(client, CONTROLLER))
+    plan2.append(ClusterUpdateJujuControllerStep(client, deployment.controller))
     plan2_results = run_plan(plan2, console)
 
     token = get_step_message(plan2_results, CreateJujuUserStep)
@@ -327,7 +327,9 @@ def bootstrap(
     plan3.append(BackupBootstrapUserStep(fqdn, data_location))
     plan3.append(SaveJujuUserLocallyStep(fqdn, data_location))
     plan3.append(
-        RegisterJujuUserStep(client, fqdn, CONTROLLER, data_location, replace=True)
+        RegisterJujuUserStep(
+            client, fqdn, deployment.controller, data_location, replace=True
+        )
     )
     run_plan(plan3, console)
 
@@ -637,7 +639,6 @@ def join(
         )
         ip = utils.get_local_cidr_by_default_route()
 
-    controller = CONTROLLER
     deployment: LocalDeployment = ctx.obj
     data_location = Snap().paths.user_data
     client = deployment.get_client()
@@ -646,7 +647,7 @@ def join(
         JujuLoginStep(deployment.juju_account),
         ClusterJoinNodeStep(client, token, ip, name, roles_str),
         SaveJujuUserLocallyStep(name, data_location),
-        RegisterJujuUserStep(client, name, controller, data_location),
+        RegisterJujuUserStep(client, name, deployment.controller, data_location),
         AddJujuMachineStep(ip),
     ]
     plan1_results = run_plan(plan1, console)
