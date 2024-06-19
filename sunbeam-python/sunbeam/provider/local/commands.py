@@ -146,7 +146,6 @@ from sunbeam.steps.microk8s import (
     RemoveMicrok8sUnitsStep,
     StoreMicrok8sConfigStep,
 )
-from sunbeam.steps.mysql import ConfigureMySQLStep
 from sunbeam.steps.openstack import (
     DeployControlPlaneStep,
     OpenStackPatchLoadBalancerServicesStep,
@@ -650,7 +649,6 @@ def bootstrap(
     plan5: list[BaseStep] = []
 
     if is_control_node:
-        plan5.append(ConfigureMySQLStep(jhelper))
         plan5.append(OpenStackPatchLoadBalancerServicesStep(client))
 
     # NOTE(jamespage):

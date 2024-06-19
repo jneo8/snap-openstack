@@ -100,6 +100,12 @@ class ResourceOptimizationFeature(OpenStackControlPlaneFeature):
         """Set terraform variables to resize the application."""
         return {}
 
+    def get_database_charm_processes(self) -> dict[str, dict[str, int]]:
+        """Returns the database processes accessing this service."""
+        return {
+            "watcher": {"watcher-k8s": 8},
+        }
+
     @click.command()
     @pass_method_obj
     def enable_cmd(self, deployment: Deployment) -> None:
