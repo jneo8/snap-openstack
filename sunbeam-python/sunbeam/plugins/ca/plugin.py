@@ -287,7 +287,7 @@ class CaTlsPlugin(TlsPluginGroup):
         "endpoints",
         multiple=True,
         default=["public"],
-        type=click.Choice(["public", "internal"], case_sensitive=False),
+        type=click.Choice(["public", "internal", "rgw"], case_sensitive=False),
         help="Specify endpoints to apply tls.",
     )
     @click.option(
@@ -328,6 +328,8 @@ class CaTlsPlugin(TlsPluginGroup):
             tfvars.update({"enable-tls-for-public-endpoint": True})
         if "internal" in self.endpoints:
             tfvars.update({"enable-tls-for-internal-endpoint": True})
+        if "rgw" in self.endpoints:
+            tfvars.update({"enable-tls-for-rgw-endpoint": True})
 
         return tfvars
 
@@ -338,6 +340,8 @@ class CaTlsPlugin(TlsPluginGroup):
             tfvars.update({"enable-tls-for-public-endpoint": False})
         if "internal" in self.endpoints:
             tfvars.update({"enable-tls-for-internal-endpoint": False})
+        if "rgw" in self.endpoints:
+            tfvars.update({"enable-tls-for-rgw-endpoint": False})
 
         return tfvars
 
