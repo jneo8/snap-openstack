@@ -419,12 +419,11 @@ class VerifyClusterdNotBootstrappedCheck(Check):
 class TokenCheck(Check):
     """Check if a join token looks valid."""
 
-    def __init__(self, hostname: str, token: str):
+    def __init__(self, token: str):
         super().__init__(
             "Check for valid join token",
             "Checking if join token looks valid",
         )
-        self.hostname = hostname
         self.token = token
 
     def run(self) -> bool:
@@ -459,22 +458,12 @@ class TokenCheck(Check):
             self.message = "Join token content is not a valid JSON object"
             return False
 
-        missing_keys = {"name", "secret", "join_addresses", "fingerprint"} - set(
-            token.keys()
-        )
+        missing_keys = {"secret", "join_addresses", "fingerprint"} - set(token.keys())
 
         if missing_keys:
             self.message = "Join token does not contain the following required fields: "
             self.message += ", ".join(sorted(missing_keys))
 
-            return False
-
-        name = token["name"]
-        if name != self.hostname:
-            self.message = (
-                f"Join token 'name' ({name}) does not match the "
-                f"hostname ({self.hostname})"
-            )
             return False
 
         join_addresses = token["join_addresses"]

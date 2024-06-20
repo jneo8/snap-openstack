@@ -34,7 +34,10 @@ from rich.status import Status
 from snaphelpers import Snap
 
 from sunbeam.clusterd.client import Client
-from sunbeam.clusterd.service import NodeNotExistInClusterException
+from sunbeam.clusterd.service import (
+    JujuUserNotFoundException,
+    NodeNotExistInClusterException,
+)
 from sunbeam.jobs.common import (
     BaseStep,
     Result,
@@ -807,7 +810,15 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
             # Error is about no controller register, which is okay is this case
             pass
 
-        user = self.client.cluster.get_juju_user(self.username)
+        try:
+            user = self.client.cluster.get_juju_user(self.username)
+        except JujuUserNotFoundException:
+            LOG.debug("User %r not found in cluster database", self.username)
+            return Result(
+                ResultType.FAILED,
+                f"Juju registration token for host {self.username!r} not found in"
+                " cluster database, was this token issued for this host?",
+            )
         self.registration_token = user.get("token")
         return Result(ResultType.COMPLETED)
 

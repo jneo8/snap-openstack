@@ -217,9 +217,8 @@ class TestSystemRequirementsCheck:
 
 class TestTokenCheck:
     def test_run_empty_token(self):
-        hostname = "myhost"
         token = ""
-        check = checks.TokenCheck(hostname, token)
+        check = checks.TokenCheck(token)
 
         result = check.run()
 
@@ -227,9 +226,8 @@ class TestTokenCheck:
         assert "empty string" in check.message
 
     def test_run_invalid_base64_token(self):
-        hostname = "myhost"
         token = "Abb+Ckfr\\01=!!!"
-        check = checks.TokenCheck(hostname, token)
+        check = checks.TokenCheck(token)
 
         result = check.run()
 
@@ -237,10 +235,9 @@ class TestTokenCheck:
         assert "not a valid base64 string" in check.message
 
     def test_run_invalid_json_token(self):
-        hostname = "myhost"
         token = b"{invalid_json}"
 
-        check = checks.TokenCheck(hostname, base64.b64encode(token).decode())
+        check = checks.TokenCheck(base64.b64encode(token).decode())
 
         result = check.run()
 
@@ -248,9 +245,8 @@ class TestTokenCheck:
         assert "not a valid JSON-encoded object" in check.message
 
     def test_run_invalid_json_object_token(self):
-        hostname = "myhost"
         token = b'["my_list"]'
-        check = checks.TokenCheck(hostname, base64.b64encode(token).decode())
+        check = checks.TokenCheck(base64.b64encode(token).decode())
 
         result = check.run()
 
@@ -258,44 +254,24 @@ class TestTokenCheck:
         assert "not a valid JSON object" in check.message
 
     def test_run_missing_required_fields(self):
-        hostname = "myhost"
         token = json.dumps({"name": "myname"})
-        check = checks.TokenCheck(hostname, base64.b64encode(token.encode()).decode())
+        check = checks.TokenCheck(base64.b64encode(token.encode()).decode())
 
         result = check.run()
 
         assert result is False
         assert "fingerprint, join_addresses, secret" in check.message
 
-    def test_run_mismatched_hostname(self):
-        hostname = "myhost"
-        token = json.dumps(
-            {
-                "name": "otherhost",
-                "secret": "mysecret",
-                "join_addresses": ["address"],
-                "fingerprint": "123",
-            }
-        )
-        check = checks.TokenCheck(hostname, base64.b64encode(token.encode()).decode())
-
-        result = check.run()
-
-        assert result is False
-        assert "does not match the hostname" in check.message
-
     def test_run_empty_join_addresses(self):
-        hostname = "myhost"
         token = json.dumps(
             {
-                "name": "myhost",
                 "secret": "mysecret",
                 "join_addresses": [],
                 "fingerprint": "123",
             }
         )
 
-        check = checks.TokenCheck(hostname, base64.b64encode(token.encode()).decode())
+        check = checks.TokenCheck(base64.b64encode(token.encode()).decode())
 
         result = check.run()
 
@@ -303,16 +279,14 @@ class TestTokenCheck:
         assert check.message == "Join token 'join_addresses' is empty"
 
     def test_run_valid_token(self):
-        hostname = "myhost"
         token = json.dumps(
             {
-                "name": "myhost",
                 "secret": "mysecret",
                 "join_addresses": ["address"],
                 "fingerprint": "123",
             }
         )
-        check = checks.TokenCheck(hostname, base64.b64encode(token.encode()).decode())
+        check = checks.TokenCheck(base64.b64encode(token.encode()).decode())
 
         result = check.run()
 
