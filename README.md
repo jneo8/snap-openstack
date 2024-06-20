@@ -23,6 +23,10 @@ MAAS-based, enterprise-grade solutions.
 
 See the full [MicroStack documentation][microstack-docs].
 
+## Contributing / developer documentation
+
+Please see the [docs](./docs) directory in this repository.
+
 ## Reporting a bug
 
 Please report bugs to the [OpenStack Snap][microstack] project on Launchpad.
