@@ -169,7 +169,7 @@ class DeployMicrocephApplicationStep(DeployMachineApplicationStep):
                     "space": self.deployment.get_space(Networks.STORAGE),
                 },
             ],
-            "charm_microceph_config": {"enable-rgw": "*", "namespace-tenants": True},
+            "charm_microceph_config": {"enable-rgw": "*", "namespace-projects": True},
         }
 
         if keystone_endpoints_offer_url:

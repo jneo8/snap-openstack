@@ -610,6 +610,9 @@ def deploy(
             proxy_settings=proxy_settings,
         )
     )
+    # Redeploy of Microceph is required to fill terraform vars
+    # related to traefik-rgw/keystone-endpoints offers from
+    # openstack model
     plan2.append(
         DeployMicrocephApplicationStep(
             deployment,
