@@ -63,6 +63,8 @@ class JujuManifest(pydantic.BaseModel):
 
 
 class CharmManifest(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="allow")
+
     channel: str | None = Field(default=None, description="Channel for the charm")
     revision: int | None = Field(
         default=None, description="Revision number of the charm"
