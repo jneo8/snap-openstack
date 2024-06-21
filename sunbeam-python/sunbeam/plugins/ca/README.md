@@ -17,12 +17,18 @@ To integrate with internal traefik instances as well, install the plugin with:
 sunbeam enable tls ca --ca=<Base64 encoded CA cert> --ca-chain=<Base64 encoded CA Chain> --endpoint public --endpoint internal
 ```
 
+To integrate with internal and rgw traefik instances as well, install the plugin with:
+
+```bash
+sunbeam enable tls ca --ca=<Base64 encoded CA cert> --ca-chain=<Base64 encoded CA Chain> --endpoint public --endpoint internal --endpoint rgw
+```
+
 ## Configure
 
 To apply tls certificate on the traefik instances, run the following command:
 
 ```bash
-sunbeam tls ca
+sunbeam tls ca unit_certs
 ```
 
 The above command will prompt the user for TLS Certificate for each traefik unit.

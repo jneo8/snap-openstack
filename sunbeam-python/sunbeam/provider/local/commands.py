@@ -481,6 +481,20 @@ def bootstrap(
                 proxy_settings=proxy_settings,
             )
         )
+        # Redeploy of Microceph is required to fill terraform vars
+        # related to traefik-rgw/keystone-endpoints offers from
+        # openstack model
+        plan4.append(
+            DeployMicrocephApplicationStep(
+                deployment,
+                client,
+                microceph_tfhelper,
+                jhelper,
+                manifest,
+                deployment.infrastructure_model,
+                refresh=True,
+            )
+        )
 
     run_plan(plan4, console)
 
