@@ -633,7 +633,7 @@ def join(
     preflight_checks.append(SshKeysConnectedCheck())
     preflight_checks.append(DaemonGroupCheck())
     preflight_checks.append(LocalShareCheck())
-    preflight_checks.append(TokenCheck(name, token))
+    preflight_checks.append(TokenCheck(token))
     if is_compute_node:
         hypervisor_hostname = utils.get_hypervisor_hostname()
         preflight_checks.append(

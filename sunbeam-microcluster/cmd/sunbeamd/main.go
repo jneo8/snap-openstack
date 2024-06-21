@@ -61,7 +61,7 @@ func (c *cmdDaemon) Command() *cobra.Command {
 }
 
 func (c *cmdDaemon) Run(_ *cobra.Command, _ []string) error {
-	m, err := microcluster.App(microcluster.Args{StateDir: c.flagStateDir, SocketGroup: c.flagSocketGroup, Verbose: c.global.flagLogVerbose, Debug: c.global.flagLogDebug})
+	m, err := microcluster.App(microcluster.Args{StateDir: c.flagStateDir, SocketGroup: c.flagSocketGroup, Verbose: c.global.flagLogVerbose, Debug: c.global.flagLogDebug, ExtensionServers: api.Servers})
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (c *cmdDaemon) Run(_ *cobra.Command, _ []string) error {
 		},
 	}
 
-	return m.Start(context.Background(), api.Endpoints, database.SchemaExtensions, h)
+	return m.Start(context.Background(), database.SchemaExtensions, nil, h)
 }
 
 func init() {
