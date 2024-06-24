@@ -862,11 +862,17 @@ class JujuHelper:
                 status = await model.get_status([app])
                 if app not in status.applications:
                     raise ValueError(f"Application {app} not found in status")
-                status = {
-                    unit.workload_status.status
-                    for unit in status.applications[app].units.values()
-                }
-                if len(status) > 0 and status.issubset(expected_status):
+                application = status.applications[app]
+                units = application.units
+                status = {unit.workload_status.status for unit in units.values()}
+                # int_ is None on machine models
+                unit_count: int | None = application.int_
+                unit_count_cond = unit_count is None or len(units) == unit_count
+                if (
+                    unit_count_cond
+                    and len(status) > 0
+                    and status.issubset(expected_status)
+                ):
                     LOG.debug("Application %r is active", app)
                     # queue is sized for the number of coroutines,
                     # it should never throw QueueFull
