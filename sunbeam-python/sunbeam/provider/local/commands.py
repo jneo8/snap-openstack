@@ -899,6 +899,7 @@ def configure_cmd(
     tfhelper.env = (tfhelper.env or {}) | admin_credentials
     answer_file = tfhelper.path / "config.auto.tfvars.json"
     plan = [
+        AddManifestStep(client, manifest_path),
         JujuLoginStep(deployment.juju_account),
         UserQuestions(
             client,

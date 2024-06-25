@@ -688,7 +688,7 @@ def configure_cmd(
 
     LOG.debug(f"Manifest used for deployment - preseed: {manifest.deployment}")
     LOG.debug(f"Manifest used for deployment - software: {manifest.software}")
-    preseed = manifest.deployment or {}
+    preseed = manifest.deployment
 
     jhelper = JujuHelper(deployment.get_connected_controller())
     try:
@@ -708,6 +708,7 @@ def configure_cmd(
         map(_name_mapper, client.cluster.list_nodes_by_role(RoleTags.COMPUTE.value))
     )
     plan = [
+        AddManifestStep(client, manifest_path),
         JujuLoginStep(deployment.juju_account),
         MaasUserQuestions(
             client,
