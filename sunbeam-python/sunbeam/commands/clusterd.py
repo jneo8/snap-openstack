@@ -601,6 +601,7 @@ class DeploySunbeamClusterdApplicationStep(BaseStep):
                 self.model,
                 num_units,
                 channel=charm_manifest.channel,
+                revision=charm_manifest.revision,
                 to=machines,
                 config=charm_config,
             )

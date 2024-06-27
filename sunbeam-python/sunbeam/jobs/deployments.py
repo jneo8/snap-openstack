@@ -22,7 +22,7 @@ import pydantic
 import yaml
 from snaphelpers import Snap
 
-from sunbeam.jobs.common import SHARE_PATH
+from sunbeam.jobs.common import SHARE_PATH, str_presenter
 from sunbeam.jobs.deployment import Deployment
 
 LOG = logging.getLogger(__name__)
@@ -65,12 +65,13 @@ class DeploymentsConfig(pydantic.BaseModel):
         Writing to temporary file first in case there's an error during write.
         Not to lose the original file.
         """
-        self_dict = self.dict()
+        self_dict = self.model_dump()
         # self_dict has deployments with Deployment dict but not of provider
         # so workaround to add each deployment based on provider
-        deployments = [d.dict() for d in self.deployments]
+        deployments = [d.model_dump() for d in self.deployments]
         self_dict["deployments"] = deployments
         LOG.debug(f"Writing deployment configuration to {str(self.path)!r}")
+        yaml.SafeDumper.add_representer(str, str_presenter)
         with tempfile.NamedTemporaryFile("w") as tmp:
             yaml.safe_dump(self_dict, tmp)
             tmp.flush()

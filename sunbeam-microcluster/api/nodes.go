@@ -11,6 +11,7 @@ import (
 	"github.com/canonical/microcluster/state"
 	"github.com/gorilla/mux"
 
+	"github.com/canonical/snap-openstack/sunbeam-microcluster/access"
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/api/types"
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/sunbeam"
 )
@@ -19,17 +20,17 @@ import (
 var nodesCmd = rest.Endpoint{
 	Path: "nodes",
 
-	Get:  rest.EndpointAction{Handler: cmdNodesGetAll, ProxyTarget: true, AllowUntrusted: true},
-	Post: rest.EndpointAction{Handler: cmdNodesPost, ProxyTarget: true, AllowUntrusted: true},
+	Get:  access.ClusterCATrustedEndpoint(cmdNodesGetAll, true),
+	Post: access.ClusterCATrustedEndpoint(cmdNodesPost, true),
 }
 
 // /1.0/nodes/<name> endpoint.
 var nodeCmd = rest.Endpoint{
 	Path: "nodes/{name}",
 
-	Get:    rest.EndpointAction{Handler: cmdNodesGet, ProxyTarget: true, AllowUntrusted: true},
-	Put:    rest.EndpointAction{Handler: cmdNodesPut, ProxyTarget: true, AllowUntrusted: true},
-	Delete: rest.EndpointAction{Handler: cmdNodesDelete, ProxyTarget: true, AllowUntrusted: true},
+	Get:    access.ClusterCATrustedEndpoint(cmdNodesGet, true),
+	Put:    access.ClusterCATrustedEndpoint(cmdNodesPut, true),
+	Delete: access.ClusterCATrustedEndpoint(cmdNodesDelete, true),
 }
 
 func cmdNodesGetAll(s *state.State, r *http.Request) response.Response {

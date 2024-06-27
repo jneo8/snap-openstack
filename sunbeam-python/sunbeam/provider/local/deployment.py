@@ -44,7 +44,7 @@ from sunbeam.commands.microk8s import (
 )
 from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.proxy import proxy_questions
-from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment, Networks
+from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, CertPair, Deployment, Networks
 from sunbeam.jobs.juju import (
     CONTROLLER,
     JujuAccount,
@@ -71,6 +71,8 @@ class LocalDeployment(Deployment):
             self.juju_account = self._load_juju_account()
         if self.juju_controller is None:
             self.juju_controller = self._load_juju_controller()
+        if self.clusterd_certpair is None:
+            self.clusterd_certpair = self._load_cert_pair()
 
     def _load_juju_account(self) -> JujuAccount | None:
         try:
@@ -91,10 +93,19 @@ class LocalDeployment(Deployment):
             LOG.debug("Clusterd service unavailable", exc_info=True)
             return None
 
-    def reload_juju_credentials(self):
+    def _load_cert_pair(self) -> CertPair | None:
+        client = self.get_client()
+        try:
+            return CertPair(**client.cluster.get_server_certpair())
+        except ClusterServiceUnavailableException:
+            LOG.debug("Clusterd service unavailable", exc_info=True)
+            return None
+
+    def reload_credentials(self):
         """Refresh instance juju credentials."""
         self.juju_account = self._load_juju_account()
         self.juju_controller = self._load_juju_controller()
+        self.clusterd_certpair = self._load_cert_pair()
 
     @property
     def infrastructure_model(self) -> str:

@@ -78,12 +78,21 @@ class Networks(enum.Enum):
         return [tag.value for tag in cls]
 
 
+class CertPair(pydantic.BaseModel):
+    certificate: str
+    private_key: str = pydantic.Field(
+        validation_alias=pydantic.AliasChoices("private_key", "private-key"),
+        serialization_alias="private-key",
+    )
+
+
 class Deployment(pydantic.BaseModel):
     name: str
     url: str
     type: str
     juju_account: JujuAccount | None = None
     juju_controller: JujuController | None = None
+    clusterd_certpair: CertPair | None = None
     _manifest: Manifest | None = pydantic.PrivateAttr(default=None)
     _tfhelpers: dict[str, TerraformHelper] = pydantic.PrivateAttr(default={})
 
@@ -256,6 +265,13 @@ class Deployment(pydantic.BaseModel):
                         self.juju_controller.api_endpoints
                     ),
                     "JUJU_CA_CERT": self.juju_controller.ca_cert,
+                }
+            )
+        if self.clusterd_certpair:
+            env.update(
+                {
+                    "TF_HTTP_CLIENT_CERTIFICATE_PEM": self.clusterd_certpair.certificate,  # noqa E501
+                    "TF_HTTP_CLIENT_PRIVATE_KEY_PEM": self.clusterd_certpair.private_key,  # noqa E501
                 }
             )
         env.update(self.get_proxy_settings())

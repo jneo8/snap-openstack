@@ -11,6 +11,7 @@ import (
 	"github.com/canonical/microcluster/state"
 	"github.com/gorilla/mux"
 
+	"github.com/canonical/snap-openstack/sunbeam-microcluster/access"
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/api/types"
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/sunbeam"
 )
@@ -19,8 +20,8 @@ import (
 var manifestsCmd = rest.Endpoint{
 	Path: "manifests",
 
-	Get:  rest.EndpointAction{Handler: cmdManifestsGetAll, ProxyTarget: true, AllowUntrusted: true},
-	Post: rest.EndpointAction{Handler: cmdManifestsPost, ProxyTarget: true, AllowUntrusted: true},
+	Get:  access.ClusterCATrustedEndpoint(cmdManifestsGetAll, true),
+	Post: access.ClusterCATrustedEndpoint(cmdManifestsPost, true),
 }
 
 // /1.0/manifests/<manifestid> endpoint.
@@ -28,8 +29,8 @@ var manifestsCmd = rest.Endpoint{
 var manifestCmd = rest.Endpoint{
 	Path: "manifests/{manifestid}",
 
-	Get:    rest.EndpointAction{Handler: cmdManifestGet, ProxyTarget: true, AllowUntrusted: true},
-	Delete: rest.EndpointAction{Handler: cmdManifestDelete, ProxyTarget: true, AllowUntrusted: true},
+	Get:    access.ClusterCATrustedEndpoint(cmdManifestGet, true),
+	Delete: access.ClusterCATrustedEndpoint(cmdManifestDelete, true),
 }
 
 func cmdManifestsGetAll(s *state.State, _ *http.Request) response.Response {

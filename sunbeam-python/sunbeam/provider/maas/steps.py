@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import ast
+import base64
 import builtins
 import copy
 import ipaddress
@@ -57,12 +58,13 @@ from sunbeam.jobs.common import (
     Result,
     ResultType,
 )
-from sunbeam.jobs.deployment import Networks
+from sunbeam.jobs.deployment import CertPair, Networks
 from sunbeam.jobs.deployments import DeploymentsConfig
 from sunbeam.jobs.juju import (
     ActionFailedException,
     JujuController,
     JujuHelper,
+    JujuSecretNotFound,
     LeaderNotFoundException,
     TimeoutException,
     UnitNotFoundException,
@@ -1100,8 +1102,8 @@ class MaasSaveControllerStep(BaseStep, JujuStepHelper):
         return Result(ResultType.COMPLETED)
 
 
-class MaasSaveClusterdAddressStep(BaseStep):
-    """Save clusterd address locally."""
+class MaasSaveClusterdCredentialsStep(BaseStep):
+    """Save clusterd credentials locally."""
 
     def __init__(
         self,
@@ -1110,8 +1112,8 @@ class MaasSaveClusterdAddressStep(BaseStep):
         deployments_config: DeploymentsConfig,
     ):
         super().__init__(
-            "Save clusterd address",
-            "Saving clusterd address locally",
+            "Save clusterd credentials",
+            "Saving clusterd credentials locally",
         )
         self.jhelper = jhelper
         self.deployment_name = deployment_name
@@ -1147,7 +1149,31 @@ class MaasSaveClusterdAddressStep(BaseStep):
         if url is None:
             return Result(ResultType.FAILED, "Failed to retrieve clusterd url")
 
-        client = Client.from_http(url)
+        certificate_authority = credentials.get("certificate-authority")
+        certificate = credentials.get("certificate")
+        private_key = None
+        if private_key_secret := credentials.get("private-key-secret"):
+            try:
+                secret = run_sync(
+                    self.jhelper.get_secret("controller", private_key_secret)
+                )
+            except JujuSecretNotFound as e:
+                return Result(ResultType.FAILED, str(e))
+            private_key = base64.b64decode(
+                secret["value"]["data"]["private-key"]
+            ).decode()
+
+        if not certificate_authority or not certificate or not private_key:
+            return Result(ResultType.FAILED, "Failed to retrieve clusterd credentials")
+
+        try:
+            client = Client.from_http(
+                url, certificate_authority, certificate, private_key
+            )
+        except ValueError:
+            LOG.debug("Failed to instantiate client", exc_info=True)
+            return Result(ResultType.FAILED, "Failed to instanciate remote client")
+
         try:
             client.cluster.list_nodes()
         except Exception as e:
@@ -1157,6 +1183,10 @@ class MaasSaveClusterdAddressStep(BaseStep):
             return Result(ResultType.FAILED)
 
         deployment.clusterd_address = url
+        deployment.clusterd_certificate_authority = certificate_authority
+        deployment.clusterd_certpair = CertPair(
+            certificate=certificate, private_key=private_key
+        )
         self.deployments_config.write()
         return Result(ResultType.COMPLETED)
 

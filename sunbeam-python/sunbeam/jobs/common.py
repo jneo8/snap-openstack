@@ -395,7 +395,7 @@ async def update_status_background(
     return asyncio.create_task(_update_status_background_coro())
 
 
-def str_presenter(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
+def str_presenter(dumper: yaml.Dumper | yaml.SafeDumper, data: str) -> yaml.ScalarNode:
     """Return multiline string as '|' literal block.
 
     Ref: https://stackoverflow.com/questions/8640959/how-can-i-control-what-scalar-form-pyyaml-uses-for-my-data

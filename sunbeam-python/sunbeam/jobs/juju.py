@@ -147,6 +147,12 @@ class UnsupportedKubeconfigException(JujuException):
     pass
 
 
+class JujuSecretNotFound(JujuException):
+    """Raised when secret is missing from model."""
+
+    pass
+
+
 class ChannelUpdate(TypedDict):
     """Channel Update step.
 
@@ -266,6 +272,64 @@ class JujuHelper:
         finally:
             os.environ["HOME"] = old_home
 
+    async def integrate(
+        self,
+        model: str,
+        provider: str,
+        requirer: str,
+        relation: str,
+    ):
+        """Integrate two applications.
+
+        Does not support different relation names on provider and requirer.
+
+        :model: Name of the model
+        :provider: Name of the application providing the relation
+        :requirer: Name of the application requiring the relation
+        :relation: Name of the relation
+        """
+        model_impl = await self.get_model(model)
+        if requirer not in model_impl.applications:
+            raise ApplicationNotFoundException(
+                f"Application {requirer!r} is missing from model {model!r}"
+            )
+        if provider not in model_impl.applications:
+            raise ApplicationNotFoundException(
+                f"Application {provider!r} is missing from model {model!r}"
+            )
+        endpoint_fmt = "{app}:{relation}"
+        provider_relation = endpoint_fmt.format(app=provider, relation=relation)
+        requirer_relation = endpoint_fmt.format(app=requirer, relation=relation)
+        await model_impl.integrate(provider_relation, requirer_relation)
+
+    async def are_integrated(
+        self, model: str, provider: str, requirer: str, relation: str
+    ) -> bool:
+        """Check if two applications are integrated.
+
+        Does not support different relation names on provider and requirer.
+
+        :model: Name of the model of the providing app
+        :provider: Name of the application providing the relation
+        :requirer: Name of the application requiring the relation
+        :relation: Name of the relation
+        """
+        app = await self.get_application(provider, model)
+        apps = (provider, requirer)
+        for rel in app.relations:
+            if len(rel.endpoints) != 2:
+                # skip peer relationship
+                continue
+            left_ep, right_ep = rel.endpoints
+            if (
+                left_ep.application_name not in apps
+                or right_ep.application_name not in apps
+            ):
+                continue
+            if left_ep.name == relation and right_ep.name == relation:
+                return True
+        return False
+
     async def get_model_name_with_owner(self, model: str) -> str:
         """Get juju model full name along with owner."""
         model_impl = await self.get_model(model)
@@ -320,6 +384,7 @@ class JujuHelper:
         model: str,
         num_units: int = 1,
         channel: str | None = None,
+        revision: int | None = None,
         to: list[str] | None = None,
         config: dict | None = None,
     ):
@@ -329,6 +394,8 @@ class JujuHelper:
             options["to"] = to
         if channel:
             options["channel"] = channel
+        if revision:
+            options["revision"] = revision
         if config:
             options["config"] = config
 
@@ -526,6 +593,21 @@ class JujuHelper:
             raise ActionFailedException(output)
 
         return action_obj.results
+
+    async def get_secret(self, model: str, secret_id: str) -> dict:
+        """Get secret from model.
+
+        :model: Name of the model
+        :secret_id: Secret ID
+        """
+        model_impl = await self.get_model(model)
+        facade = juju_client.SecretsFacade.from_connection(model_impl.connection())
+        secrets = await facade.ListSecrets(
+            filter_={"uri": secret_id}, show_secrets=True
+        )
+        if len(secrets.results) != 1:
+            raise JujuSecretNotFound(f"Secret {secret_id!r}")
+        return secrets["results"][0].serialize()
 
     async def scp_from(self, name: str, model: str, source: str, destination: str):
         """Scp files from unit to local.

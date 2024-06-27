@@ -96,6 +96,7 @@ class MaasDeployment(Deployment):
     resource_pool: str
     network_mapping: dict[str, str | None] = {}
     clusterd_address: str | None = None
+    clusterd_certificate_authority: str | None = None
     _client: Client | None = pydantic.PrivateAttr(default=None)
 
     @property
@@ -140,8 +141,17 @@ class MaasDeployment(Deployment):
         """Return a client for the deployment."""
         if self.clusterd_address is None:
             raise ValueError("Clusterd address not set.")
+        if self.clusterd_certificate_authority is None:
+            raise ValueError("Clusterd certificate authority not set.")
+        if self.clusterd_certpair is None:
+            raise ValueError("Clusterd certificate not set.")
         if self._client is None:
-            self._client = Client.from_http(self.clusterd_address)
+            certificate_authority = self.clusterd_certificate_authority
+            certificate = self.clusterd_certpair.certificate
+            private_key = self.clusterd_certpair.private_key
+            self._client = Client.from_http(
+                self.clusterd_address, certificate_authority, certificate, private_key
+            )
         return self._client
 
     def get_clusterd_http_address(self) -> str:

@@ -231,6 +231,14 @@ class ExtendedAPIService(service.BaseService):
         """Remove manifest from database."""
         self._delete(f"/1.0/manifest/{manifest_id}")
 
+    def get_server_certpair(self) -> dict:
+        """Fetch server certpair from cluster.
+
+        This will always raise a 403 exception if not used over
+        the unix socket.
+        """
+        return self._get("/local/certpair/server", redact_response=True).get("metadata")
+
 
 class ClusterService(MicroClusterService, ExtendedAPIService):
     """Lists and manages cluster."""
