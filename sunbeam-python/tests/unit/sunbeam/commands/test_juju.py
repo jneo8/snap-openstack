@@ -515,3 +515,37 @@ class TestBindJujuApplicationStep:
         step._bindings = {"endpoint1": "test-space", "endpoint2": "test-space"}
         result = step.run()
         assert result.result_type == ResultType.FAILED
+
+
+class TestUnregisterJujuControllerStep:
+    def test_is_skip(self, mocker, tmp_path):
+        step = juju.UnregisterJujuController("testcontroller", tmp_path)
+        mocker.patch.object(step, "get_controller", return_value={"testcontroller"})
+        result = step.is_skip()
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_is_skip_controller_not_registered(self, mocker, tmp_path):
+        step = juju.UnregisterJujuController("testcontroller", tmp_path)
+        mocker.patch.object(
+            step,
+            "get_controller",
+            side_effect=juju.ControllerNotFoundException("Controller not found"),
+        )
+        result = step.is_skip()
+        assert result.result_type == ResultType.SKIPPED
+
+    @patch("subprocess.run")
+    def test_run(self, mock_run, mocker, tmp_path):
+        step = juju.UnregisterJujuController("testcontroller", tmp_path)
+        mocker.patch.object(step, "_get_juju_binary", return_value="/juju-mock")
+        result = step.run()
+        assert mock_run.call_count == 1
+        assert result.result_type == ResultType.COMPLETED
+
+    @patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "command"))
+    def test_run_unregister_failed(self, mock_run, mocker, tmp_path):
+        step = juju.UnregisterJujuController("testcontroller", tmp_path)
+        mocker.patch.object(step, "_get_juju_binary", return_value="/juju-mock")
+        result = step.run()
+        assert mock_run.call_count == 1
+        assert result.result_type == ResultType.FAILED
