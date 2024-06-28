@@ -29,7 +29,7 @@ from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
 )
-from sunbeam.jobs.common import read_config
+from sunbeam.jobs.common import SunbeamException, read_config
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.manifest import SoftwareConfig
 
@@ -350,20 +350,18 @@ class PluginManager:
         for plugin in cls.get_plugin_classes(core_plugin_file):
             try:
                 plugin(deployment).register(cli)
-            except ValueError as e:
+            except (ValueError, SunbeamException) as e:
                 LOG.debug("Failed to register plugin: %r", str(plugin))
-                if "Clusterd address" in str(e):
-                    LOG.debug(
-                        "Clusterd address not found. Ignoring plugin registration."
-                    )
+                if "Clusterd address" in str(e) or "Insufficient permissions" in str(e):
+                    LOG.debug("Sunbeam not bootstrapped. Ignoring plugin registration.")
                     continue
                 raise e
         try:
             client = deployment.get_client()
-        except ValueError as e:
-            if "Clusterd address" in str(e):
+        except (ValueError, SunbeamException) as e:
+            if "Clusterd address" in str(e) or "Insufficient permissions" in str(e):
                 LOG.debug(
-                    "Clusterd address unset. Ignoring external plugin registration."
+                    "Sunbeam not bootstrapped. Ignoring external plugin registration."
                 )
                 return
             raise e

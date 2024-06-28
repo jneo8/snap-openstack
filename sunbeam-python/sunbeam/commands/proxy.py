@@ -29,7 +29,7 @@ from sunbeam.commands.juju import UpdateJujuModelConfigStep
 from sunbeam.commands.openstack import UpdateOpenStackModelConfigStep
 from sunbeam.commands.sunbeam_machine import DeploySunbeamMachineApplicationStep
 from sunbeam.commands.terraform import TerraformInitStep
-from sunbeam.jobs.checks import DaemonGroupCheck, VerifyBootstrappedCheck
+from sunbeam.jobs.checks import VerifyBootstrappedCheck
 from sunbeam.jobs.common import (
     FORMAT_TABLE,
     FORMAT_YAML,
@@ -68,10 +68,7 @@ def _preflight_checks(deployment: Deployment):
                 "completed succesfully. Please run `sunbeam cluster bootstrap`"
             )
             raise click.ClickException(message)
-        else:
-            preflight_checks = [VerifyBootstrappedCheck(client)]
-    else:
-        preflight_checks = [DaemonGroupCheck(), VerifyBootstrappedCheck(client)]
+    preflight_checks = [VerifyBootstrappedCheck(client)]
 
     run_preflight_checks(preflight_checks, console)
 

@@ -44,6 +44,8 @@ from sunbeam.commands.microk8s import (
 )
 from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.proxy import proxy_questions
+from sunbeam.jobs.checks import DaemonGroupCheck
+from sunbeam.jobs.common import SunbeamException
 from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, CertPair, Deployment, Networks
 from sunbeam.jobs.juju import (
     CONTROLLER,
@@ -92,13 +94,18 @@ class LocalDeployment(Deployment):
         except ClusterServiceUnavailableException:
             LOG.debug("Clusterd service unavailable", exc_info=True)
             return None
+        except SunbeamException:
+            LOG.debug("Failed to load juju controller", exc_info=True)
+            return None
 
     def _load_cert_pair(self) -> CertPair | None:
-        client = self.get_client()
         try:
-            return CertPair(**client.cluster.get_server_certpair())
+            return CertPair(**self.get_client().cluster.get_server_certpair())
         except ClusterServiceUnavailableException:
             LOG.debug("Clusterd service unavailable", exc_info=True)
+            return None
+        except SunbeamException:
+            LOG.debug("Failed to load cert pair", exc_info=True)
             return None
 
     def reload_credentials(self):
@@ -120,6 +127,9 @@ class LocalDeployment(Deployment):
     def get_client(self) -> Client:
         """Return a client for the deployment."""
         if self._client is None:
+            check = DaemonGroupCheck()
+            if not check.run():
+                raise SunbeamException(check.message)
             self._client = Client.from_socket()
         return self._client
 

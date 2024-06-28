@@ -21,7 +21,7 @@ from rich.console import Console
 from sunbeam.commands.configure import retrieve_admin_credentials
 from sunbeam.commands.openstack import OPENSTACK_MODEL
 from sunbeam.jobs import juju
-from sunbeam.jobs.checks import DaemonGroupCheck, VerifyBootstrappedCheck
+from sunbeam.jobs.checks import VerifyBootstrappedCheck
 from sunbeam.jobs.common import run_preflight_checks
 from sunbeam.jobs.deployment import Deployment
 
@@ -36,7 +36,6 @@ def openrc(ctx: click.Context) -> None:
     deployment: Deployment = ctx.obj
     client = deployment.get_client()
     preflight_checks = []
-    preflight_checks.append(DaemonGroupCheck())
     preflight_checks.append(VerifyBootstrappedCheck(client))
     run_preflight_checks(preflight_checks, console)
 
