@@ -248,6 +248,47 @@ class JujuStepHelper:
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
             )
 
+    def integrate(
+        self,
+        model: str,
+        provider: str,
+        requirer: str,
+        ignore_error_if_exists: bool = True,
+    ):
+        """Juju integrate applications."""
+        cmd = [
+            self._get_juju_binary(),
+            "integrate",
+            "-m",
+            model,
+            provider,
+            requirer,
+        ]
+        try:
+            LOG.debug(f'Running command {" ".join(cmd)}')
+            process = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            LOG.debug(
+                f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
+            )
+        except subprocess.CalledProcessError as e:
+            LOG.debug(e.stderr)
+            if ignore_error_if_exists and "already exists" not in e.stderr:
+                raise e
+
+    def remove_relation(self, model: str, provider: str, requirer: str):
+        """Juju remove relation."""
+        cmd = [
+            self._get_juju_binary(),
+            "remove-relation",
+            "-m",
+            model,
+            provider,
+            requirer,
+        ]
+        LOG.debug(f'Running command {" ".join(cmd)}')
+        process = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        LOG.debug(f"Command finished. stdout={process.stdout}, stderr={process.stderr}")
+
     def revision_update_needed(
         self, application_name: str, model: str, status: dict | None = None
     ) -> bool:

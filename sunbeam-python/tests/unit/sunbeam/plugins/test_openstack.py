@@ -68,7 +68,7 @@ class TestEnableOpenStackApplicationStep:
         result = step.run()
 
         tfhelper.update_tfvars_and_apply_tf.assert_called_once()
-        jhelper.wait_until_active.assert_called_once()
+        jhelper.wait_until_desired_status.assert_called_once()
         assert result.result_type == ResultType.COMPLETED
 
     def test_run_tf_apply_failed(self, jhelper, tfhelper, osfeature):
@@ -80,18 +80,18 @@ class TestEnableOpenStackApplicationStep:
         result = step.run()
 
         tfhelper.update_tfvars_and_apply_tf.assert_called_once()
-        jhelper.wait_until_active.assert_not_called()
+        jhelper.wait_until_desired_status.assert_not_called()
         assert result.result_type == ResultType.FAILED
         assert result.message == "apply failed..."
 
     def test_run_waiting_timed_out(self, jhelper, tfhelper, osfeature):
-        jhelper.wait_until_active.side_effect = TimeoutException("timed out")
+        jhelper.wait_until_desired_status.side_effect = TimeoutException("timed out")
 
         step = openstack.EnableOpenStackApplicationStep(tfhelper, jhelper, osfeature)
         result = step.run()
 
         tfhelper.update_tfvars_and_apply_tf.assert_called_once()
-        jhelper.wait_until_active.assert_called_once()
+        jhelper.wait_until_desired_status.assert_called_once()
         assert result.result_type == ResultType.FAILED
         assert result.message == "timed out"
 
