@@ -31,6 +31,9 @@ from snaphelpers import Snap
 from sunbeam.commands import resize as resize_cmds
 from sunbeam.commands import utils
 from sunbeam.commands.bootstrap_state import SetBootstrapped
+from sunbeam.commands.certificates import APPLICATION as CERTIFICATES_APPLICATION
+from sunbeam.commands.certificates import DeployCertificatesProviderApplicationStep
+from sunbeam.commands.clusterd import APPLICATION as CLUSTERD_APPLICATION
 from sunbeam.commands.clusterd import DeploySunbeamClusterdApplicationStep
 from sunbeam.commands.configure import (
     DemoSetup,
@@ -48,6 +51,7 @@ from sunbeam.commands.juju import (
     AddCredentialsJujuStep,
     AddInfrastructureModelStep,
     DownloadJujuControllerCharmStep,
+    IntegrateJujuApplicationsStep,
     JujuLoginStep,
 )
 from sunbeam.commands.k8s import (
@@ -134,7 +138,7 @@ from sunbeam.provider.maas.steps import (
     MaasDeployMachinesStep,
     MaasDeployMicrok8sApplicationStep,
     MaasEnableK8SFeatures,
-    MaasSaveClusterdAddressStep,
+    MaasSaveClusterdCredentialsStep,
     MaasSaveControllerStep,
     MaasScaleJujuStep,
     MaasSetHypervisorUnitsOptionsStep,
@@ -352,11 +356,25 @@ def bootstrap(
     jhelper = JujuHelper(deployment.get_connected_controller())
     plan2 = []
     plan2.append(
+        DeployCertificatesProviderApplicationStep(
+            jhelper, manifest, CONTROLLER_MODEL.split("/")[-1]
+        )
+    )
+    plan2.append(
         DeploySunbeamClusterdApplicationStep(
             jhelper, manifest, CONTROLLER_MODEL.split("/")[-1]
         )
     )
-    plan2.append(MaasSaveClusterdAddressStep(jhelper, deployment.name, deployments))
+    plan2.append(
+        IntegrateJujuApplicationsStep(
+            jhelper,
+            CONTROLLER_MODEL.split("/")[-1],
+            CERTIFICATES_APPLICATION,
+            CLUSTERD_APPLICATION,
+            "certificates",
+        )
+    )
+    plan2.append(MaasSaveClusterdCredentialsStep(jhelper, deployment.name, deployments))
 
     run_plan(plan2, console)
     # reload deployment to get clusterd address
@@ -437,7 +455,9 @@ def deploy(
         console.print(f"Could not connect to controller: {e}")
         sys.exit(1)
     jhelper = JujuHelper(controller)
-    clusterd_plan = [MaasSaveClusterdAddressStep(jhelper, deployment.name, deployments)]
+    clusterd_plan = [
+        MaasSaveClusterdCredentialsStep(jhelper, deployment.name, deployments)
+    ]
     run_plan(clusterd_plan, console)  # type: ignore
 
     client = deployment.get_client()

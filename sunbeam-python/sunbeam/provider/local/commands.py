@@ -333,7 +333,7 @@ def bootstrap(
     )
     run_plan(plan3, console)
 
-    deployment.reload_juju_credentials()
+    deployment.reload_credentials()
     jhelper = JujuHelper(deployment.get_connected_controller())
     plan4 = []
     plan4.append(
@@ -666,7 +666,7 @@ def join(
     ]
     plan1_results = run_plan(plan1, console)
 
-    deployment.reload_juju_credentials()
+    deployment.reload_credentials()
 
     # Get manifest object once the cluster is joined
     manifest = deployment.get_manifest()

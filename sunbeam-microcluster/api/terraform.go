@@ -13,6 +13,7 @@ import (
 	"github.com/canonical/microcluster/state"
 	"github.com/gorilla/mux"
 
+	"github.com/canonical/snap-openstack/sunbeam-microcluster/access"
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/sunbeam"
 )
 
@@ -20,7 +21,7 @@ import (
 var terraformStateListCmd = rest.Endpoint{
 	Path: "terraformstate",
 
-	Get: rest.EndpointAction{Handler: cmdStateList, AllowUntrusted: true},
+	Get: access.ClusterCATrustedEndpoint(cmdStateList, false),
 }
 
 // /1.0/terraformstate/{name} endpoint.
@@ -36,31 +37,31 @@ var terraformStateListCmd = rest.Endpoint{
 var terraformStateCmd = rest.Endpoint{
 	Path: "terraformstate/{name}",
 
-	Get:    rest.EndpointAction{Handler: cmdStateGet, AllowUntrusted: true},
-	Put:    rest.EndpointAction{Handler: cmdStatePut, AllowUntrusted: true},
-	Delete: rest.EndpointAction{Handler: cmdStateDelete, AllowUntrusted: true},
+	Get:    access.ClusterCATrustedEndpoint(cmdStateGet, false),
+	Put:    access.ClusterCATrustedEndpoint(cmdStatePut, false),
+	Delete: access.ClusterCATrustedEndpoint(cmdStateDelete, false),
 }
 
 // /1.0/terraformlock endpoint.
 var terraformLockListCmd = rest.Endpoint{
 	Path: "terraformlock",
 
-	Get: rest.EndpointAction{Handler: cmdLockList, AllowUntrusted: true},
+	Get: access.ClusterCATrustedEndpoint(cmdLockList, false),
 }
 
 // /1.0/terraformlock/{name} endpoint.
 var terraformLockCmd = rest.Endpoint{
 	Path: "terraformlock/{name}",
 
-	Get: rest.EndpointAction{Handler: cmdLockGet, AllowUntrusted: true},
-	Put: rest.EndpointAction{Handler: cmdLockPut, AllowUntrusted: true},
+	Get: access.ClusterCATrustedEndpoint(cmdLockGet, false),
+	Put: access.ClusterCATrustedEndpoint(cmdLockPut, false),
 }
 
 // /1.0/terraformunlock/{name} endpoint.
 var terraformUnlockCmd = rest.Endpoint{
 	Path: "terraformunlock/{name}",
 
-	Put: rest.EndpointAction{Handler: cmdUnlockPut, AllowUntrusted: true},
+	Put: access.ClusterCATrustedEndpoint(cmdUnlockPut, false),
 }
 
 func cmdStateList(s *state.State, _ *http.Request) response.Response {

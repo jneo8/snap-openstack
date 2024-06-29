@@ -29,6 +29,12 @@ var Servers = []rest.Server{
 					manifestCmd,
 				},
 			},
+			{
+				PathPrefix: types.LocalPathPrefix,
+				Endpoints: []rest.Endpoint{
+					certPair,
+				},
+			},
 		},
 	},
 }

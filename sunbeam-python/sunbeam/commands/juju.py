@@ -22,6 +22,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -46,12 +47,15 @@ from sunbeam.jobs.common import (
 )
 from sunbeam.jobs.juju import (
     CONTROLLER_MODEL,
+    ApplicationNotFoundException,
     ControllerNotFoundException,
     JujuAccount,
     JujuAccountNotFound,
     JujuException,
     JujuHelper,
+    JujuWaitException,
     ModelNotFoundException,
+    TimeoutException,
     run_sync,
 )
 from sunbeam.versions import JUJU_BASE, JUJU_CHANNEL
@@ -1595,4 +1599,63 @@ class BindJujuApplicationStep(BaseStep):
             message = f"Failed to bind application to space: {str(e)}"
             return Result(ResultType.FAILED, message)
 
+        return Result(ResultType.COMPLETED)
+
+
+class IntegrateJujuApplicationsStep(BaseStep):
+    """Integrate two applications together."""
+
+    def __init__(
+        self,
+        jhelper: JujuHelper,
+        model: str,
+        provider: str,
+        requirer: str,
+        relation: str,
+    ):
+        super().__init__(
+            "Integrate Applications",
+            f"Integrating {requirer} and {provider}",
+        )
+        self.jhelper = jhelper
+        self.model = model
+        self.provider = provider
+        self.requirer = requirer
+        self.relation = relation
+
+    def is_skip(self, status: Status | None) -> Result:
+        """Determines if the step should be skipped or not."""
+        are_integrated = run_sync(
+            self.jhelper.are_integrated(
+                self.model, self.requirer, self.provider, self.relation
+            )
+        )
+        if are_integrated:
+            return Result(ResultType.SKIPPED)
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None) -> Result:
+        """Integrate applications."""
+        try:
+            run_sync(
+                self.jhelper.integrate(
+                    self.model, self.requirer, self.provider, self.relation
+                )
+            )
+        except ApplicationNotFoundException as e:
+            return Result(ResultType.FAILED, str(e))
+        # Juju might take a while to start integrate the applications
+        time.sleep(15)
+        apps = [self.requirer, self.provider]
+        try:
+            run_sync(
+                self.jhelper.wait_until_active(
+                    self.model,
+                    apps,
+                    timeout=1200,
+                )
+            )
+        except (JujuWaitException, TimeoutException) as e:
+            LOG.warning(str(e))
+            return Result(ResultType.FAILED, str(e))
         return Result(ResultType.COMPLETED)

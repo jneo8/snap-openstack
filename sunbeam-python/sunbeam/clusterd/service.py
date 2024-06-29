@@ -97,7 +97,7 @@ class JujuUserNotFoundException(RemoteException):
 class BaseService(ABC):
     """BaseService is the base service class for sunbeam clusterd services."""
 
-    def __init__(self, session: Session, endpoint: str):
+    def __init__(self, session: Session, endpoint: str, certs=None):
         """Creates a new BaseService for the sunbeam clusterd API.
 
         The service class is used to provide convenient APIs for clients to
@@ -109,17 +109,23 @@ class BaseService(ABC):
         """
         self.__session = session
         self._endpoint = endpoint
+        self._certs = certs
 
     def _request(self, method, path, **kwargs):  # noqa: C901 too complex
         if path.startswith("/"):
             path = path[1:]
         netloc = self._endpoint
         url = f"{netloc}/{path}"
-
+        redact_response = kwargs.pop("redact_response", False)
         try:
             LOG.debug("[%s] %s, args=%s", method, url, kwargs)
-            response = self.__session.request(method=method, url=url, **kwargs)
-            LOG.debug("Response(%s) = %s", response, response.text)
+            response = self.__session.request(
+                method=method, url=url, cert=self._certs, **kwargs
+            )
+            output = response.text
+            if redact_response:
+                output = "/* REDACTED */"
+            LOG.debug("Response(%s) = %s", response, output)
         except ConnectionError as e:
             msg = str(e)
             if "FileNotFoundError" in msg:
