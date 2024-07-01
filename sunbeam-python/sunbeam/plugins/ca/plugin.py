@@ -15,6 +15,7 @@
 
 import json
 import logging
+from pathlib import Path
 from typing import List, Optional
 
 import click
@@ -48,7 +49,7 @@ from sunbeam.jobs.juju import (
     LeaderNotFoundException,
     run_sync,
 )
-from sunbeam.jobs.manifest import CharmManifest, SoftwareConfig
+from sunbeam.jobs.manifest import AddManifestStep, CharmManifest, SoftwareConfig
 from sunbeam.plugins.interface.utils import (
     encode_base64_as_string,
     get_subject_from_csr,
@@ -404,9 +405,22 @@ class CaTlsPlugin(TlsPluginGroup):
             console.print(yaml.dump(csrs))
 
     @click.command()
-    def configure(self) -> None:
+    @click.option(
+        "-m",
+        "--manifest",
+        "manifest_path",
+        help="Manifest file.",
+        type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    )
+    def configure(
+        self,
+        manifest_path: Path | None = None,
+    ) -> None:
         """Configure Unit certs."""
         client = self.deployment.get_client()
+        manifest = self.deployment.get_manifest(manifest_path)
+        preseed = manifest.deployment
+
         try:
             config = read_config(client, CERTIFICATE_PLUGIN_KEY)
         except ConfigItemNotFoundException:
@@ -416,12 +430,14 @@ class CaTlsPlugin(TlsPluginGroup):
 
         jhelper = JujuHelper(self.deployment.get_connected_controller())
         plan = [
+            AddManifestStep(client, manifest_path),
             ConfigureCAStep(
                 client,
                 jhelper,
                 self.ca,
                 self.ca_chain,
-            )
+                deployment_preseed=preseed,
+            ),
         ]
         run_plan(plan, console)
         click.echo("CA certs configured")
