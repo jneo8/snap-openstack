@@ -27,8 +27,7 @@ from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ManifestItemNotFoundException,
 )
-from sunbeam.jobs.checks import DaemonGroupCheck
-from sunbeam.jobs.common import FORMAT_TABLE, FORMAT_YAML, run_preflight_checks
+from sunbeam.jobs.common import FORMAT_TABLE, FORMAT_YAML
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.manifest import Manifest
 
@@ -85,9 +84,6 @@ def list(ctx: click.Context, format: str) -> None:
     client = deployment.get_client()
     manifests = []
 
-    preflight_checks = [DaemonGroupCheck()]
-    run_preflight_checks(preflight_checks, console)
-
     try:
         manifests = client.cluster.list_manifests()
     except ClusterServiceUnavailableException:
@@ -117,9 +113,6 @@ def show(ctx: click.Context, id: str) -> None:
     """
     deployment: Deployment = ctx.obj
     client = deployment.get_client()
-
-    preflight_checks = [DaemonGroupCheck()]
-    run_preflight_checks(preflight_checks, console)
 
     try:
         manifest = client.cluster.get_manifest(id)
@@ -156,9 +149,6 @@ def generate(
 
     LOG.debug(f"Creating {manifest_file} parent directory if it does not exist")
     manifest_file.parent.mkdir(mode=0o775, parents=True, exist_ok=True)
-
-    preflight_checks = [DaemonGroupCheck()]
-    run_preflight_checks(preflight_checks, console)
 
     manifest = deployment.get_manifest()
 

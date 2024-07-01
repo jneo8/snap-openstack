@@ -82,7 +82,6 @@ from sunbeam.commands.sunbeam_machine import (
 )
 from sunbeam.commands.terraform import TerraformInitStep
 from sunbeam.jobs.checks import (
-    DaemonGroupCheck,
     DiagnosticsCheck,
     DiagnosticsResult,
     JujuSnapCheck,
@@ -699,7 +698,6 @@ def configure_cmd(
     client = deployment.get_client()
     maas_client = MaasClient.from_deployment(deployment)
     preflight_checks = []
-    preflight_checks.append(DaemonGroupCheck())
     preflight_checks.append(VerifyBootstrappedCheck(client))
     run_preflight_checks(preflight_checks, console)
 

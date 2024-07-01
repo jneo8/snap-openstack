@@ -33,7 +33,7 @@ from rich.table import Table
 from snaphelpers import Snap
 
 from sunbeam.clusterd.client import Client
-from sunbeam.jobs.checks import DaemonGroupCheck, VerifyBootstrappedCheck
+from sunbeam.jobs.checks import VerifyBootstrappedCheck
 from sunbeam.jobs.common import (
     FORMAT_TABLE,
     FORMAT_YAML,
@@ -251,7 +251,6 @@ class RepoPlugin(BasePlugin):
     def add(self, name: str, repo: str, branch: str) -> None:
         """Add external plugin repo."""
         preflight_checks = []
-        preflight_checks.append(DaemonGroupCheck())
         preflight_checks.append(VerifyBootstrappedCheck(self.deployment.get_client()))
         run_preflight_checks(preflight_checks, console)
 
@@ -276,7 +275,6 @@ class RepoPlugin(BasePlugin):
     def remove(self, name: str) -> None:
         """Remove external plugin repo."""
         preflight_checks = []
-        preflight_checks.append(DaemonGroupCheck())
         preflight_checks.append(VerifyBootstrappedCheck(self.deployment.get_client()))
         run_preflight_checks(preflight_checks, console)
 
@@ -302,7 +300,6 @@ class RepoPlugin(BasePlugin):
     def list_repos(self, format: str, plugins: bool, include_core: bool) -> None:
         """List external plugin repo."""
         preflight_checks = []
-        preflight_checks.append(DaemonGroupCheck())
         preflight_checks.append(VerifyBootstrappedCheck(self.deployment.get_client()))
         run_preflight_checks(preflight_checks, console)
         repos = PluginManager.get_all_external_repos(
@@ -359,7 +356,6 @@ class RepoPlugin(BasePlugin):
     def update(self, name: str) -> None:
         """Update external plugin repo."""
         preflight_checks = []
-        preflight_checks.append(DaemonGroupCheck())
         preflight_checks.append(VerifyBootstrappedCheck(self.deployment.get_client()))
         run_preflight_checks(preflight_checks, console)
 
