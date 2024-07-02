@@ -45,7 +45,7 @@ LOG = logging.getLogger(__name__)
 CONFIG_KEY = "TerraformVarsMicrocephPlan"
 CONFIG_DISKS_KEY = "TerraformVarsMicroceph"
 APPLICATION = "microceph"
-MICROCEPH_APP_TIMEOUT = 180  # 3 minutes, managing the application should be fast
+MICROCEPH_APP_TIMEOUT = 540  # 9 minutes, updating rgw configs can take some time
 MICROCEPH_UNIT_TIMEOUT = (
     1200  # 15 minutes, adding / removing units can take a long time
 )
