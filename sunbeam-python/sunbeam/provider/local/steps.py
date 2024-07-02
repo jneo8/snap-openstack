@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import logging
+from functools import cache
 from typing import Any, Optional, TextIO
 
 from rich.console import Console
@@ -22,6 +23,7 @@ from rich.prompt import InvalidResponse, PromptBase
 import sunbeam.jobs.questions
 from sunbeam import utils
 from sunbeam.clusterd.client import Client
+from sunbeam.commands import hypervisor
 from sunbeam.commands.cluster_status import ClusterStatusStep
 from sunbeam.commands.configure import (
     CLOUD_CONFIG_SECTION,
@@ -192,6 +194,23 @@ class LocalClusterStatusStep(ClusterStatusStep):
     def models(self) -> list[str]:
         """List of models to query status from."""
         return [self.deployment.infrastructure_model]
+
+    @cache
+    def _has_storage(self) -> bool:
+        """Check if deployment has storage."""
+        return (
+            len(self.deployment.get_client().cluster.list_nodes_by_role("storage")) > 0
+        )
+
+    def map_application_status(self, application: str, status: str) -> str:
+        """Callback to map application status to a column.
+
+        This callback is called for every unit status with the name of its application.
+        """
+        if application == hypervisor.APPLICATION:
+            if status == "waiting" and not self._has_storage():
+                return "active"
+        return status
 
     def _update_microcluster_status(self, status: dict, microcluster_status: dict):
         """How to update microcluster status in the status dict."""

@@ -788,7 +788,7 @@ def list_nodes(ctx: click.Context, format: str) -> None:
     """List nodes in the custer."""
     deployment: MaasDeployment = ctx.obj
     jhelper = JujuHelper(deployment.get_connected_controller())
-    step = MaasClusterStatusStep(deployment, jhelper, console, format)
+    step = MaasClusterStatusStep(deployment, jhelper)
     results = run_plan([step], console)
     msg = get_step_message(results, MaasClusterStatusStep)
     renderables = cluster_status.format_status(deployment, msg, format)
