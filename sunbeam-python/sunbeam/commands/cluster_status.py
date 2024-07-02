@@ -33,7 +33,7 @@ from sunbeam.jobs.common import (
     SunbeamException,
 )
 from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper, run_sync
+from sunbeam.jobs.juju import JujuHelper, ModelNotFoundException, run_sync
 from sunbeam.jobs.steps import BaseStep
 from sunbeam.utils import merge_dict
 
@@ -241,7 +241,11 @@ class ClusterStatusStep(abc.ABC, BaseStep):
     def _compute_status(self) -> dict:
         status = {}
         for model in self.models():
-            _status_model = self._get_machines_status(model)
+            try:
+                _status_model = self._get_machines_status(model)
+            except ModelNotFoundException as e:
+                LOG.debug(f"Model {model} not found", exc_info=True)
+                raise SunbeamException("Failed to query model status.") from e
             status[model] = merge_dict(
                 _status_model,
                 self._get_application_status_per_machine(model),
@@ -252,5 +256,8 @@ class ClusterStatusStep(abc.ABC, BaseStep):
     def run(self, status: Status) -> Result:
         """Run the step to completion."""
         self.update_status(status, "Computing cluster status")
-        cluster_status = self._compute_status()
+        try:
+            cluster_status = self._compute_status()
+        except SunbeamException as e:
+            return Result(ResultType.FAILED, str(e))
         return Result(ResultType.COMPLETED, cluster_status)
