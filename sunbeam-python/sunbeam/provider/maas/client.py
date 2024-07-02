@@ -38,23 +38,32 @@ console = Console()
 class MaasClient:
     """Facade to MAAS APIs."""
 
-    def __init__(self, url: str, token: str, resource_pool: str | None = None):
+    def __init__(self, url: str, token: str, resource_tag: str | None = None):
         self._client = connect(url, apikey=token)
-        self.resource_pool = resource_pool
+        self.resource_tag = resource_tag
 
-    def get_resource_pool(self, name: str) -> object:
-        """Fetch resource pool from MAAS."""
-        return self._client.resource_pools.get(name)  # type: ignore
+    def ensure_tag(self, tag: str):
+        """Create a tag if it does not already exist."""
+        try:
+            self._client.tags.create(name=tag)  # type: ignore
+        except bones.CallError as e:
+            if "already exists" not in str(e):
+                raise e
 
     def list_machines(self, **kwargs) -> list[dict]:
         """List machines."""
-        if self.resource_pool:
-            kwargs["pool"] = self.resource_pool
+        if self.resource_tag:
+            tags = kwargs.pop("tags", None)
+            if tags:
+                tags += "," + self.resource_tag
+            else:
+                tags = self.resource_tag
+            kwargs["tags"] = tags
         try:
             return self._client.machines.list.__self__._handler.read(**kwargs)  # type: ignore # noqa
         except bones.CallError as e:
-            if "No such pool" in str(e):
-                raise ValueError(f"Resource pool {self.resource_pool!r} not found.")
+            if "No such tag(s)" in str(e):
+                raise ValueError(str(e))
             raise e
 
     def get_machine(self, machine: str) -> dict:
@@ -62,8 +71,8 @@ class MaasClient:
         kwargs = {
             "hostname": machine,
         }
-        if self.resource_pool:
-            kwargs["pool"] = self.resource_pool
+        if self.resource_tag:
+            kwargs["tags"] = self.resource_tag
         machines = self._client.machines.list.__self__._handler.read(**kwargs)  # type: ignore # noqa
         if len(machines) == 0:
             raise ValueError(f"Machine {machine!r} not found.")
@@ -125,7 +134,7 @@ class MaasClient:
         return cls(
             deployment.url,
             deployment.token,
-            deployment.resource_pool,
+            deployment.resource_tag,
         )
 
 

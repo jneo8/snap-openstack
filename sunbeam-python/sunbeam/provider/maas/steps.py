@@ -117,23 +117,23 @@ class AddMaasDeployment(BaseStep):
                 current_deployments.add(
                     (
                         deployment.url,
-                        deployment.resource_pool,
+                        deployment.resource_tag,
                     )
                 )
 
-        if (self.deployment.url, self.deployment.resource_pool) in current_deployments:
+        if (self.deployment.url, self.deployment.resource_tag) in current_deployments:
             return Result(
                 ResultType.FAILED,
-                "Deployment with same url and resource pool already exists.",
+                "Deployment with same url and resource tag already exists.",
             )
 
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Status | None = None) -> Result:
-        """Check MAAS is working, Resource Pool exists, write to local configuration."""
+        """Check MAAS is working, write to local configuration."""
         try:
             client = maas_client.MaasClient(self.deployment.url, self.deployment.token)
-            _ = client.get_resource_pool(self.deployment.resource_pool)
+            client.ensure_tag(self.deployment.resource_tag)
         except ValueError as e:
             LOG.debug("Failed to connect to maas", exc_info=True)
             return Result(ResultType.FAILED, str(e))
@@ -143,13 +143,6 @@ class AddMaasDeployment(BaseStep):
                 return Result(
                     ResultType.FAILED,
                     "Unauthorized, check your api token has necessary permissions.",
-                )
-            elif e.status == 404:
-                LOG.debug("Resource pool not found", exc_info=True)
-                return Result(
-                    ResultType.FAILED,
-                    f"Resource pool {self.deployment.resource_pool!r} not"
-                    " found in given MAAS URL.",
                 )
             LOG.debug("Unknown error", exc_info=True)
             return Result(ResultType.FAILED, f"Unknown error, {e}")
@@ -555,6 +548,15 @@ class DeploymentMachinesCheck(DiagnosticsCheck):
 
     def run(self) -> list[DiagnosticsResult]:
         """Run a series of checks on the machines' definition."""
+        if not self.machines:
+            return [
+                DiagnosticsResult.fail(
+                    self.name,
+                    "less than 2 machines",
+                    "A deployment needs to have at least two machine"
+                    " to be a part of an openstack deployment.",
+                )
+            ]
         checks = []
         for machine in self.machines:
             checks.append(MachineRolesCheck(machine))
@@ -626,10 +628,10 @@ class ZonesCheck(DiagnosticsCheck):
 
     def run(self) -> DiagnosticsResult:
         """Checks deployment zones."""
-        if len(self.zones) == 2:
+        if len(self.zones) in (0, 2):
             return DiagnosticsResult.fail(
                 self.name,
-                "deployment has 2 zones",
+                "deployment has 0 or 2 zones",
                 textwrap.dedent(
                     f"""\
                     A deployment needs to have either 1 zone or more than 2 zones.
@@ -812,6 +814,15 @@ class DeploymentTopologyCheck(DiagnosticsCheck):
 
     def run(self) -> list[DiagnosticsResult]:
         """Run a sequence of checks to validate deployment topology."""
+        if len(self.machines) < 2:
+            return [
+                DiagnosticsResult.fail(
+                    self.name,
+                    "less than 2 machines",
+                    "A deployment needs to have at least two machine"
+                    " to be a part of an openstack deployment.",
+                )
+            ]
         machines_by_zone = maas_client._group_machines_by_zone(self.machines)
         checks = []
         checks.append(
