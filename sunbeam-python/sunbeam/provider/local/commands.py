@@ -757,7 +757,7 @@ def list(
     run_preflight_checks(preflight_checks, console)
     deployment: LocalDeployment = ctx.obj
     jhelper = JujuHelper(deployment.get_connected_controller())
-    step = LocalClusterStatusStep(deployment, jhelper, console, format)
+    step = LocalClusterStatusStep(deployment, jhelper)
     results = run_plan([step], console)
     msg = get_step_message(results, LocalClusterStatusStep)
     renderables = cluster_status.format_status(deployment, msg, format)

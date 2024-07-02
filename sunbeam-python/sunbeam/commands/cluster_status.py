@@ -21,7 +21,6 @@ import rich.console
 import rich.table
 import rich.text
 import yaml
-from rich.console import Console
 from rich.status import Status
 
 from sunbeam.clusterd.service import ClusterServiceUnavailableException
@@ -43,38 +42,6 @@ LOG = logging.getLogger(__name__)
 GREEN = "[green]{}[/green]"
 ORANGE = "[orange1]{}[/orange1]"
 RED = "[red]{}[/red]"
-
-
-def _to_status(status: dict, application_column_mapping: dict) -> dict:
-    """Return dict to the correct status format.
-
-    Return format:
-    <model>:
-        <machine_id>:
-            hostname: <machine_hostname>
-            status:
-                <role>: <status>
-    """
-    formatted_status = {}
-    for model, model_status in status.items():
-        formatted_status[model] = {}
-        for machine, machine_status in model_status.items():
-            _status = {}
-            if mac_status := machine_status.get("status"):
-                _status["machine"] = mac_status
-            if clusterd_status := machine_status.get("clusterd-status"):
-                _status["cluster"] = clusterd_status
-            if machines_applications := machine_status.get("applications", {}):
-                for app, app_status in machines_applications.items():
-                    column = application_column_mapping.get(app)
-                    if column is None:
-                        continue
-                    _status[column] = app_status["status"]
-            formatted_status[model][machine] = {
-                "hostname": machine_status["name"],
-                "status": _status,
-            }
-    return formatted_status
 
 
 def color_status(status: str | None) -> str:
@@ -156,14 +123,10 @@ def format_status(
 
 
 class ClusterStatusStep(abc.ABC, BaseStep):
-    def __init__(
-        self, deployment: Deployment, jhelper: JujuHelper, console: Console, format: str
-    ):
+    def __init__(self, deployment: Deployment, jhelper: JujuHelper):
         super().__init__("Cluster Status", "Querying cluster status")
         self.deployment = deployment
         self.jhelper = jhelper
-        self.console = console
-        self.format = format
 
     @abc.abstractmethod
     def models(self) -> list[str]:
@@ -235,6 +198,46 @@ class ClusterStatusStep(abc.ABC, BaseStep):
             }
         return machines_status
 
+    def _to_status(self, status: dict, application_column_mapping: dict) -> dict:
+        """Return dict to the correct status format.
+
+        Return format:
+        <model>:
+            <machine_id>:
+                hostname: <machine_hostname>
+                status:
+                    <role>: <status>
+        """
+        formatted_status = {}
+        for model, model_status in status.items():
+            formatted_status[model] = {}
+            for machine, machine_status in model_status.items():
+                _status = {}
+                if mac_status := machine_status.get("status"):
+                    _status["machine"] = mac_status
+                if clusterd_status := machine_status.get("clusterd-status"):
+                    _status["cluster"] = clusterd_status
+                if machines_applications := machine_status.get("applications", {}):
+                    for app, app_status in machines_applications.items():
+                        column = application_column_mapping.get(app)
+                        if column is None:
+                            continue
+                        _status[column] = self.map_application_status(
+                            app, app_status["status"]
+                        )
+                formatted_status[model][machine] = {
+                    "hostname": machine_status["name"],
+                    "status": _status,
+                }
+        return formatted_status
+
+    def map_application_status(self, application: str, status: str) -> str:
+        """Callback to map application status to a column.
+
+        This callback is called for every unit status with the name of its application.
+        """
+        return status
+
     def _compute_status(self) -> dict:
         status = {}
         for model in self.models():
@@ -244,7 +247,7 @@ class ClusterStatusStep(abc.ABC, BaseStep):
                 self._get_application_status_per_machine(model),
             )
         self._update_microcluster_status(status, self._get_microcluster_status())
-        return _to_status(status, self.applications_to_columns())
+        return self._to_status(status, self.applications_to_columns())
 
     def run(self, status: Status) -> Result:
         """Run the step to completion."""
