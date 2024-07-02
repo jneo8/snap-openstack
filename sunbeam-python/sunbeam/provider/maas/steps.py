@@ -1262,7 +1262,7 @@ class MaasDeployMachinesStep(BaseStep):
         """Determines if the step should be skipped or not."""
         clusterd_nodes = self.client.cluster.list_nodes()
         if len(clusterd_nodes) == 0:
-            return Result(ResultType.FAILED, "No machines to deploy.")
+            return Result(ResultType.FAILED, "No machines found in clusterd.")
 
         juju_machines = run_sync(self.jhelper.get_machines(self.model))
 
@@ -1270,6 +1270,11 @@ class MaasDeployMachinesStep(BaseStep):
         nodes_to_update = []
         for node in clusterd_nodes:
             node_machine_id = node["machineid"]
+            role = node.get("role")
+            if role and maas_deployment.RoleTags.JUJU_CONTROLLER.value in role:
+                # Juju Controllers should not be deployed by this step
+                nodes_to_deploy.remove(node)
+                continue
             for id, machine in juju_machines.items():
                 if node["name"] == machine.hostname:
                     if int(id) != node_machine_id and node_machine_id != -1:
@@ -1297,6 +1302,8 @@ class MaasDeployMachinesStep(BaseStep):
         self.nodes_to_deploy = sorted(nodes_to_deploy, key=lambda x: x["name"])
         self.nodes_to_update = nodes_to_update
 
+        if not self.nodes_to_deploy and not self.nodes_to_update:
+            return Result(ResultType.SKIPPED)
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Status | None = None) -> Result:
