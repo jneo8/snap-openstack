@@ -849,7 +849,14 @@ class TestMaasDeployMachinesStep:
         maas_deploy_machines_step.client.cluster.list_nodes.return_value = []
         result = maas_deploy_machines_step.is_skip()
         assert result.result_type == ResultType.FAILED
-        assert result.message == "No machines to deploy."
+        assert result.message == "No machines found in clusterd."
+
+    def test_is_skip_with_juju_controller_nodes(self, maas_deploy_machines_step):
+        maas_deploy_machines_step.client.cluster.list_nodes.return_value = [
+            {"name": "test_node", "machineid": 1, "role": ["juju-controller"]}
+        ]
+        result = maas_deploy_machines_step.is_skip()
+        assert result.result_type == ResultType.SKIPPED
 
     def test_is_skip_with_existing_machine_id(self, maas_deploy_machines_step):
         maas_deploy_machines_step.client.cluster.list_nodes.return_value = [
