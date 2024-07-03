@@ -20,6 +20,7 @@ import pytest
 from maas.client.bones import CallError
 
 import sunbeam.provider.maas.steps as maas_steps
+from sunbeam.jobs.checks import DiagnosticResultType
 from sunbeam.jobs.deployment import Networks
 from sunbeam.jobs.deployments import DeploymentsConfig
 from sunbeam.jobs.juju import ControllerNotFoundException
@@ -134,14 +135,14 @@ class TestMachineRolesCheck:
         machine = {"hostname": "test_machine", "roles": []}
         check = MachineRolesCheck(machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed == DiagnosticResultType.FAILURE
         assert result.details["machine"] == "test_machine"
 
     def test_run_with_assigned_roles(self):
         machine = {"hostname": "test_machine", "roles": ["role1", "role2"]}
         check = MachineRolesCheck(machine)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.details["machine"] == "test_machine"
 
 
@@ -158,7 +159,7 @@ class TestMachineNetworkCheck:
         }
         check = MachineNetworkCheck(snap, machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert result.details["machine"] == "test_machine"
         assert result.message and "network mapping" in result.message
 
@@ -171,7 +172,7 @@ class TestMachineNetworkCheck:
         machine = {"hostname": "test_machine", "roles": [], "spaces": []}
         check = MachineNetworkCheck(snap, machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert result.details["machine"] == "test_machine"
         assert result.message and "no role assigned" in result.message
 
@@ -191,7 +192,7 @@ class TestMachineNetworkCheck:
         }
         check = MachineNetworkCheck(snap, machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert result.details["machine"] == "test_machine"
         assert result.message and "missing beta" in result.message
 
@@ -208,7 +209,7 @@ class TestMachineNetworkCheck:
         }
         check = MachineNetworkCheck(snap, machine)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.details["machine"] == "test_machine"
 
 
@@ -217,7 +218,7 @@ class TestMachineStorageCheck:
         machine = {"hostname": "test_machine", "roles": [], "storage": {}}
         check = MachineStorageCheck(machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert result.details["machine"] == "test_machine"
         assert result.message and "machine has no role assigned" in result.message
 
@@ -229,7 +230,7 @@ class TestMachineStorageCheck:
         }
         check = MachineStorageCheck(machine)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.details["machine"] == "test_machine"
         assert result.message == "not a storage node."
 
@@ -241,7 +242,7 @@ class TestMachineStorageCheck:
         }
         check = MachineStorageCheck(machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert result.details["machine"] == "test_machine"
         assert result.message and "storage node has no ceph storage" in result.message
         assert result.diagnostics
@@ -255,7 +256,7 @@ class TestMachineStorageCheck:
         }
         check = MachineStorageCheck(machine)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.details["machine"] == "test_machine"
         assert result.message and StorageTags.CEPH.value in result.message
 
@@ -265,7 +266,7 @@ class TestMachineComputeNicCheck:
         machine = {"hostname": "test_machine", "roles": [], "nics": []}
         check = MachineComputeNicCheck(machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert result.details["machine"] == "test_machine"
         assert result.message and "machine has no role assigned" in result.message
 
@@ -277,7 +278,7 @@ class TestMachineComputeNicCheck:
         }
         check = MachineComputeNicCheck(machine)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.details["machine"] == "test_machine"
         assert result.message == "not a compute node."
 
@@ -289,7 +290,7 @@ class TestMachineComputeNicCheck:
         }
         check = MachineComputeNicCheck(machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert result.details["machine"] == "test_machine"
         assert result.message and "no compute nic found" in result.message
         assert result.diagnostics
@@ -303,7 +304,7 @@ class TestMachineComputeNicCheck:
         }
         check = MachineComputeNicCheck(machine)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.details["machine"] == "test_machine"
         assert result.message and NicTags.COMPUTE.value in result.message
 
@@ -313,7 +314,7 @@ class TestMachineRootDiskCheck:
         machine = {"hostname": "test_machine"}
         check = MachineRootDiskCheck(machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert result.details["machine"] == "test_machine"
         assert result.message and "could not determine" in result.message
 
@@ -321,7 +322,7 @@ class TestMachineRootDiskCheck:
         machine = {"hostname": "test_machine", "root_disk": {"tags": []}}
         check = MachineRootDiskCheck(machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.WARNING
         assert result.details["machine"] == "test_machine"
         assert result.message and "is not a SSD" in result.message
 
@@ -332,7 +333,7 @@ class TestMachineRootDiskCheck:
         }
         check = MachineRootDiskCheck(machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.WARNING
         assert result.details["machine"] == "test_machine"
         assert result.message and "is too small" in result.message
 
@@ -343,7 +344,7 @@ class TestMachineRootDiskCheck:
         }
         check = MachineRootDiskCheck(machine)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.details["machine"] == "test_machine"
         assert result.message and "is a SSD and is large enough" in result.message
 
@@ -358,7 +359,7 @@ class TestMachineRequirementsCheck:
         }
         check = MachineRequirementsCheck(machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.WARNING
         assert result.details["machine"] == "test_machine"
         assert result.message and "machine does not meet requirements" in result.message
 
@@ -371,7 +372,7 @@ class TestMachineRequirementsCheck:
         }
         check = MachineRequirementsCheck(machine)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.WARNING
         assert result.details["machine"] == "test_machine"
         assert result.message and "machine does not meet requirements" in result.message
 
@@ -384,7 +385,7 @@ class TestMachineRequirementsCheck:
         }
         check = MachineRequirementsCheck(machine)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.details["machine"] == "test_machine"
 
 
@@ -397,7 +398,7 @@ class TestDeploymentRolesCheck:
         ]
         check = DeploymentRolesCheck(machines, "Role", "role1", min_count=3)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.WARNING
         assert result.message and "less than 3 Role" in result.message
 
     def test_run_with_sufficient_roles(self):
@@ -408,7 +409,7 @@ class TestDeploymentRolesCheck:
         ]
         check = DeploymentRolesCheck(machines, "Role", "role1", min_count=3)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.message == "Role: 3"
 
 
@@ -417,21 +418,21 @@ class TestZonesCheck:
         zones = ["zone1"]
         check = ZonesCheck(zones)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.message == "1 zone(s)"
 
     def test_run_with_two_zones(self):
         zones = ["zone1", "zone2"]
         check = ZonesCheck(zones)
         result = check.run()
-        assert result.passed is False
-        assert result.message == "deployment has 0 or 2 zones"
+        assert result.passed is DiagnosticResultType.WARNING
+        assert result.message == "deployment has 2 zones"
 
     def test_run_with_three_zones(self):
         zones = ["zone1", "zone2", "zone3"]
         check = ZonesCheck(zones)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.message == "3 zone(s)"
 
 
@@ -449,7 +450,7 @@ class TestZoneBalanceCheck:
         }
         check = ZoneBalanceCheck(machines)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         assert result.message == "deployment is balanced"
 
     def test_run_with_unbalanced_roles(self):
@@ -465,7 +466,7 @@ class TestZoneBalanceCheck:
         }
         check = ZoneBalanceCheck(machines)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.WARNING
         assert result.message and "compute distribution is unbalanced" in result.message
 
 
@@ -476,7 +477,7 @@ class TestIpRangesCheck:
         deployment.network_mapping = {}
         check = IpRangesCheck(client, deployment)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert result.diagnostics and "network mapping" in result.diagnostics
 
     def test_run_with_missing_public_ip_ranges(self, mocker):
@@ -496,7 +497,7 @@ class TestIpRangesCheck:
         )
         check = IpRangesCheck(client, deployment)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert result.diagnostics and deployment.public_api_label in result.diagnostics
         get_ip_ranges_from_space_mock.assert_any_call(client, "public_space")
 
@@ -530,7 +531,7 @@ class TestIpRangesCheck:
         )
         check = IpRangesCheck(client, deployment)
         result = check.run()
-        assert result.passed is False
+        assert result.passed is DiagnosticResultType.FAILURE
         assert (
             result.diagnostics and deployment.internal_api_label in result.diagnostics
         )
@@ -576,7 +577,7 @@ class TestIpRangesCheck:
         )
         check = IpRangesCheck(client, deployment)
         result = check.run()
-        assert result.passed is True
+        assert result.passed is DiagnosticResultType.SUCCESS
         get_ip_ranges_from_space_mock.assert_any_call(client, "public_space")
         get_ip_ranges_from_space_mock.assert_any_call(client, "internal_space")
 

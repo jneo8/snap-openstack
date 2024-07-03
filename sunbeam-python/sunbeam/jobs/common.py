@@ -47,6 +47,7 @@ SHARE_PATH = Path(".local/share/openstack/")
 
 CLICK_OK = "[green]OK[/green]"
 CLICK_FAIL = "[red]FAIL[/red]"
+CLICK_WARN = "[yellow]WARN[/yellow]"
 
 DEFAULT_JUJU_NO_PROXY_SETTINGS = "127.0.0.1,localhost,::1"
 K8S_CLUSTER_SERVICE_CIDR = "10.152.183.0/24"

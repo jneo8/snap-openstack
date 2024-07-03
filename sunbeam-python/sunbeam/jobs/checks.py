@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import base64
+import enum
 import json
 import logging
 import os
@@ -58,11 +59,19 @@ class Check:
         return True
 
 
+class DiagnosticResultType(enum.Enum):
+    """Enum for diagnostic result types."""
+
+    SUCCESS = "success"
+    WARNING = "warning"
+    FAILURE = "failure"
+
+
 class DiagnosticsResult:
     def __init__(
         self,
         name: str,
-        passed: bool,
+        passed: DiagnosticResultType,
         message: str | None = None,
         diagnostics: str | None = None,
         **details: dict,
@@ -77,7 +86,7 @@ class DiagnosticsResult:
         """Return the result as a dictionary."""
         result = {
             "name": self.name,
-            "passed": self.passed,
+            "passed": self.passed.value,
             **self.details,
         }
         if self.message:
@@ -95,7 +104,7 @@ class DiagnosticsResult:
         **details: dict,
     ):
         """Helper to create a failed result."""
-        return cls(name, False, message, diagnostics, **details)
+        return cls(name, DiagnosticResultType.FAILURE, message, diagnostics, **details)
 
     @classmethod
     def success(
@@ -106,7 +115,28 @@ class DiagnosticsResult:
         **details: dict,
     ):
         """Helper to create a successful result."""
-        return cls(name, True, message, diagnostics, **details)
+        return cls(name, DiagnosticResultType.SUCCESS, message, diagnostics, **details)
+
+    @classmethod
+    def warn(
+        cls,
+        name: str,
+        message: str | None = None,
+        diagnostics: str | None = None,
+        **details: dict,
+    ):
+        """Helper to create a warning result."""
+        return cls(name, DiagnosticResultType.WARNING, message, diagnostics, **details)
+
+    @staticmethod
+    def coalesce_type(results: list["DiagnosticsResult"]) -> DiagnosticResultType:
+        """Coalesce results into a single result."""
+        types = [result.passed for result in results]
+        if DiagnosticResultType.FAILURE in types:
+            return DiagnosticResultType.FAILURE
+        if DiagnosticResultType.WARNING in types:
+            return DiagnosticResultType.WARNING
+        return DiagnosticResultType.SUCCESS
 
 
 class DiagnosticsCheck:
