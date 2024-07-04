@@ -1,0 +1,81 @@
+sunbeam-features:
+  description: Sunbeam core features
+  features:
+    - name: "pro"
+      version: "0.0.1"
+      description: "Ubuntu pro feature"
+      path: sunbeam.features.pro.feature.ProFeature
+      supported_architectures:
+        - amd64
+    - name: "vault"
+      version: "0.0.1"
+      description: "Vault feature"
+      path: sunbeam.features.vault.feature.VaultFeature
+      supported_architectures:
+        - amd64
+    - name: "orchestration"
+      version: "0.0.1"
+      description: "OpenStack Heat feature"
+      path: sunbeam.features.orchestration.feature.OrchestrationFeature
+      supported_architectures:
+        - amd64
+    - name: "observability"
+      version: "0.0.1"
+      description: "Observability Feature"
+      path: sunbeam.features.observability.feature.ObservabilityFeature
+      supported_architectures:
+        - amd64
+    - name: "telemetry"
+      version: "0.0.1"
+      description: "OpenStack Telemetry feature"
+      path: sunbeam.features.telemetry.feature.TelemetryFeature
+      supported_architectures:
+        - amd64
+    - name: "loadbalancer"
+      version: "0.0.1"
+      description: "OpenStack Octavia feature"
+      path: sunbeam.features.loadbalancer.feature.LoadbalancerFeature
+      supported_architectures:
+        - amd64
+    - name: "dns"
+      version: "0.0.1"
+      description: "OpenStack DNS feature"
+      path: sunbeam.features.dns.feature.DnsFeature
+      supported_architectures:
+        - amd64
+    - name: "secrets"
+      version: "0.0.1"
+      description: "OpenStack Secrets feature"
+      path: sunbeam.features.secrets.feature.SecretsFeature
+      supported_architectures:
+        - amd64
+    - name: "caas"
+      version: "0.0.1"
+      description: "OpenStack Container as a Service feature"
+      path: sunbeam.features.caas.feature.CaasFeature
+      supported_architectures:
+        - amd64
+    - name: "ldap-domain"
+      version: "0.0.1"
+      description: "Feature for integrating with an existing LDAP backend"
+      path: sunbeam.features.ldap.feature.LDAPFeature
+      supported_architectures:
+        - amd64
+    - name: "ca"
+      version: "0.0.1"
+      description: "TLS Manual Certificates feature"
+      path: sunbeam.features.ca.feature.CaTlsFeature
+      supported_architectures:
+        - amd64
+    - name: "validation"
+      version: "0.0.1"
+      description: "Feature for integrating with tempest"
+      path: sunbeam.features.validation.feature.ValidationFeature
+      supported_architectures:
+        - amd64
+    - name: "images-sync"
+      version: "0.0.1"
+      description: "Feature for syncing images from a simplestreams source"
+      path: sunbeam.features.images_sync.feature.ImagesSyncFeature
+      supported_architectures:
+        - amd64

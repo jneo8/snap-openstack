@@ -19,17 +19,17 @@ import pytest
 from packaging.version import Version
 
 from sunbeam.clusterd.service import ConfigItemNotFoundException
-from sunbeam.jobs.plugin import PLUGIN_YAML, PluginManager
-from sunbeam.plugins.interface.v1.base import (
-    BasePlugin,
-    EnableDisablePlugin,
+from sunbeam.features.interface.v1.base import (
+    BaseFeature,
+    EnableDisableFeature,
+    FeatureError,
+    FeatureRequirement,
     IncompatibleVersionError,
-    MissingPluginError,
+    MissingFeatureError,
     MissingVersionInfoError,
-    NotAutomaticPluginError,
-    PluginError,
-    PluginRequirement,
+    NotAutomaticFeatureError,
 )
+from sunbeam.jobs.feature import FEATURES_YAML, FeatureManager
 
 
 @pytest.fixture()
@@ -39,96 +39,96 @@ def deployment():
 
 @pytest.fixture()
 def utils():
-    with patch("sunbeam.plugins.interface.v1.base.utils") as p:
+    with patch("sunbeam.features.interface.v1.base.utils") as p:
         yield p
 
 
 @pytest.fixture()
 def clickinstantiator():
-    with patch("sunbeam.plugins.interface.v1.base.ClickInstantiator") as p:
+    with patch("sunbeam.features.interface.v1.base.ClickInstantiator") as p:
         yield p
 
 
 @pytest.fixture()
 def read_config():
-    with patch("sunbeam.plugins.interface.v1.base.read_config") as p:
+    with patch("sunbeam.features.interface.v1.base.read_config") as p:
         yield p
 
 
 @pytest.fixture()
 def update_config():
-    with patch("sunbeam.plugins.interface.v1.base.update_config") as p:
+    with patch("sunbeam.features.interface.v1.base.update_config") as p:
         yield p
 
 
 @pytest.fixture(autouse=True)
-def base_plugin_abc():
+def base_feature_abc():
     """Disable abstract methods for ease of testing."""
-    base_abstract_methods = BasePlugin.__abstractmethods__
-    enable_abstract_methods = EnableDisablePlugin.__abstractmethods__
-    BasePlugin.__abstractmethods__ = frozenset()
-    EnableDisablePlugin.__abstractmethods__ = frozenset()
+    base_abstract_methods = BaseFeature.__abstractmethods__
+    enable_abstract_methods = EnableDisableFeature.__abstractmethods__
+    BaseFeature.__abstractmethods__ = frozenset()
+    EnableDisableFeature.__abstractmethods__ = frozenset()
     yield
-    BasePlugin.__abstractmethods__ = base_abstract_methods
-    EnableDisablePlugin.__abstractmethods__ = enable_abstract_methods
+    BaseFeature.__abstractmethods__ = base_abstract_methods
+    EnableDisableFeature.__abstractmethods__ = enable_abstract_methods
 
 
-def plugin_classes() -> list[type[EnableDisablePlugin]]:
+def feature_classes() -> list[type[EnableDisableFeature]]:
     with patch("snaphelpers.Snap"):
-        manager = PluginManager()
-        yaml_file = manager.get_core_plugins_path() / PLUGIN_YAML
+        manager = FeatureManager()
+        yaml_file = manager.get_core_features_path() / FEATURES_YAML
         classes = []
-        for klass in manager.get_plugin_classes(yaml_file):
-            if issubclass(klass, EnableDisablePlugin):
+        for klass in manager.get_feature_classes(yaml_file):
+            if issubclass(klass, EnableDisableFeature):
                 classes.append(klass)
         return classes
 
 
-class TestBasePlugin:
+class TestBaseFeature:
     def test_validate_commands(self, deployment):
-        with patch.object(BasePlugin, "commands") as mock_commands:
-            plugin = BasePlugin("test", deployment)
+        with patch.object(BaseFeature, "commands") as mock_commands:
+            feature = BaseFeature("test", deployment)
             mock_commands.return_value = {
                 "group1": [{"name": "cmd1", "command": click.Command("cmd1")}]
             }
-            plugin = BasePlugin("test", deployment)
-            result = plugin.validate_commands()
+            feature = BaseFeature("test", deployment)
+            result = feature.validate_commands()
             assert result is True
 
     def test_validate_commands_missing_command_function(self, deployment):
-        with patch.object(BasePlugin, "commands") as mock_commands:
+        with patch.object(BaseFeature, "commands") as mock_commands:
             mock_commands.return_value = {"group1": [{"name": "cmd1"}]}
-            plugin = BasePlugin("test", deployment)
-            result = plugin.validate_commands()
+            feature = BaseFeature("test", deployment)
+            result = feature.validate_commands()
             assert result is False
 
     def test_validate_commands_missing_command_name(self, deployment):
-        with patch.object(BasePlugin, "commands") as mock_commands:
+        with patch.object(BaseFeature, "commands") as mock_commands:
             mock_commands.return_value = {
                 "group1": [{"command": click.Command("cmd1")}]
             }
-            plugin = BasePlugin("test", deployment)
-            result = plugin.validate_commands()
+            feature = BaseFeature("test", deployment)
+            result = feature.validate_commands()
             assert result is False
 
     def test_validate_commands_empty_command_list(self, deployment):
-        with patch.object(BasePlugin, "commands") as mock_commands:
+        with patch.object(BaseFeature, "commands") as mock_commands:
             mock_commands.return_value = {"group1": []}
-            plugin = BasePlugin("test", deployment)
-            result = plugin.validate_commands()
+            feature = BaseFeature("test", deployment)
+            result = feature.validate_commands()
             assert result is True
 
     def test_validate_commands_subgroup_as_command(self, deployment):
-        with patch.object(BasePlugin, "commands") as mock_commands:
+        with patch.object(BaseFeature, "commands") as mock_commands:
             mock_commands.return_value = {
                 "group1": [{"name": "subgroup1", "command": click.Group("subgroup1")}]
             }
-            plugin = BasePlugin("test", deployment)
-            result = plugin.validate_commands()
+            feature = BaseFeature("test", deployment)
+            result = feature.validate_commands()
             assert result is True
 
     def test_register(self, deployment, utils, clickinstantiator):
-        with patch.object(BasePlugin, "commands") as mock_commands:
+        with patch.object(BaseFeature, "commands") as mock_commands:
             cli = Mock()
             mock_groups = Mock()
             mock_group_obj = Mock()
@@ -140,15 +140,15 @@ class TestBasePlugin:
             mock_commands.return_value = {
                 "group1": [{"name": "cmd1", "command": cmd1_obj}]
             }
-            plugin = BasePlugin("test", deployment)
-            plugin.register(cli)
+            feature = BaseFeature("test", deployment)
+            feature.register(cli)
             clickinstantiator.assert_called_once()
             mock_group_obj.add_command.assert_called_once_with(cmd1_obj, "cmd1")
 
     def test_register_when_command_already_exists(
         self, deployment, utils, clickinstantiator
     ):
-        with patch.object(BasePlugin, "commands") as mock_commands:
+        with patch.object(BaseFeature, "commands") as mock_commands:
             cli = Mock()
             mock_groups = Mock()
             mock_group_obj = Mock()
@@ -160,15 +160,15 @@ class TestBasePlugin:
             mock_commands.return_value = {
                 "group1": [{"name": "cmd1", "command": cmd1_obj}]
             }
-            plugin = BasePlugin("test", deployment)
-            plugin.register(cli)
+            feature = BaseFeature("test", deployment)
+            feature.register(cli)
             mock_group_obj.add_command.assert_not_called()
             clickinstantiator.assert_not_called()
 
     def test_register_when_group_doesnot_exists(
         self, deployment, utils, clickinstantiator
     ):
-        with patch.object(BasePlugin, "commands") as mock_commands:
+        with patch.object(BaseFeature, "commands") as mock_commands:
             cli = Mock()
             mock_groups = Mock()
             utils.get_all_registered_groups.return_value = mock_groups
@@ -178,90 +178,90 @@ class TestBasePlugin:
             mock_commands.return_value = {
                 "group1": [{"name": "cmd1", "command": cmd1_obj}]
             }
-            plugin = BasePlugin("test", deployment)
-            plugin.register(cli)
+            feature = BaseFeature("test", deployment)
+            feature.register(cli)
             clickinstantiator.assert_not_called()
 
-    def test_get_plugin_info(self, deployment, read_config):
+    def test_get_feature_info(self, deployment, read_config):
         mock_info = {"version": "0.0.1"}
         read_config.return_value = mock_info
-        plugin = BasePlugin("test", deployment)
-        info = plugin.get_plugin_info()
+        feature = BaseFeature("test", deployment)
+        info = feature.get_feature_info()
         assert info == mock_info
 
-    def test_get_plugin_info_no_config_in_db(self, deployment, read_config):
+    def test_get_feature_info_no_config_in_db(self, deployment, read_config):
         read_config.side_effect = ConfigItemNotFoundException()
-        plugin = BasePlugin("test", deployment)
-        info = plugin.get_plugin_info()
+        feature = BaseFeature("test", deployment)
+        info = feature.get_feature_info()
         assert info == {}
 
-    def test_update_plugin_info(self, deployment, read_config, update_config):
+    def test_update_feature_info(self, deployment, read_config, update_config):
         mock_info = {}
         read_config.return_value = mock_info
-        plugin = BasePlugin("test", deployment)
-        plugin.update_plugin_info({"test": "test"})
+        feature = BaseFeature("test", deployment)
+        feature.update_feature_info({"test": "test"})
         assert update_config.call_args.args[2] == {"test": "test", "version": "0.0.0"}
 
-    def test_update_plugin_info_with_config_in_database(
+    def test_update_feature_info_with_config_in_database(
         self, deployment, read_config, update_config
     ):
         mock_info = {"version": "0.0.1", "enabled": "true"}
         read_config.return_value = mock_info
-        plugin = BasePlugin("test", deployment)
-        plugin.update_plugin_info({"test": "test"})
+        feature = BaseFeature("test", deployment)
+        feature.update_feature_info({"test": "test"})
         assert update_config.call_args.args[2] == {
             "enabled": "true",
             "test": "test",
             "version": "0.0.0",
         }
 
-    def test_fetch_plugin_version_with_valid_plugin(self, deployment, read_config):
+    def test_fetch_feature_version_with_valid_feature(self, deployment, read_config):
         client_instance = Mock()
         deployment.get_client.return_value = client_instance
-        plugin_key = "test_plugin"
+        feature_key = "test_feature"
         config = {"version": "1.0.0"}
         read_config.return_value = config
 
-        plugin = BasePlugin("test", deployment)
-        version = plugin.fetch_plugin_version(plugin_key)
+        feature = BaseFeature("test", deployment)
+        version = feature.fetch_feature_version(feature_key)
         assert version == Version("1.0.0")
-        read_config.assert_called_once_with(client_instance, f"Plugin-{plugin_key}")
+        read_config.assert_called_once_with(client_instance, f"Feature-{feature_key}")
 
-    def test_fetch_plugin_version_with_missing_plugin(self, deployment, read_config):
+    def test_fetch_feature_version_with_missing_feature(self, deployment, read_config):
         client_instance = Mock()
         deployment.get_client.return_value = client_instance
-        plugin_key = "test_plugin"
+        feature_key = "test_feature"
         read_config.side_effect = ConfigItemNotFoundException
-        plugin = BasePlugin("test", deployment)
-        with pytest.raises(MissingPluginError):
-            plugin.fetch_plugin_version(plugin_key)
-        read_config.assert_called_once_with(client_instance, f"Plugin-{plugin_key}")
+        feature = BaseFeature("test", deployment)
+        with pytest.raises(MissingFeatureError):
+            feature.fetch_feature_version(feature_key)
+        read_config.assert_called_once_with(client_instance, f"Feature-{feature_key}")
 
-    def test_fetch_plugin_version_with_missing_version_info(
+    def test_fetch_feature_version_with_missing_version_info(
         self, deployment, read_config
     ):
         client_instance = Mock()
         deployment.get_client.return_value = client_instance
-        plugin_key = "test_plugin"
+        feature_key = "test_feature"
         config = {}
         read_config.return_value = config
-        plugin = BasePlugin("test", deployment)
+        feature = BaseFeature("test", deployment)
         with pytest.raises(MissingVersionInfoError):
-            plugin.fetch_plugin_version(plugin_key)
-        read_config.assert_called_once_with(client_instance, f"Plugin-{plugin_key}")
+            feature.fetch_feature_version(feature_key)
+        read_config.assert_called_once_with(client_instance, f"Feature-{feature_key}")
 
 
-class DummyPlugin(EnableDisablePlugin):
+class DummyFeature(EnableDisableFeature):
     version = Version("0.0.1")
 
     def __init__(self, name: str, deployment):
         self.name = name
         self.deployment = deployment
 
-    def enable_plugin(self) -> None:
+    def enable_feature(self) -> None:
         pass
 
-    def disable_plugin(self) -> None:
+    def disable_feature(self) -> None:
         pass
 
     def run_enable_plans(self) -> None:
@@ -271,20 +271,20 @@ class DummyPlugin(EnableDisablePlugin):
         pass
 
 
-def plugin_klass(version_: str) -> type[EnableDisablePlugin]:
-    class CompatiblePlugin(EnableDisablePlugin):
+def feature_klass(version_: str) -> type[EnableDisableFeature]:
+    class CompatibleFeature(EnableDisableFeature):
         name = "compatible"
         version = Version(version_)
 
-        requires = {PluginRequirement("test_req>=1.0.0")}
+        requires = {FeatureRequirement("test_req>=1.0.0")}
 
         def __init__(self, client):
             super().__init__(self.name, client)
 
-        def enable_plugin(self, *args, **kwargs) -> None:
+        def enable_feature(self, *args, **kwargs) -> None:
             pass
 
-        def disable_plugin(self, *args, **kwargs) -> None:
+        def disable_feature(self, *args, **kwargs) -> None:
             pass
 
         def run_enable_plans(self) -> None:
@@ -293,231 +293,231 @@ def plugin_klass(version_: str) -> type[EnableDisablePlugin]:
         def run_disable_plans(self) -> None:
             pass
 
-    return CompatiblePlugin
+    return CompatibleFeature
 
 
-class TestEnableDisablePlugin:
-    def test_check_enabled_plugin_is_compatible_with_compatible_requirement(
+class TestEnableDisableFeature:
+    def test_check_enabled_feature_is_compatible_with_compatible_requirement(
         self, deployment, mocker
     ):
-        plugin = DummyPlugin("test_plugin", deployment)
-        mocker.patch.object(plugin, "fetch_plugin_version", return_value="1.0.0")
-        requirement = PluginRequirement("test_plugin>=1.0.0")
-        plugin.check_enabled_requirement_is_compatible(requirement)
+        feature = DummyFeature("test_feature", deployment)
+        mocker.patch.object(feature, "fetch_feature_version", return_value="1.0.0")
+        requirement = FeatureRequirement("test_feature>=1.0.0")
+        feature.check_enabled_requirement_is_compatible(requirement)
 
-    def test_check_enabled_plugin_is_compatible_with_missing_version_info(
+    def test_check_enabled_feature_is_compatible_with_missing_version_info(
         self, deployment, mocker
     ):
-        plugin = DummyPlugin("test_plugin", deployment)
+        feature = DummyFeature("test_feature", deployment)
 
         mocker.patch.object(
-            plugin, "fetch_plugin_version", side_effect=MissingVersionInfoError
+            feature, "fetch_feature_version", side_effect=MissingVersionInfoError
         )
-        requirement = PluginRequirement("test_plugin>=1.0.0")
-        with pytest.raises(PluginError):
-            plugin.check_enabled_requirement_is_compatible(requirement)
+        requirement = FeatureRequirement("test_feature>=1.0.0")
+        with pytest.raises(FeatureError):
+            feature.check_enabled_requirement_is_compatible(requirement)
 
-    def test_check_enabled_plugin_is_compatible_with_incompatible_requirement(
+    def test_check_enabled_feature_is_compatible_with_incompatible_requirement(
         self, deployment, mocker
     ):
-        plugin = DummyPlugin("test_plugin", deployment)
+        feature = DummyFeature("test_feature", deployment)
 
-        mocker.patch.object(plugin, "fetch_plugin_version", return_value="0.9.0")
-        requirement = PluginRequirement("test_plugin>=1.0.0")
+        mocker.patch.object(feature, "fetch_feature_version", return_value="0.9.0")
+        requirement = FeatureRequirement("test_feature>=1.0.0")
         with pytest.raises(IncompatibleVersionError):
-            plugin.check_enabled_requirement_is_compatible(requirement)
+            feature.check_enabled_requirement_is_compatible(requirement)
 
-    def test_check_enabled_plugin_is_compatible_with_optional_requirement(
+    def test_check_enabled_feature_is_compatible_with_optional_requirement(
         self, deployment, mocker
     ):
-        plugin = DummyPlugin("test_plugin", deployment)
+        feature = DummyFeature("test_feature", deployment)
 
         mocker.patch.object(
-            plugin, "fetch_plugin_version", side_effect=MissingVersionInfoError
+            feature, "fetch_feature_version", side_effect=MissingVersionInfoError
         )
-        requirement = PluginRequirement("test_plugin>=1.0.0", optional=True)
-        with pytest.raises(PluginError):
-            plugin.check_enabled_requirement_is_compatible(requirement)
+        requirement = FeatureRequirement("test_feature>=1.0.0", optional=True)
+        with pytest.raises(FeatureError):
+            feature.check_enabled_requirement_is_compatible(requirement)
 
-    def test_check_enabled_plugin_is_compatible_with_no_specifier_and_optional_requirement(  # noqa: E501
+    def test_check_enabled_feature_is_compatible_with_no_specifier_and_optional_requirement(  # noqa: E501
         self, deployment, mocker
     ):
-        plugin = DummyPlugin("test_plugin", deployment)
+        feature = DummyFeature("test_feature", deployment)
 
         mocker.patch.object(
-            plugin, "fetch_plugin_version", side_effect=MissingVersionInfoError
+            feature, "fetch_feature_version", side_effect=MissingVersionInfoError
         )
-        requirement = PluginRequirement("test_plugin", optional=True)
-        plugin.check_enabled_requirement_is_compatible(requirement)
+        requirement = FeatureRequirement("test_feature", optional=True)
+        feature.check_enabled_requirement_is_compatible(requirement)
 
-    def test_check_enabled_plugin_is_compatible_with_no_specifier_and_required_requirement(  # noqa: E501
+    def test_check_enabled_feature_is_compatible_with_no_specifier_and_required_requirement(  # noqa: E501
         self, deployment, mocker
     ):
-        plugin = DummyPlugin("test_plugin", deployment)
+        feature = DummyFeature("test_feature", deployment)
 
         mocker.patch.object(
-            plugin, "fetch_plugin_version", side_effect=MissingVersionInfoError
+            feature, "fetch_feature_version", side_effect=MissingVersionInfoError
         )
-        requirement = PluginRequirement("test_plugin", optional=False)
-        plugin.check_enabled_requirement_is_compatible(requirement)
+        requirement = FeatureRequirement("test_feature", optional=False)
+        feature.check_enabled_requirement_is_compatible(requirement)
 
-    def test_check_plugin_class_is_compatible_with_compatible_requirement(
+    def test_check_feature_class_is_compatible_with_compatible_requirement(
         self, deployment
     ):
-        plugin = DummyPlugin("test_plugin", deployment)
+        feature = DummyFeature("test_feature", deployment)
 
-        requirement = PluginRequirement("test_plugin>=1.0.0")
+        requirement = FeatureRequirement("test_feature>=1.0.0")
 
-        klass = plugin_klass("1.0.0")
-        plugin.check_plugin_class_is_compatible(klass(deployment), requirement)
+        klass = feature_klass("1.0.0")
+        feature.check_feature_class_is_compatible(klass(deployment), requirement)
 
-    def test_check_plugin_class_is_compatible_with_incompatible_requirement(
+    def test_check_feature_class_is_compatible_with_incompatible_requirement(
         self, deployment
     ):
-        plugin = DummyPlugin("test_plugin", deployment)
+        feature = DummyFeature("test_feature", deployment)
 
-        requirement = PluginRequirement("test_plugin>=2.0.0")
+        requirement = FeatureRequirement("test_feature>=2.0.0")
 
-        klass = plugin_klass("1.0.0")
+        klass = feature_klass("1.0.0")
         with pytest.raises(IncompatibleVersionError):
-            plugin.check_plugin_class_is_compatible(klass(deployment), requirement)
+            feature.check_feature_class_is_compatible(klass(deployment), requirement)
 
-    def test_check_plugin_class_is_compatible_with_core_plugin_and_incompatible_version(
+    def test_check_feature_class_is_compatible_with_core_feature_and_incompatible_version(
         self, deployment
     ):
-        plugin = DummyPlugin("test_plugin", deployment)
+        feature = DummyFeature("test_feature", deployment)
 
-        requirement = PluginRequirement("test_plugin>=1.0.0")
+        requirement = FeatureRequirement("test_feature>=1.0.0")
 
-        klass = plugin_klass("0.5.0")
+        klass = feature_klass("0.5.0")
         with pytest.raises(IncompatibleVersionError):
-            plugin.check_plugin_class_is_compatible(klass(deployment), requirement)
+            feature.check_feature_class_is_compatible(klass(deployment), requirement)
 
-    def test_check_plugin_class_is_compatible_with_no_specifier(self, deployment):
-        plugin = DummyPlugin("test_plugin", deployment)
+    def test_check_feature_class_is_compatible_with_no_specifier(self, deployment):
+        feature = DummyFeature("test_feature", deployment)
 
-        requirement = PluginRequirement("test_plugin")
+        requirement = FeatureRequirement("test_feature")
 
-        klass = plugin_klass("1.0.0")
-        plugin.check_plugin_class_is_compatible(klass(deployment), requirement)
+        klass = feature_klass("1.0.0")
+        feature.check_feature_class_is_compatible(klass(deployment), requirement)
 
-    def test_check_plugin_is_automatically_enableable_with_automatically_enableable_plugin(  # noqa: E501
+    def test_check_feature_is_automatically_enableable_with_automatically_enableable_feature(  # noqa: E501
         self, deployment
     ):
-        plugin = DummyPlugin("test_plugin", deployment)
-        plugin.check_plugin_is_automatically_enableable(plugin)  # type: ignore
+        feature = DummyFeature("test_feature", deployment)
+        feature.check_feature_is_automatically_enableable(feature)  # type: ignore
 
-    def test_check_plugin_is_automatically_enableable_with_non_automatically_enableable_plugin(  # noqa: E501
+    def test_check_feature_is_automatically_enableable_with_non_automatically_enableable_feature(  # noqa: E501
         self, deployment
     ):
-        class DummyPluginInner(DummyPlugin):
-            def enable_plugin(self, necessary_arg) -> None:
-                return super().enable_plugin()
+        class DummyFeatureInner(DummyFeature):
+            def enable_feature(self, necessary_arg) -> None:
+                return super().enable_feature()
 
-        required_plugin = DummyPluginInner(name="test_plugin", deployment=deployment)
+        required_feature = DummyFeatureInner(name="test_feature", deployment=deployment)
 
-        plugin = DummyPlugin("test_plugin", deployment)
-        with pytest.raises(NotAutomaticPluginError):
-            plugin.check_plugin_is_automatically_enableable(required_plugin)  # type: ignore # noqa: E501
+        feature = DummyFeature("test_feature", deployment)
+        with pytest.raises(NotAutomaticFeatureError):
+            feature.check_feature_is_automatically_enableable(required_feature)  # type: ignore # noqa: E501
 
-    @pytest.mark.parametrize("klass", plugin_classes())
-    def test_core_plugins_requirements(self, deployment, klass):
-        plugin = klass(deployment=deployment)
+    @pytest.mark.parametrize("klass", feature_classes())
+    def test_core_features_requirements(self, deployment, klass):
+        feature = klass(deployment=deployment)
 
-        for requirement in plugin.requires:
-            plugin.check_plugin_class_is_compatible(
+        for requirement in feature.requires:
+            feature.check_feature_class_is_compatible(
                 requirement.klass(deployment=deployment), requirement
             )
 
     def test_check_enablement_requirements_with_enabled_compatible_requirement(
         self, deployment, mocker
     ):
-        plugin = DummyPlugin(deployment=deployment, name="test_req")
-        plugin.version = Version("1.0.1")
-        klass = plugin_klass("0.0.1")
+        feature = DummyFeature(deployment=deployment, name="test_req")
+        feature.version = Version("1.0.1")
+        klass = feature_klass("0.0.1")
         mocker.patch.object(
             klass,
-            "get_plugin_info",
+            "get_feature_info",
             return_value={"version": klass.version, "enabled": "true"},
         )
         mocker.patch.object(
-            PluginManager, "get_all_plugin_classes", return_value=[klass]
+            FeatureManager, "get_all_feature_classes", return_value=[klass]
         )
-        plugin.check_enablement_requirements()
+        feature.check_enablement_requirements()
 
     def test_check_enablement_requirements_with_disabled_compatible_requirement(
         self, deployment, mocker
     ):
-        plugin = DummyPlugin(deployment=deployment, name="test_req")
-        klass = plugin_klass("0.0.1")
+        feature = DummyFeature(deployment=deployment, name="test_req")
+        klass = feature_klass("0.0.1")
         mocker.patch.object(
             klass,
-            "get_plugin_info",
+            "get_feature_info",
             return_value={"version": klass.version, "enabled": "false"},
         )
         mocker.patch.object(
-            PluginManager, "get_all_plugin_classes", return_value=[klass]
+            FeatureManager, "get_all_feature_classes", return_value=[klass]
         )
-        plugin.check_enablement_requirements()
+        feature.check_enablement_requirements()
 
     def test_check_enablement_requirements_with_enabled_incompatible_requirement(
         self, deployment, mocker
     ):
-        plugin = DummyPlugin(deployment=deployment, name="test_req")
-        klass = plugin_klass("0.0.1")
+        feature = DummyFeature(deployment=deployment, name="test_req")
+        klass = feature_klass("0.0.1")
         mocker.patch.object(
             klass,
-            "get_plugin_info",
+            "get_feature_info",
             return_value={"version": klass.version, "enabled": "true"},
         )
         mocker.patch.object(
-            PluginManager, "get_all_plugin_classes", return_value=[klass]
+            FeatureManager, "get_all_feature_classes", return_value=[klass]
         )
         with pytest.raises(IncompatibleVersionError):
-            plugin.check_enablement_requirements()
+            feature.check_enablement_requirements()
 
     def test_check_enablement_requirements_with_disabled_incompatible_requirement(
         self, deployment, mocker
     ):
-        plugin = DummyPlugin(deployment=deployment, name="test_req")
-        klass = plugin_klass("0.0.1")
+        feature = DummyFeature(deployment=deployment, name="test_req")
+        klass = feature_klass("0.0.1")
         mocker.patch.object(
             klass,
-            "get_plugin_info",
+            "get_feature_info",
             return_value={"version": klass.version, "enabled": "false"},
         )
         mocker.patch.object(
-            PluginManager, "get_all_plugin_classes", return_value=[klass]
+            FeatureManager, "get_all_feature_classes", return_value=[klass]
         )
-        plugin.check_enablement_requirements()
+        feature.check_enablement_requirements()
 
     def test_check_enablement_requirements_with_enabled_dependant(
         self, deployment, mocker
     ):
-        plugin = DummyPlugin(deployment=deployment, name="test_req")
-        klass = plugin_klass("0.0.1")
+        feature = DummyFeature(deployment=deployment, name="test_req")
+        klass = feature_klass("0.0.1")
         mocker.patch.object(
             klass,
-            "get_plugin_info",
+            "get_feature_info",
             return_value={"version": klass.version, "enabled": "true"},
         )
         mocker.patch.object(
-            PluginManager, "get_all_plugin_classes", return_value=[klass]
+            FeatureManager, "get_all_feature_classes", return_value=[klass]
         )
-        with pytest.raises(PluginError):
-            plugin.check_enablement_requirements("disable")
+        with pytest.raises(FeatureError):
+            feature.check_enablement_requirements("disable")
 
     def test_check_enablement_requirements_with_disabled_dependant(
         self, deployment, mocker
     ):
-        plugin = DummyPlugin(deployment=deployment, name="test_req")
-        klass = plugin_klass("0.0.1")
+        feature = DummyFeature(deployment=deployment, name="test_req")
+        klass = feature_klass("0.0.1")
         mocker.patch.object(
             klass,
-            "get_plugin_info",
+            "get_feature_info",
             return_value={"version": klass.version, "enabled": "false"},
         )
         mocker.patch.object(
-            PluginManager, "get_all_plugin_classes", return_value=[klass]
+            FeatureManager, "get_all_feature_classes", return_value=[klass]
         )
-        plugin.check_enablement_requirements("disable")
+        feature.check_enablement_requirements("disable")

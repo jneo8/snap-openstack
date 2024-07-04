@@ -28,7 +28,7 @@ from sunbeam.commands.configure import (
 from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.proxy import proxy_questions
 from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment, Networks
-from sunbeam.jobs.plugin import PluginManager
+from sunbeam.jobs.feature import FeatureManager
 from sunbeam.jobs.questions import Question, QuestionBank, load_answers, show_questions
 
 MAAS_TYPE = "maas"
@@ -239,7 +239,7 @@ class MaasDeployment(Deployment):
             )
         )
 
-        preseed_content.extend(PluginManager().get_preseed_questions_content(self))
+        preseed_content.extend(FeatureManager().get_preseed_questions_content(self))
 
         preseed_content_final = "\n".join(preseed_content)
         return preseed_content_final

@@ -350,7 +350,7 @@ class TerraformHelper:
         """Updates terraform vars and Apply the terraform.
 
         Get tfvars from cluster db using tfvar_config key, Manifest file using
-        Charm Manifest tfvar map from core and plugins, User provided override_tfvars.
+        Charm Manifest tfvar map from core and features, User provided override_tfvars.
         Merge the tfvars in the above order so that terraform vars in override_tfvars
         will have highest priority.
         Get tfhelper object for tfplan and write tfvars and apply the terraform plan.

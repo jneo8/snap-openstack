@@ -43,8 +43,8 @@ from sunbeam.jobs.common import (
     update_config,
 )
 from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment
+from sunbeam.jobs.feature import FeatureManager
 from sunbeam.jobs.juju import CONTROLLER_MODEL, JujuHelper
-from sunbeam.jobs.plugin import PluginManager
 from sunbeam.jobs.questions import (
     ConfirmQuestion,
     PromptQuestion,
@@ -121,7 +121,7 @@ def _update_proxy(proxy: dict, deployment: Deployment):
         )
     run_plan(plan, console)
 
-    PluginManager.update_proxy_model_configs(deployment)
+    FeatureManager.update_proxy_model_configs(deployment)
 
 
 @click.command()

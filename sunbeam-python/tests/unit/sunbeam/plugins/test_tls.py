@@ -18,10 +18,10 @@ from unittest.mock import AsyncMock, Mock, patch
 import click
 import pytest
 
+import sunbeam.features.ca.feature as ca
+import sunbeam.features.interface.utils
+import sunbeam.features.interface.v1.tls as tls
 import sunbeam.jobs.questions
-import sunbeam.plugins.ca.plugin as ca
-import sunbeam.plugins.interface.utils
-import sunbeam.plugins.interface.v1.tls as tls
 from sunbeam.jobs.common import ResultType
 from sunbeam.jobs.juju import ActionFailedException, LeaderNotFoundException
 

@@ -30,7 +30,7 @@ from sunbeam.commands.openstack import CONFIG_KEY as OPENSTACK_CONFIG_KEY
 from sunbeam.commands.openstack import OPENSTACK_DEPLOY_TIMEOUT
 from sunbeam.commands.sunbeam_machine import CONFIG_KEY as SUNBEAM_MACHINE_CONFIG_KEY
 from sunbeam.commands.terraform import TerraformException, TerraformHelper
-from sunbeam.commands.upgrades.base import UpgradeCoordinator, UpgradePlugins
+from sunbeam.commands.upgrades.base import UpgradeCoordinator, UpgradeFeatures
 from sunbeam.jobs.common import (
     BaseStep,
     Result,
@@ -39,9 +39,9 @@ from sunbeam.jobs.common import (
     update_status_background,
 )
 from sunbeam.jobs.deployment import Deployment
+from sunbeam.jobs.feature import FeatureManager
 from sunbeam.jobs.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
 from sunbeam.jobs.manifest import Manifest
-from sunbeam.jobs.plugin import PluginManager
 from sunbeam.versions import (
     MISC_CHARMS_K8S,
     MYSQL_CHARMS_K8S,
@@ -211,10 +211,10 @@ class UpgradeControlPlane(BaseUpgrade):
         if result.result_type == ResultType.FAILED:
             return result
 
-        # Step 3: Upgrade all plugins that uses openstack-plan
-        LOG.debug("Upgrading openstack plugins that are enabled")
+        # Step 3: Upgrade all features that uses openstack-plan
+        LOG.debug("Upgrading openstack features that are enabled")
         # TODO(gboutry): We have a loaded manifest, can't we get charms from there ?
-        charms = PluginManager().get_all_charms_in_openstack_plan(self.deployment)
+        charms = FeatureManager().get_all_charms_in_openstack_plan(self.deployment)
         apps = self.get_apps_filter_by_charms(self.model, charms)
         result = self.upgrade_applications(
             apps,
@@ -493,7 +493,7 @@ class ChannelUpgradeCoordinator(UpgradeCoordinator):
                     self.manifest,
                     "controller",
                 ),
-                UpgradePlugins(self.deployment, upgrade_release=True),
+                UpgradeFeatures(self.deployment, upgrade_release=True),
             ]
         )
         return plan

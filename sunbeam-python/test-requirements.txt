@@ -22,7 +22,7 @@ pytest-asyncio
 types-requests
 types-pyyaml
 
-# For validation plugin
+# For validation feature
 croniter
 
 ruff
