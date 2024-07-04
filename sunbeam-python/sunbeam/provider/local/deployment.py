@@ -47,13 +47,13 @@ from sunbeam.commands.proxy import proxy_questions
 from sunbeam.jobs.checks import DaemonGroupCheck
 from sunbeam.jobs.common import SunbeamException
 from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, CertPair, Deployment, Networks
+from sunbeam.jobs.feature import FeatureManager
 from sunbeam.jobs.juju import (
     CONTROLLER,
     JujuAccount,
     JujuAccountNotFound,
     JujuController,
 )
-from sunbeam.jobs.plugin import PluginManager
 from sunbeam.jobs.questions import QuestionBank, load_answers, show_questions
 
 LOG = logging.getLogger(__name__)
@@ -289,7 +289,7 @@ class LocalDeployment(Deployment):
                 microceph_content.extend(lines[2:])
         preseed_content.extend(microceph_content)
 
-        preseed_content.extend(PluginManager().get_preseed_questions_content(self))
+        preseed_content.extend(FeatureManager().get_preseed_questions_content(self))
 
         preseed_content_final = "\n".join(preseed_content)
         return preseed_content_final

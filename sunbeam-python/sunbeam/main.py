@@ -32,7 +32,7 @@ from sunbeam.commands import prepare_node as prepare_node_cmds
 from sunbeam.commands import proxy as proxy_cmds
 from sunbeam.commands import utils as utils_cmds
 from sunbeam.jobs import deployments as deployments_jobs
-from sunbeam.jobs.plugin import PluginManager
+from sunbeam.jobs.feature import FeatureManager
 from sunbeam.provider import commands as provider_cmds
 from sunbeam.utils import CatchGroup
 
@@ -41,9 +41,6 @@ LOG = logging.getLogger()
 # Update the help options to allow -h in addition to --help for
 # triggering the help for various commands
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
-
-# Core plugins yaml
-CORE_PLUGINS_YAML = "plugins/plugins.yaml"
 
 
 @click.group("init", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
@@ -80,13 +77,13 @@ def proxy(ctx):
 )
 @click.pass_context
 def enable(ctx, manifest: Path | None = None):
-    """Enable plugins."""
+    """Enable features."""
 
 
 @click.group("disable", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
 @click.pass_context
 def disable(ctx):
-    """Disable plugins."""
+    """Disable features."""
 
 
 @click.group("utils", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
@@ -133,8 +130,8 @@ def main():
     cli.add_command(utils)
     utils.add_command(utils_cmds.juju_login)
 
-    # Register the plugins after all groups,commands are registered
-    PluginManager.register(deployment, cli)
+    # Register the features after all groups,commands are registered
+    FeatureManager.register(deployment, cli)
 
     cli(obj=deployment)
 

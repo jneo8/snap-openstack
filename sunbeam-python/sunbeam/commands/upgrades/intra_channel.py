@@ -27,7 +27,7 @@ from sunbeam.commands.microk8s import DeployMicrok8sApplicationStep
 from sunbeam.commands.openstack import ReapplyOpenStackTerraformPlanStep
 from sunbeam.commands.sunbeam_machine import DeploySunbeamMachineApplicationStep
 from sunbeam.commands.terraform import TerraformInitStep
-from sunbeam.commands.upgrades.base import UpgradeCoordinator, UpgradePlugins
+from sunbeam.commands.upgrades.base import UpgradeCoordinator, UpgradeFeatures
 from sunbeam.jobs.common import BaseStep, Result, ResultType
 from sunbeam.jobs.juju import JujuHelper, run_sync
 from sunbeam.jobs.manifest import Manifest
@@ -195,7 +195,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
                     self.manifest,
                     self.deployment.infrastructure_model,
                 ),
-                UpgradePlugins(self.deployment, upgrade_release=False),
+                UpgradeFeatures(self.deployment, upgrade_release=False),
             ]
         )
 

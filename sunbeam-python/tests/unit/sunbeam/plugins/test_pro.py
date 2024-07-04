@@ -19,12 +19,12 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from sunbeam.commands.terraform import TerraformException
-from sunbeam.jobs.common import ResultType
-from sunbeam.jobs.juju import TimeoutException
-from sunbeam.plugins.pro.plugin import (
+from sunbeam.features.pro.feature import (
     DisableUbuntuProApplicationStep,
     EnableUbuntuProApplicationStep,
 )
+from sunbeam.jobs.common import ResultType
+from sunbeam.jobs.juju import TimeoutException
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +37,7 @@ def mock_run_sync(mocker):
     def run_sync(coro):
         return loop.run_until_complete(coro)
 
-    mocker.patch("sunbeam.plugins.pro.plugin.run_sync", run_sync)
+    mocker.patch("sunbeam.features.pro.feature.run_sync", run_sync)
     yield
     loop.close()
 

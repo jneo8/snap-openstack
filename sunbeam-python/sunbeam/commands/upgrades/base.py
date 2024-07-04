@@ -23,21 +23,21 @@ from snaphelpers import Snap
 from sunbeam.clusterd.client import Client
 from sunbeam.jobs.common import BaseStep, Result, ResultType, run_plan
 from sunbeam.jobs.deployments import Deployment
+from sunbeam.jobs.feature import FeatureManager
 from sunbeam.jobs.juju import JujuHelper
 from sunbeam.jobs.manifest import Manifest
-from sunbeam.jobs.plugin import PluginManager
 
 LOG = logging.getLogger(__name__)
 console = Console()
 
 
-class UpgradePlugins(BaseStep):
+class UpgradeFeatures(BaseStep):
     def __init__(
         self,
         deployment: Deployment,
         upgrade_release: bool = False,
     ):
-        """Upgrade plugins.
+        """Upgrade features.
 
         :client: Helper for interacting with clusterd
         :upgrade_release: Whether to upgrade channel
@@ -47,8 +47,8 @@ class UpgradePlugins(BaseStep):
         self.upgrade_release = upgrade_release
 
     def run(self, status: Optional[Status] = None) -> Result:
-        """Upgrade plugins."""
-        PluginManager.update_plugins(
+        """Upgrade features."""
+        FeatureManager.update_features(
             self.deployment, upgrade_release=self.upgrade_release
         )
         return Result(ResultType.COMPLETED)

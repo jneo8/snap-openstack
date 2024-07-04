@@ -95,7 +95,7 @@ class SoftwareConfig(pydantic.BaseModel):
 
     @classmethod
     def get_default(
-        cls, plugin_softwares: dict[str, "SoftwareConfig"] | None = None
+        cls, feature_softwares: dict[str, "SoftwareConfig"] | None = None
     ) -> "SoftwareConfig":
         """Load default software config."""
         # TODO(gboutry): Remove Snap instanciation
@@ -108,23 +108,23 @@ class SoftwareConfig(pydantic.BaseModel):
             tfplan: TerraformManifest(source=Path(snap.paths.snap / "etc" / tfplan_dir))
             for tfplan, tfplan_dir in TERRAFORM_DIR_NAMES.items()
         }
-        if plugin_softwares is None:
-            LOG.debug("No plugins provided, skipping")
+        if feature_softwares is None:
+            LOG.debug("No features provided, skipping")
             return SoftwareConfig(charms=charms, terraform=terraform)
 
         extra = {}
-        for plugin, software in plugin_softwares.items():
+        for feature, software in feature_softwares.items():
             for charm, charm_manifest in software.charms.items():
                 if charm in charms:
-                    raise ValueError(f"Plugin {plugin} overrides charm {charm}")
+                    raise ValueError(f"Feature {feature} overrides charm {charm}")
                 charms[charm] = charm_manifest
             for tfplan, tf_manifest in software.terraform.items():
                 if tfplan in terraform:
-                    raise ValueError(f"Plugin {plugin} overrides tfplan {tfplan}")
+                    raise ValueError(f"Feature {feature} overrides tfplan {tfplan}")
                 terraform[tfplan] = tf_manifest
             for key in software.extra:
                 if key in extra:
-                    raise ValueError(f"Plugin {plugin} overrides extra key {key}")
+                    raise ValueError(f"Feature {feature} overrides extra key {key}")
                 extra[key] = software.extra[key]
 
         return SoftwareConfig(charms=charms, terraform=terraform, **extra)
@@ -185,10 +185,10 @@ class Manifest(pydantic.BaseModel):
     @classmethod
     def get_default(
         cls,
-        plugin_softwares: dict[str, SoftwareConfig] | None = None,
+        feature_softwares: dict[str, SoftwareConfig] | None = None,
     ) -> "Manifest":
         """Load manifest and override the default manifest."""
-        software_config = SoftwareConfig.get_default(plugin_softwares)
+        software_config = SoftwareConfig.get_default(feature_softwares)
         return Manifest(software=software_config)
 
     @classmethod

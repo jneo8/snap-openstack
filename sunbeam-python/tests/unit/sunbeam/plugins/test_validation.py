@@ -15,7 +15,7 @@
 import click
 import pytest
 
-from sunbeam.plugins.validation import plugin as validation_plugin
+from sunbeam.features.validation import feature as validation_feature
 
 
 class TestValidatorFunction:
@@ -32,7 +32,7 @@ class TestValidatorFunction:
     )
     def test_valid_cron_expressions(self, input_schedule):
         """Verify valid cron expressions."""
-        config = validation_plugin.Config(schedule=input_schedule)
+        config = validation_feature.Config(schedule=input_schedule)
         assert config.schedule == input_schedule
 
     @pytest.mark.parametrize(
@@ -47,7 +47,7 @@ class TestValidatorFunction:
     def test_invalid_cron_expressions(self, test_input, expected_msg):
         """Verify invalid cron expressions."""
         with pytest.raises(click.ClickException) as e:
-            validation_plugin.Config(schedule=test_input)
+            validation_feature.Config(schedule=test_input)
             assert expected_msg in str(e)
 
     @pytest.mark.parametrize(
@@ -60,7 +60,7 @@ class TestValidatorFunction:
     def test_parse_config_args_syntax_error(self, test_args):
         """Test if parse_config_args handles syntax error."""
         with pytest.raises(click.ClickException):
-            validation_plugin.parse_config_args(test_args)
+            validation_feature.parse_config_args(test_args)
 
     @pytest.mark.parametrize(
         "test_args",
@@ -71,7 +71,7 @@ class TestValidatorFunction:
     def test_parse_config_args_duplicated_params(self, test_args):
         """Test if parse_config_args handles duplicated parameters."""
         with pytest.raises(click.ClickException):
-            validation_plugin.parse_config_args(test_args)
+            validation_feature.parse_config_args(test_args)
 
     @pytest.mark.parametrize(
         "test_args,expected_output",
@@ -83,7 +83,7 @@ class TestValidatorFunction:
     )
     def test_valid_parse_config_args(self, test_args, expected_output):
         """Test if parse_config_args handles duplicated parameters."""
-        output = validation_plugin.parse_config_args(test_args)
+        output = validation_feature.parse_config_args(test_args)
         assert set(output.keys()) == set(expected_output.keys())
         for k, v in output.items():
             assert expected_output[k] == v
@@ -99,7 +99,7 @@ class TestValidatorFunction:
     )
     def test_valid_schedule_validated_config_args(self, input_args):
         """Test validated_config_args handles valid key correctly."""
-        config = validation_plugin.validated_config_args(input_args)
+        config = validation_feature.validated_config_args(input_args)
         assert config.schedule == input_args["schedule"]
 
     @pytest.mark.parametrize(
@@ -115,7 +115,7 @@ class TestValidatorFunction:
         """Test validated_config_args handles valid key but invalid value correctly."""
         # This is raise by `validated_schedule`
         with pytest.raises(click.ClickException):
-            validation_plugin.validated_config_args(input_args)
+            validation_feature.validated_config_args(input_args)
 
     @pytest.mark.parametrize(
         "input_args",
@@ -128,4 +128,4 @@ class TestValidatorFunction:
         """Test validated_config_args handles invalid key correctly."""
         # This is raise by `validated_config_args`
         with pytest.raises(click.ClickException):
-            validation_plugin.validated_config_args(input_args)
+            validation_feature.validated_config_args(input_args)

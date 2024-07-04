@@ -152,12 +152,12 @@ class Deployment(pydantic.BaseModel):
         """Return default proxy settings."""
         return {}
 
-    def get_plugin_manager(self) -> "PluginManager":
-        """Return the plugin manager for the deployment."""
-        from sunbeam.jobs.plugin import PluginManager
+    def get_feature_manager(self) -> "FeatureManager":
+        """Return the feature manager for the deployment."""
+        from sunbeam.jobs.feature import FeatureManager
 
-        plugin_manager = PluginManager()
-        return plugin_manager
+        feature_manager = FeatureManager()
+        return feature_manager
 
     def get_proxy_settings(self) -> dict:
         """Fetch proxy settings from clusterd, if not available use defaults."""
@@ -192,9 +192,9 @@ class Deployment(pydantic.BaseModel):
         if self._manifest is not None:
             return self._manifest
 
-        plugin_manager = self.get_plugin_manager()
+        feature_manager = self.get_feature_manager()
 
-        manifest = Manifest.get_default(plugin_manager.get_all_plugin_manifests(self))
+        manifest = Manifest.get_default(feature_manager.get_all_feature_manifests(self))
 
         override_manifest = None
         if manifest_file is not None:
@@ -237,19 +237,19 @@ class Deployment(pydantic.BaseModel):
             manifest = manifest.merge(override_manifest)
 
         # TODO(gboutry): Manage extra better
-        plugin_manager.add_manifest_section(self, manifest.software)
+        feature_manager.add_manifest_section(self, manifest.software)
 
         self._manifest = manifest
         return self._manifest
 
     def _load_tfhelpers(self):
-        plugin_manager = self.get_plugin_manager()
+        feature_manager = self.get_feature_manager()
         # TODO(gboutry): Remove snap instanciation
         snap = Snap()
 
         tfvar_map = copy.deepcopy(MANIFEST_ATTRIBUTES_TFVAR_MAP)
-        tfvar_map_plugin = plugin_manager.get_all_plugin_manifest_tfvar_map(self)
-        tfvar_map = sunbeam_utils.merge_dict(tfvar_map, tfvar_map_plugin)
+        tfvar_map_feature = feature_manager.get_all_feature_manifest_tfvar_map(self)
+        tfvar_map = sunbeam_utils.merge_dict(tfvar_map, tfvar_map_feature)
 
         manifest = self.get_manifest()
         if not manifest.software.terraform:
