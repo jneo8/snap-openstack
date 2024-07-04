@@ -68,7 +68,8 @@ func GetNodesFromRoles(ctx context.Context, tx *sql.Tx, roles []string) ([]Node,
 				queryParts[0] += " AND"
 			}
 			queryParts[0] += " instr(nodes.role, ?) > 0"
-			args = append(args, role)
+			// Role is a json list, quote it to cheaply do full string match
+			args = append(args, "\""+role+"\"")
 		}
 	}
 
