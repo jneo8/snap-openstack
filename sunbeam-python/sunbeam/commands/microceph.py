@@ -125,6 +125,9 @@ class DeployMicrocephApplicationStep(DeployMachineApplicationStep):
         keystone_endpoints_offer_url = openstack_tf_output.get(
             "keystone-endpoints-offer-url"
         )
+        cert_distributor_offer_url = openstack_tf_output.get(
+            "cert-distributor-offer-url"
+        )
         traefik_rgw_offer_url = openstack_tf_output.get("ingress-rgw-offer-url")
         storage_nodes = self.client.cluster.list_nodes_by_role("storage")
 
@@ -174,6 +177,9 @@ class DeployMicrocephApplicationStep(DeployMachineApplicationStep):
 
         if keystone_endpoints_offer_url:
             tfvars["keystone-endpoints-offer-url"] = keystone_endpoints_offer_url
+
+        if cert_distributor_offer_url:
+            tfvars["cert-distributor-offer-url"] = cert_distributor_offer_url
 
         if traefik_rgw_offer_url:
             tfvars["ingress-rgw-offer-url"] = traefik_rgw_offer_url

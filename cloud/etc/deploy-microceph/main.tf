@@ -83,3 +83,17 @@ resource "juju_integration" "microceph-traefik-rgw" {
     offer_url = var.ingress-rgw-offer-url
   }
 }
+
+resource "juju_integration" "microceph-cert-distributor" {
+  count = (var.cert-distributor-offer-url != null) ? 1 : 0
+  model = var.machine_model
+
+  application {
+    name     = juju_application.microceph.name
+    endpoint = "receive-ca-cert"
+  }
+
+  application {
+    offer_url = var.cert-distributor-offer-url
+  }
+}

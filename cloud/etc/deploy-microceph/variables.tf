@@ -64,3 +64,9 @@ variable "ingress-rgw-offer-url" {
   type        = string
   default     = null
 }
+
+variable "cert-distributor-offer-url" {
+  description = "Offer URL for cert distributor"
+  type        = string
+  default     = null
+}
