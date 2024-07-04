@@ -71,14 +71,14 @@ class OrchestrationFeature(OpenStackControlPlaneFeature):
         """Set terraform variables to enable the application."""
         return {
             "enable-heat": True,
-            **self.add_horizon_feature_to_tfvars("heat"),
+            **self.add_horizon_plugin_to_tfvars("heat"),
         }
 
     def set_tfvars_on_disable(self) -> dict:
         """Set terraform variables to disable the application."""
         return {
             "enable-heat": False,
-            **self.remove_horizon_feature_from_tfvars("heat"),
+            **self.remove_horizon_plugin_from_tfvars("heat"),
         }
 
     def set_tfvars_on_resize(self) -> dict:

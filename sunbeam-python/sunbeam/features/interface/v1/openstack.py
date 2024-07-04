@@ -257,8 +257,8 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
         """Disable feature command."""
         super().disable_feature()
 
-    def add_horizon_feature_to_tfvars(self, feature: str) -> dict[str, list[str]]:
-        """Tf vars to have the given feature enabled.
+    def add_horizon_plugin_to_tfvars(self, plugin: str) -> dict[str, list[str]]:
+        """Tf vars to have the given plugin enabled.
 
         Return of the function is expected to be passed to set_tfvars_on_enable.
         """
@@ -270,14 +270,14 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
         except ConfigItemNotFoundException:
             tfvars = {}
 
-        horizon_features = tfvars.get("horizon-features", [])
-        if feature not in horizon_features:
-            horizon_features.append(feature)
+        horizon_plugins = tfvars.get("horizon-plugins", [])
+        if plugin not in horizon_plugins:
+            horizon_plugins.append(plugin)
 
-        return {"horizon-features": sorted(horizon_features)}
+        return {"horizon-plugins": sorted(horizon_plugins)}
 
-    def remove_horizon_feature_from_tfvars(self, feature: str) -> dict[str, list[str]]:
-        """TF vars to have the given feature disabled.
+    def remove_horizon_plugin_from_tfvars(self, plugin: str) -> dict[str, list[str]]:
+        """TF vars to have the given plugin disabled.
 
         Return of the function is expected to be passed to set_tfvars_on_disable.
         """
@@ -289,11 +289,11 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
         except ConfigItemNotFoundException:
             tfvars = {}
 
-        horizon_features = tfvars.get("horizon-features", [])
-        if feature in horizon_features:
-            horizon_features.remove(feature)
+        horizon_plugins = tfvars.get("horizon-plugins", [])
+        if plugin in horizon_plugins:
+            horizon_plugins.remove(plugin)
 
-        return {"horizon-features": sorted(horizon_features)}
+        return {"horizon-plugins": sorted(horizon_plugins)}
 
     @property
     def k8s_application_data(self) -> dict[str, ApplicationChannelData]:

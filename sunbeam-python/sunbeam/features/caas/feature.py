@@ -193,14 +193,14 @@ class CaasFeature(OpenStackControlPlaneFeature):
         """Set terraform variables to enable the application."""
         return {
             "enable-magnum": True,
-            **self.add_horizon_feature_to_tfvars("magnum"),
+            **self.add_horizon_plugin_to_tfvars("magnum"),
         }
 
     def set_tfvars_on_disable(self) -> dict:
         """Set terraform variables to disable the application."""
         return {
             "enable-magnum": False,
-            **self.remove_horizon_feature_from_tfvars("magnum"),
+            **self.remove_horizon_plugin_from_tfvars("magnum"),
         }
 
     def set_tfvars_on_resize(self) -> dict:
