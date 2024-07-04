@@ -489,6 +489,7 @@ def deploy(
     tfhelper_hypervisor_deploy = deployment.get_tfhelper("hypervisor-plan")
 
     plan = []
+    plan.append(AddManifestStep(client, manifest_path))
     plan.append(
         AddInfrastructureModelStep(
             jhelper, deployment.infrastructure_model, proxy_settings
