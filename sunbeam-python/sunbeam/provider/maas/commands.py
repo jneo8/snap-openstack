@@ -801,8 +801,7 @@ def list_nodes(ctx: click.Context, format: str) -> None:
 @click.option("-n", "--name", type=str, prompt=True, help="Name of the deployment")
 @click.option("-t", "--token", type=str, prompt=True, help="API token")
 @click.option("-u", "--url", type=str, prompt=True, help="API URL")
-@click.option("-r", "--resource-pool", type=str, prompt=True, help="Resource pool")
-def add_maas(name: str, token: str, url: str, resource_pool: str) -> None:
+def add_maas(name: str, token: str, url: str) -> None:
     """Add MAAS-backed deployment to registered deployments."""
     preflight_checks = [
         LocalShareCheck(),
@@ -814,12 +813,15 @@ def add_maas(name: str, token: str, url: str, resource_pool: str) -> None:
     path = deployment_path(snap)
     deployments = DeploymentsConfig.load(path)
     plan = []
+    try:
+        deployment = MaasDeployment(name=name, token=token, url=url)
+    except Exception as e:
+        console.print("Error: " + str(e))
+        sys.exit(1)
     plan.append(
         AddMaasDeployment(
             deployments,
-            MaasDeployment(
-                name=name, token=token, url=url, resource_pool=resource_pool
-            ),
+            deployment,
         )
     )
     run_plan(plan, console)

@@ -63,7 +63,6 @@ class TestAddMaasDeployment:
                 name="test_deployment",
                 token="test_token",
                 url="test_url",
-                resource_pool="test_resource_pool",
             ),
         )
 
@@ -74,23 +73,6 @@ class TestAddMaasDeployment:
                 MaasDeployment(
                     name="test_deployment",
                     url="test_url2",
-                    resource_pool="test_resource_pool3",
-                    token="test_token",
-                )
-            ],
-        )
-        add_maas_deployment.deployments_config = deployments_config
-        result = add_maas_deployment.is_skip()
-        assert result.result_type == ResultType.FAILED
-
-    def test_is_skip_with_existing_url_and_resource_pool(self, add_maas_deployment):
-        deployments_config = DeploymentsConfig(
-            active="test_deployment",
-            deployments=[
-                MaasDeployment(
-                    name="different_deployment",
-                    url="test_url",
-                    resource_pool="test_resource_pool",
                     token="test_token",
                 )
             ],
@@ -443,7 +425,7 @@ class TestZonesCheck:
         check = ZonesCheck(zones)
         result = check.run()
         assert result.passed is False
-        assert result.message == "deployment has 2 zones"
+        assert result.message == "deployment has 0 or 2 zones"
 
     def test_run_with_three_zones(self):
         zones = ["zone1", "zone2", "zone3"]

@@ -91,9 +91,9 @@ class NicTags(enum.Enum):
 
 
 class MaasDeployment(Deployment):
+    name: str = pydantic.Field(pattern=r"^[a-zA-Z0-9-_]+$", max_length=246)
     type: str = MAAS_TYPE
     token: str
-    resource_pool: str
     network_mapping: dict[str, str | None] = {}
     clusterd_address: str | None = None
     clusterd_certificate_authority: str | None = None
@@ -105,14 +105,19 @@ class MaasDeployment(Deployment):
         return self.name + "-controller"
 
     @property
+    def resource_tag(self) -> str:
+        """Return resource tag."""
+        return "openstack-" + self.name
+
+    @property
     def public_api_label(self) -> str:
         """Return public API label."""
-        return self.resource_pool + "-public-api"
+        return self.name + "-public-api"
 
     @property
     def internal_api_label(self) -> str:
         """Return internal API label."""
-        return self.resource_pool + "-internal-api"
+        return self.name + "-internal-api"
 
     @pydantic.validator("type")
     def type_validator(cls, v: str, values: dict) -> str:  # noqa N805
