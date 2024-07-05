@@ -226,17 +226,15 @@ class MachineRolesCheck(DiagnosticsCheck):
         assigned_roles = self.machine["roles"]
         LOG.debug(f"{self.machine['hostname']=!r} assigned roles: {assigned_roles!r}")
         if not assigned_roles:
-            return DiagnosticsResult(
+            return DiagnosticsResult.fail(
                 self.name,
-                False,
                 "machine has no role assigned.",
                 diagnostics=ROLES_NEEDED_ERROR,
                 machine=self.machine["hostname"],
             )
 
-        return DiagnosticsResult(
+        return DiagnosticsResult.success(
             self.name,
-            True,
             ", ".join(self.machine["roles"]),
             machine=self.machine["hostname"],
         )
@@ -452,7 +450,7 @@ class MachineRootDiskCheck(DiagnosticsCheck):
             )
 
         if "ssd" not in root_disk["tags"]:
-            return DiagnosticsResult.fail(
+            return DiagnosticsResult.warn(
                 self.name,
                 "root disk is not a SSD",
                 "A machine root disk needs to be an SSD to be"
@@ -462,7 +460,7 @@ class MachineRootDiskCheck(DiagnosticsCheck):
             )
 
         if root_disk["root_partition"]["size"] < 500 * 1024**3:
-            return DiagnosticsResult.fail(
+            return DiagnosticsResult.warn(
                 self.name,
                 "root disk is too small",
                 "A machine root disk needs to be at least 500GB"
@@ -496,7 +494,7 @@ class MachineRequirementsCheck(DiagnosticsCheck):
             memory_min = RAM_32_GB_IN_MB
             core_min = 16
         if self.machine["memory"] < memory_min or self.machine["cores"] < core_min:
-            return DiagnosticsResult.fail(
+            return DiagnosticsResult.warn(
                 self.name,
                 "machine does not meet requirements",
                 textwrap.dedent(
@@ -528,7 +526,8 @@ def _run_check_list(checks: list[DiagnosticsCheck]) -> list[DiagnosticsResult]:
         if isinstance(results, DiagnosticsResult):
             results = [results]
         for result in results:
-            LOG.debug(f"{result.name=!r}, {result.passed=!r}, {result.message=!r}")
+            passed = result.passed.value
+            LOG.debug(f"{result.name=!r}, {passed=!r}, {result.message=!r}")
             check_results.extend(results)
     return check_results
 
@@ -567,7 +566,7 @@ class DeploymentMachinesCheck(DiagnosticsCheck):
             checks.append(MachineRequirementsCheck(machine))
         results = _run_check_list(checks)
         results.append(
-            DiagnosticsResult(self.name, all(result.passed for result in results))
+            DiagnosticsResult(self.name, DiagnosticsResult.coalesce_type(results))
         )
         return results
 
@@ -593,21 +592,32 @@ class DeploymentRolesCheck(DiagnosticsCheck):
         for machine in self.machines:
             if self.role_tag in machine["roles"]:
                 machines += 1
-        if machines < self.min_count:
+        failure_diagnostics = textwrap.dedent(
+            """\
+            A deployment needs to have at least {min_count} {role_name} to be
+            a part of an openstack deployment. You need to add more {role_name}
+            to the deployment using {role_tag} tag.
+            More on using tags: https://maas.io/docs/how-to-use-machine-tags
+            """
+        )
+        if machines == 0:
             return DiagnosticsResult.fail(
                 self.name,
+                "no machine with role: " + self.role_name,
+                failure_diagnostics.format(
+                    min_count=self.min_count,
+                    role_name=self.role_name,
+                    role_tag=self.role_tag,
+                ),
+            )
+        if machines < self.min_count:
+            return DiagnosticsResult.warn(
+                self.name,
                 "less than 3 " + self.role_name,
-                textwrap.dedent(
-                    """\
-                    A deployment needs to have at least {min_count} {role_name} to be
-                    a part of an openstack deployment. You need to add more {role_name}
-                    to the deployment using {role_tag} tag.
-                    More on using tags: https://maas.io/docs/how-to-use-machine-tags
-                    """.format(
-                        min_count=self.min_count,
-                        role_name=self.role_name,
-                        role_tag=self.role_tag,
-                    )
+                failure_diagnostics.format(
+                    min_count=self.min_count,
+                    role_name=self.role_name,
+                    role_tag=self.role_tag,
                 ),
             )
         return DiagnosticsResult.success(
@@ -628,15 +638,20 @@ class ZonesCheck(DiagnosticsCheck):
 
     def run(self) -> DiagnosticsResult:
         """Checks deployment zones."""
-        if len(self.zones) in (0, 2):
+        nb_zones = len(self.zones)
+        diagnostics = textwrap.dedent(
+            f"""\
+            A deployment needs to have either 1 zone or more than 2 zones.
+            Current zones: {', '.join(self.zones)}
+            """
+        )
+        if nb_zones == 0:
             return DiagnosticsResult.fail(
-                self.name,
-                "deployment has 0 or 2 zones",
-                textwrap.dedent(
-                    f"""\
-                    A deployment needs to have either 1 zone or more than 2 zones.
-                    Current zones: {', '.join(self.zones)}"""
-                ),
+                self.name, "deployment has no zone", diagnostics
+            )
+        if len(self.zones) == 2:
+            return DiagnosticsResult.warn(
+                self.name, "deployment has 2 zones", diagnostics
             )
         return DiagnosticsResult.success(
             self.name,
@@ -688,7 +703,7 @@ class ZoneBalanceCheck(DiagnosticsCheck):
                 """
             )
             diagnostics += distribution
-            return DiagnosticsResult.fail(
+            return DiagnosticsResult.warn(
                 self.name,
                 f"{', '.join(unbalanced_roles)} distribution is unbalanced",
                 diagnostics,
@@ -852,7 +867,7 @@ class DeploymentTopologyCheck(DiagnosticsCheck):
 
         results = _run_check_list(checks)
         results.append(
-            DiagnosticsResult(self.name, all(result.passed for result in results))
+            DiagnosticsResult(self.name, DiagnosticsResult.coalesce_type(results))
         )
         return results
 
@@ -879,7 +894,7 @@ class DeploymentNetworkingCheck(DiagnosticsCheck):
 
         results = _run_check_list(checks)
         results.append(
-            DiagnosticsResult(self.name, all(result.passed for result in results))
+            DiagnosticsResult(self.name, DiagnosticsResult.coalesce_type(results))
         )
         return results
 

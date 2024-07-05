@@ -83,6 +83,7 @@ from sunbeam.commands.sunbeam_machine import (
 )
 from sunbeam.commands.terraform import TerraformInitStep
 from sunbeam.jobs.checks import (
+    DiagnosticResultType,
     DiagnosticsCheck,
     DiagnosticsResult,
     JujuSnapCheck,
@@ -93,6 +94,7 @@ from sunbeam.jobs.checks import (
 from sunbeam.jobs.common import (
     CLICK_FAIL,
     CLICK_OK,
+    CLICK_WARN,
     CONTEXT_SETTINGS,
     FORMAT_TABLE,
     FORMAT_YAML,
@@ -1078,6 +1080,18 @@ def list_networks_cmd(ctx: click.Context, format: str):
         console.print(yaml.dump(mapping), end="")
 
 
+def _colorize_result(result: DiagnosticsResult) -> str:
+    """Return a colorize string of the result status."""
+    match result.passed:
+        case DiagnosticResultType.SUCCESS:
+            status = CLICK_OK
+        case DiagnosticResultType.FAILURE:
+            status = CLICK_FAIL
+        case DiagnosticResultType.WARNING:
+            status = CLICK_WARN
+    return status
+
+
 def _run_maas_checks(checks: list[DiagnosticsCheck], console: Console) -> list[dict]:
     """Run checks sequentially.
 
@@ -1097,12 +1111,13 @@ def _run_maas_checks(checks: list[DiagnosticsCheck], console: Console) -> list[d
                 results = [results]
 
             for result in results:
-                LOG.debug(f"{result.name=!r}, {result.passed=!r}, {result.message=!r}")
+                passed = result.passed.value
+                LOG.debug(f"{result.name=!r}, {passed=!r}, {result.message=!r}")
                 console.print(
                     message,
                     result.message,
                     "-",
-                    CLICK_OK if result.passed else CLICK_FAIL,
+                    _colorize_result(result),
                 )
                 check_results.append(result.to_dict())
     return check_results
@@ -1129,7 +1144,7 @@ def _run_maas_meta_checks(
                 results = [results]
             for result in results:
                 check_results.append(result.to_dict())
-            console.print(message, CLICK_OK if results[-1].passed else CLICK_FAIL)
+            console.print(message, _colorize_result(results[-1]))
     return check_results
 
 
