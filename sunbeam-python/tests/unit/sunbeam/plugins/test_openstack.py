@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import asyncio
-import json
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -129,14 +128,6 @@ class TestDisableOpenStackApplicationStep:
         assert result.message == "timed out"
 
 
-class MockStatus:
-    def __init__(self, value: dict):
-        self.status = value
-
-    def to_json(self):
-        return json.dumps(self.status)
-
-
 class TestUpgradeOpenStackApplicationStep:
     def test_run(
         self,
@@ -144,16 +135,15 @@ class TestUpgradeOpenStackApplicationStep:
         jhelper,
         osfeature,
     ):
-        jhelper.get_model_status_full.return_value = MockStatus(
-            {
-                "applications": {
-                    "keystone": {
-                        "charm": "ch:amd64/jammy/keystone-k8s-148",
-                        "charm-channel": "2023.2/stable",
-                    }
+        jhelper.get_model_status_full.return_value = {
+            "applications": {
+                "keystone": {
+                    "charm": "ch:amd64/jammy/keystone-k8s-148",
+                    "charm-channel": "2023.2/stable",
                 }
             }
-        )
+        }
+
         step = openstack.UpgradeOpenStackApplicationStep(tfhelper, jhelper, osfeature)
         result = step.run()
 
@@ -166,16 +156,15 @@ class TestUpgradeOpenStackApplicationStep:
             "apply failed..."
         )
 
-        jhelper.get_model_status_full.return_value = MockStatus(
-            {
-                "applications": {
-                    "keystone": {
-                        "charm": "ch:amd64/jammy/keystone-k8s-148",
-                        "charm-channel": "2023.2/stable",
-                    }
+        jhelper.get_model_status_full.return_value = {
+            "applications": {
+                "keystone": {
+                    "charm": "ch:amd64/jammy/keystone-k8s-148",
+                    "charm-channel": "2023.2/stable",
                 }
             }
-        )
+        }
+
         step = openstack.UpgradeOpenStackApplicationStep(tfhelper, jhelper, osfeature)
         result = step.run()
 
@@ -187,16 +176,15 @@ class TestUpgradeOpenStackApplicationStep:
     def test_run_waiting_timed_out(self, tfhelper, jhelper, osfeature):
         jhelper.wait_until_desired_status.side_effect = TimeoutException("timed out")
 
-        jhelper.get_model_status_full.return_value = MockStatus(
-            {
-                "applications": {
-                    "keystone": {
-                        "charm": "ch:amd64/jammy/keystone-k8s-148",
-                        "charm-channel": "2023.2/stable",
-                    }
+        jhelper.get_model_status_full.return_value = {
+            "applications": {
+                "keystone": {
+                    "charm": "ch:amd64/jammy/keystone-k8s-148",
+                    "charm-channel": "2023.2/stable",
                 }
             }
-        )
+        }
+
         step = openstack.UpgradeOpenStackApplicationStep(tfhelper, jhelper, osfeature)
         result = step.run()
 

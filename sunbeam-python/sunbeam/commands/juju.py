@@ -67,6 +67,8 @@ JUJU_CONTROLLER_CHARM = "juju-controller.charm"
 
 
 class JujuStepHelper:
+    jhelper: JujuHelper
+
     def _get_juju_binary(self) -> str:
         """Get juju binary path."""
         snap = Snap()
@@ -222,8 +224,7 @@ class JujuStepHelper:
         :param status: Dictionay of model status
         """
         if not status:
-            _status = run_sync(self.jhelper.get_model_status_full(model))
-            status = json.loads(_status.to_json())
+            status = run_sync(self.jhelper.get_model_status_full(model))
         app_status = status["applications"].get(application_name, {})
         if not app_status:
             LOG.debug(f"{application_name} not present in model")
@@ -248,8 +249,7 @@ class JujuStepHelper:
         Example output:
         {"keystone": ("keystone-k8s", "2023.2/stable", 234)}
         """
-        _status = run_sync(self.jhelper.get_model_status_full(model))
-        status = json.loads(_status.to_json())
+        status = run_sync(self.jhelper.get_model_status_full(model))
 
         apps = {}
         for app_name, app_status in status.get("applications", {}).items():
@@ -1194,18 +1194,14 @@ class WriteJujuStatusStep(BaseStep, JujuStepHelper):
         """
         try:
             LOG.debug(f"Getting juju status for model {self.model}")
-            _status = run_sync(self.jhelper.get_model_status_full(self.model))
-            # Running json.dump directly on the json returned by to_json
-            # results in a single line. There is probably a better way of
-            # doing this.
-            LOG.debug(_status)
-            status = json.loads(_status.to_json())
+            model_status = run_sync(self.jhelper.get_model_status_full(self.model))
+            LOG.debug(model_status)
 
             if not self.file_path.exists():
                 self.file_path.touch()
             self.file_path.chmod(0o660)
             with self.file_path.open("w") as file:
-                json.dump(status, file, ensure_ascii=False, indent=4)
+                json.dump(model_status, file, ensure_ascii=False, indent=4)
             return Result(ResultType.COMPLETED, "Inspecting Model Status")
         except Exception as e:  # noqa
             return Result(ResultType.FAILED, str(e))

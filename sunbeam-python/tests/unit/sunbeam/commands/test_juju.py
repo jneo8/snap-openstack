@@ -123,11 +123,9 @@ class TestWriteJujuStatusStep:
         assert result.result_type == ResultType.SKIPPED
 
     def test_run(self, jhelper):
-        status_mock = Mock()
-        status_mock.to_json.return_value = (
-            '{"applications": {"controller": {"status": "active"}}}'
-        )
-        jhelper.get_model_status_full.return_value = status_mock
+        jhelper.get_model_status_full.return_value = {
+            "applications": {"controller": {"status": "active"}}
+        }
         with tempfile.NamedTemporaryFile() as tmpfile:
             step = juju.WriteJujuStatusStep(jhelper, "openstack", Path(tmpfile.name))
             result = step.run()
