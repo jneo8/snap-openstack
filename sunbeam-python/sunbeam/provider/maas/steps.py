@@ -394,7 +394,7 @@ class MachineComputeNicCheck(DiagnosticsCheck):
                 machine=self.machine["hostname"],
             )
         compute_tag = maas_deployment.NicTags.COMPUTE.value
-        if compute_tag not in assigned_roles:
+        if maas_deployment.RoleTags.COMPUTE.value not in assigned_roles:
             self.message = "not a compute node."
             return DiagnosticsResult.success(
                 self.name,
@@ -406,7 +406,7 @@ class MachineComputeNicCheck(DiagnosticsCheck):
             if compute_tag in nic["tags"]:
                 return DiagnosticsResult.success(
                     self.name,
-                    "compute nic found",
+                    compute_tag + " nic found",
                     machine=self.machine["hostname"],
                 )
 

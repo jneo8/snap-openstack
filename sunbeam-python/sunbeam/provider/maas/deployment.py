@@ -82,7 +82,7 @@ class StorageTags(enum.Enum):
 
 
 class NicTags(enum.Enum):
-    COMPUTE = "compute"
+    COMPUTE = "neutron:physnet1"
 
     @classmethod
     def values(cls) -> list[str]:
