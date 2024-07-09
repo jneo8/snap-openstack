@@ -238,31 +238,40 @@ class AddManifestStep(BaseStep):
         """Skip if the user provided manifest and the latest from db are same."""
         risk = infer_risk(self.snap)
         try:
+            embedded_manifest = yaml.safe_load(
+                embedded_manifest_path(self.snap, risk).read_bytes()
+            )
             if self.manifest_file:
                 with self.manifest_file.open("r") as file:
                     self.manifest_content = yaml.safe_load(file)
             elif self.clear:
                 self.manifest_content = EMPTY_MANIFEST
-            elif risk != RiskLevel.STABLE:
-                self.manifest_content = yaml.safe_load(
-                    embedded_manifest_path(self.snap, risk).read_bytes()
-                )
-            else:
-                # No manifest to update
-                return Result(ResultType.SKIPPED)
         except (yaml.YAMLError, IOError) as e:
             LOG.debug("Failed to load manifest", exc_info=True)
             return Result(ResultType.FAILED, str(e))
 
+        latest_manifest = None
         try:
             latest_manifest = self.client.cluster.get_latest_manifest()
         except ManifestItemNotFoundException:
-            return Result(ResultType.COMPLETED)
+            if self.manifest_content is None:
+                if risk == RiskLevel.STABLE:
+                    # only save risk manifest when not stable,
+                    # and no manifest was found in db
+                    return Result(ResultType.SKIPPED)
+                else:
+                    self.manifest_content = embedded_manifest
         except ClusterServiceUnavailableException as e:
             LOG.debug("Failed to fetch latest manifest from clusterd", exc_info=True)
             return Result(ResultType.FAILED, str(e))
 
-        if yaml.safe_load(latest_manifest.get("data", {})) == self.manifest_content:
+        if self.manifest_content is None:
+            return Result(ResultType.SKIPPED)
+
+        if (
+            latest_manifest
+            and yaml.safe_load(latest_manifest.get("data", {})) == self.manifest_content
+        ):
             return Result(ResultType.SKIPPED)
 
         return Result(ResultType.COMPLETED)
