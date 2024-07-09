@@ -649,6 +649,7 @@ def _keep_cmd_params(cmd: click.Command, params: dict) -> dict:
 @click.option(
     "-m",
     "--manifest",
+    "manifest_path",
     help="Manifest file.",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
@@ -661,7 +662,7 @@ def _keep_cmd_params(cmd: click.Command, params: dict) -> dict:
 def configure(
     ctx: click.Context,
     openrc: Optional[Path] = None,
-    manifest: Optional[Path] = None,
+    manifest_path: Optional[Path] = None,
     accept_defaults: bool = False,
 ) -> None:
     """Configure cloud with some sensible defaults."""
