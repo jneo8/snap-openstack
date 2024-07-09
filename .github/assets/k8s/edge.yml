@@ -58,6 +58,8 @@ software:
       channel: 2024.1/edge
     microceph:
       channel: reef/edge
+      config:
+        snap-channel: reef/edge
     # Required for k8s until the rabbitmq-k8s stable is updated
     rabbitmq-k8s:
       channel: 3.12/candidate
