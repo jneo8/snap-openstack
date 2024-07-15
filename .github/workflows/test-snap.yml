@@ -23,6 +23,11 @@ on:
         required: true
         default: reef/candidate
         type: string
+      microceph-snap-channel:
+        description: Specify microceph snap channel
+        required: true
+        default: reef/candidate
+        type: string
       rabbitmq-charm-channel:
         description: Specify rabbitmq charms channel
         required: true
@@ -46,7 +51,7 @@ on:
         options:
           - single
           - multi
-      
+
 jobs:
   functional-test:
     name: Functional test
@@ -63,6 +68,7 @@ jobs:
           sed -i 's|OS_CHARM|${{ inputs.os-charm-channel }}|' manifest.yml
           sed -i 's|OVN_CHARM|${{ inputs.ovn-charm-channel }}|' manifest.yml
           sed -i 's|MICROCEPH_CHARM|${{ inputs.microceph-charm-channel }}|' manifest.yml
+          sed -i 's|MICROCEPH_SNAP|${{ inputs.microceph-snap-channel }}|' manifest.yml
           sed -i 's|RABBITMQ_CHARM|${{ inputs.rabbitmq-charm-channel }}|' manifest.yml
           sed -i 's|MYSQL_CHARM|${{ inputs.mysql-charm-channel }}|' manifest.yml
           sed -i 's|MYSQL_ROUTER_CHARM|${{ inputs.mysql-router-charm-channel }}|' manifest.yml

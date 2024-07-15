@@ -56,6 +56,8 @@ software:
       channel: OS_CHARM
     microceph:
       channel: MICROCEPH_CHARM
+      config:
+        snap-channel: MICROCEPH_SNAP
     rabbitmq-k8s:
       channel: RABBITMQ_CHARM
     mysql-k8s:
