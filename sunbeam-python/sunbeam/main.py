@@ -30,7 +30,6 @@ from sunbeam.commands import manifest as manifest_cmds
 from sunbeam.commands import openrc as openrc_cmds
 from sunbeam.commands import prepare_node as prepare_node_cmds
 from sunbeam.commands import proxy as proxy_cmds
-from sunbeam.commands import rgw_endpoints as rgw_cmds
 from sunbeam.commands import utils as utils_cmds
 from sunbeam.jobs import deployments as deployments_jobs
 from sunbeam.jobs.feature import FeatureManager
@@ -105,7 +104,6 @@ def main():
     cli.add_command(launch_cmds.launch)
     cli.add_command(openrc_cmds.openrc)
     cli.add_command(dasboard_url_cmds.dashboard_url)
-    cli.add_command(rgw_cmds.radosgw_url)
 
     # Cluster management
     provider_cmds.register_providers()
