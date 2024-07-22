@@ -785,8 +785,8 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
         self.registration_token = None
         self.juju_account = None
 
-        home = os.environ.get("SNAP_REAL_HOME")
-        os.environ["JUJU_DATA"] = f"{home}/.local/share/juju"
+        self.home = os.environ.get("SNAP_REAL_HOME")
+        os.environ["JUJU_DATA"] = f"{self.home}/.local/share/juju"
 
     def is_skip(self, status: Optional["Status"] = None) -> Result:
         """Determines if the step should be skipped or not.
@@ -800,6 +800,7 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
         except JujuAccountNotFound as e:
             LOG.warning(e)
             return Result(ResultType.FAILED, "Account was not registered locally")
+
         try:
             user = self._juju_cmd("show-user")
             LOG.debug(f"Found user: {user['user-name']}")
@@ -861,9 +862,10 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
         # client need to login/logout?
         # Does saving the password in $HOME/.local/share/juju/accounts.yaml
         # avoids login/logout?
-        register_args = ["register", self.registration_token]
+        register_args = ["--debug", "register", self.registration_token]
         if self.replace:
             register_args.append("--replace")
+        LOG.debug(f"User registration args: {register_args}")
 
         try:
             child = pexpect.spawn(
@@ -885,7 +887,15 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
                     if index in (0, 1, 3):
                         child.sendline(self.juju_account.password)
                     elif index == 2:
-                        child.sendline(self.controller)
+                        result = child.before.decode()
+                        # If controller already exists, the command keeps on asking
+                        # controller name, so change the controller name to dummy.
+                        # The command errors out at the next stage that controller
+                        # is already registered.
+                        if f'Controller "{self.controller}" already exists' in result:
+                            child.sendline("dummy")
+                        else:
+                            child.sendline(self.controller)
                     elif index == 4:
                         result = child.before.decode()
                         if "ERROR" in result:
@@ -897,6 +907,136 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
         except pexpect.TIMEOUT as e:
             LOG.exception(f"Error registering user {self.username} in Juju")
             LOG.warning(e)
+            return Result(ResultType.FAILED, str(e))
+
+        return Result(ResultType.COMPLETED)
+
+
+class RegisterRemoteJujuUserStep(RegisterJujuUserStep):
+    """Register remote user/controller in juju."""
+
+    def __init__(
+        self,
+        client: Client,
+        token: str,
+        controller: str,
+        data_location: Path,
+        replace: bool = False,
+    ):
+        # User name not required to register a user. Pass empty string to
+        # base class as user name
+        super().__init__(client, "", controller, data_location, replace)
+        self.registration_token = token
+        self.account_file = f"{self.controller}.yaml"
+
+    def is_skip(self, status: Optional["Status"] = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                 ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        try:
+            self.juju_account = JujuAccount.load(self.data_location, self.account_file)
+            LOG.debug(f"Local account found for {self.controller}")
+        except JujuAccountNotFound:
+            password = pwgen.pwgen(12)
+            self.juju_account = JujuAccount(user="REPLACE_USER", password=password)
+            LOG.debug(f"Writing to file {self.juju_account}")
+            self.juju_account.write(self.data_location, self.account_file)
+
+        return Result(ResultType.COMPLETED)
+
+    def _get_user_from_local_juju(self, controller: str) -> str | None:
+        """Get user name from local juju accounts file."""
+        try:
+            with open(f"{self.home}/.local/share/juju/accounts.yaml") as f:
+                accounts = yaml.safe_load(f)
+                user = (
+                    accounts.get("controllers", {}).get(self.controller, {}).get("user")
+                )
+                LOG.debug(f"Found user from accounts.yaml for {controller}: {user}")
+        except FileNotFoundError as e:
+            LOG.debug(f"Error in retrieving local user: {str(e)}")
+            user = None
+
+        return user
+
+    def run(self, status: Optional["Status"] = None) -> Result:
+        """Run the step to completion.
+
+        Invoked when the step is run and returns a ResultType to indicate
+
+        :return:
+        """
+        result = super().run()
+        if result.result_type != ResultType.COMPLETED:
+            # Delete the account file created in skip step
+            account_file = self.data_location / self.account_file
+            account_file.unlink(missing_ok=True)
+            return result
+
+        # Update user name from local juju accounts.yaml
+        user = self._get_user_from_local_juju(self.controller)
+        if not user:
+            return Result(ResultType.FAILED, "User not updated in local juju client")
+
+        if self.juju_account.user != user:
+            self.juju_account.user = user
+            LOG.debug(f"Updating user in {self.juju_account} file")
+            self.juju_account.write(self.data_location, self.account_file)
+
+        return Result(ResultType.COMPLETED)
+
+
+class UnregisterJujuController(BaseStep, JujuStepHelper):
+    """Unregister an external Juju controller."""
+
+    def __init__(self, controller: str, data_location: Path):
+        super().__init__(
+            "Unregister Juju controller", f"Unregistering juju controller {controller}"
+        )
+        self.controller = controller
+        self.account_file = data_location / f"{self.controller}.yaml"
+
+    def is_skip(self, status: Optional["Status"] = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                 ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        try:
+            self.get_controller(self.controller)
+        except ControllerNotFoundException:
+            self.account_file.unlink(missing_ok=True)
+            LOG.warning(
+                f"Controller {self.controller} not found, skipping unregsiter "
+                "controller"
+            )
+            return Result(ResultType.SKIPPED)
+
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Optional["Status"] = None) -> Result:
+        """Run the step to completion.
+
+        Invoked when the step is run and returns a ResultType to indicate
+
+        :return:
+        """
+        try:
+            cmd = [
+                self._get_juju_binary(),
+                "unregister",
+                self.controller,
+                "--no-prompt",
+            ]
+            LOG.debug(f'Running command {" ".join(cmd)}')
+            process = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            LOG.debug(
+                f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
+            )
+            self.account_file.unlink(missing_ok=True)
+        except subprocess.CalledProcessError as e:
             return Result(ResultType.FAILED, str(e))
 
         return Result(ResultType.COMPLETED)
@@ -1746,4 +1886,32 @@ class UpdateJujuMachineIDStep(BaseStep):
                 return Result(
                     ResultType.FAILED, f"Machine ID not found for node {node['name']}"
                 )
+        return Result(ResultType.COMPLETED)
+
+
+class SwitchToController(BaseStep, JujuStepHelper):
+    """Switch to controller in juju."""
+
+    def __init__(
+        self,
+        controller: str,
+    ):
+        super().__init__(
+            "Switch to juju controller", f"Switching to juju controller {controller}"
+        )
+        self.controller = controller
+
+    def run(self, status: Optional["Status"] = None) -> Result:
+        """Switch to juju controller."""
+        try:
+            cmd = [self._get_juju_binary(), "switch", self.controller]
+            LOG.debug(f'Running command {" ".join(cmd)}')
+            process = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            LOG.debug(
+                f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
+            )
+        except subprocess.CalledProcessError as e:
+            LOG.exception(f"Error in switching the controller to {self.controller}")
+            return Result(ResultType.FAILED, str(e))
+
         return Result(ResultType.COMPLETED)
