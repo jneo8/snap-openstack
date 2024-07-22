@@ -211,7 +211,7 @@ class AddMicrok8sCloudStep(BaseStep, JujuStepHelper):
         )
         self.client = client
         self.jhelper = jhelper
-        self.name = MICROK8S_CLOUD
+        self.cloud_name = MICROK8S_CLOUD
         self.credential_name = f"{MICROK8S_CLOUD}{CREDENTIAL_SUFFIX}"
 
     def is_skip(self, status: Optional[Status] = None) -> Result:
@@ -223,7 +223,7 @@ class AddMicrok8sCloudStep(BaseStep, JujuStepHelper):
         clouds = run_sync(self.jhelper.get_clouds())
         LOG.debug(f"Clouds registered in the controller: {clouds}")
         # TODO(hemanth): Need to check if cloud credentials are also created?
-        if f"cloud-{self.name}" in clouds.keys():
+        if f"cloud-{self.cloud_name}" in clouds.keys():
             return Result(ResultType.SKIPPED)
 
         return Result(ResultType.COMPLETED)
@@ -233,7 +233,9 @@ class AddMicrok8sCloudStep(BaseStep, JujuStepHelper):
         try:
             kubeconfig = read_config(self.client, self._CONFIG)
             run_sync(
-                self.jhelper.add_k8s_cloud(self.name, self.credential_name, kubeconfig)
+                self.jhelper.add_k8s_cloud(
+                    self.cloud_name, self.credential_name, kubeconfig
+                )
             )
         except (ConfigItemNotFoundException, UnsupportedKubeconfigException) as e:
             LOG.debug("Failed to add k8s cloud to Juju controller", exc_info=True)

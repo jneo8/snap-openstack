@@ -503,7 +503,12 @@ def deploy(
     plan = []
     plan.append(AddManifestStep(client, manifest_path))
     plan.append(
-        AddJujuModelStep(jhelper, deployment.openstack_machines_model, , deployment.name, proxy_settings)
+        AddJujuModelStep(
+            jhelper,
+            deployment.openstack_machines_model,
+            deployment.name,
+            proxy_settings,
+        )
     )
     plan.append(MaasAddMachinesToClusterdStep(client, maas_client))
     plan.append(

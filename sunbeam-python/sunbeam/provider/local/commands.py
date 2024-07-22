@@ -54,6 +54,7 @@ from sunbeam.commands.hypervisor import (
 from sunbeam.commands.juju import (
     AddCloudJujuStep,
     AddJujuMachineStep,
+    AddJujuModelStep,
     AddJujuSpaceStep,
     BackupBootstrapUserStep,
     BindJujuApplicationStep,
@@ -63,6 +64,8 @@ from sunbeam.commands.juju import (
     JujuLoginStep,
     RegisterJujuUserStep,
     RemoveJujuMachineStep,
+    SaveControllerStep,
+    SaveJujuRemoteUserLocallyStep,
     SaveJujuUserLocallyStep,
     UpdateJujuModelConfigStep,
 )
@@ -103,6 +106,7 @@ from sunbeam.commands.sunbeam_machine import (
 from sunbeam.commands.terraform import TerraformInitStep
 from sunbeam.jobs.checks import (
     DaemonGroupCheck,
+    JujuControllerRegistrationCheck,
     JujuSnapCheck,
     LocalShareCheck,
     SshKeysConnectedCheck,
@@ -221,12 +225,20 @@ class LocalProvider(ProviderBase):
         "'multi' for a database per service, "
     ),
 )
+@click.option(
+    "-c",
+    "--controller",
+    "juju_controller",
+    type=str,
+    help="Juju controller name",
+)
 @click.pass_context
 def bootstrap(
     ctx: click.Context,
     roles: list[Role],
     topology: str,
     database: str,
+    juju_controller: str | None = None,
     manifest_path: Path | None = None,
     accept_defaults: bool = False,
 ) -> None:
@@ -275,6 +287,10 @@ def bootstrap(
         preflight_checks.append(
             VerifyHypervisorHostnameCheck(fqdn, hypervisor_hostname)
         )
+    if juju_controller:
+        preflight_checks.append(
+            JujuControllerRegistrationCheck(juju_controller, data_location)
+        )
 
     run_preflight_checks(preflight_checks, console)
 
@@ -287,7 +303,23 @@ def bootstrap(
         cloud_name, utils.get_local_ip_by_cidr(management_cidr)
     )
 
+    try:
+        juju_controller_ip = utils.get_local_ip_by_cidr(management_cidr)
+    except ValueError:
+        LOG.debug(
+            "Failed to find local address matching join token addresses"
+            ", picking local address from default route",
+            exc_info=True,
+        )
+        juju_controller_ip = utils.get_local_cidr_by_default_route()
+
     plan = []
+    if juju_controller:
+        plan.append(
+            SaveControllerStep(
+                deployment, juju_controller, data_location, bool(juju_controller)
+            )
+        )
     plan.append(JujuLoginStep(deployment.juju_account))
     # bootstrapped node is always machine 0 in controller model
     plan.append(ClusterInitStep(client, roles_to_str_list(roles), 0, management_cidr))
@@ -303,70 +335,122 @@ def bootstrap(
     proxy_settings = deployment.get_proxy_settings()
     LOG.debug(f"Proxy settings: {proxy_settings}")
 
-    plan1 = []
-    plan1.append(AddCloudJujuStep(cloud_name, cloud_definition))
-    plan1.append(
-        BootstrapJujuStep(
-            client,
-            cloud_name,
-            cloud_type,
-            deployment.controller,
-            bootstrap_args=juju_bootstrap_args,
-            proxy_settings=proxy_settings,
-        )
-    )
-    run_plan(plan1, console)
+    if juju_controller:
+        plan1 = []
+        plan1.append(AddCloudJujuStep(cloud_name, cloud_definition, juju_controller))
+        run_plan(plan1, console)
 
-    plan2 = []
-    plan2.append(CreateJujuUserStep(fqdn))
-    plan2.append(ClusterUpdateJujuControllerStep(client, deployment.controller))
-    plan2_results = run_plan(plan2, console)
+        # Not creating Juju user in external controller case because of below juju bug
+        # https://bugs.launchpad.net/juju/+bug/2073741
+        plan2 = []
+        plan2.append(
+            ClusterUpdateJujuControllerStep(client, deployment.controller, True)
+        )
+        plan2.append(SaveJujuRemoteUserLocallyStep(juju_controller, data_location))
+        run_plan(plan2, console)
 
-    token = get_step_message(plan2_results, CreateJujuUserStep)
+        deployment.reload_credentials()
+        jhelper = JujuHelper(deployment.get_connected_controller())
 
-    plan3 = []
-    plan3.append(ClusterAddJujuUserStep(client, fqdn, token))
-    plan3.append(BackupBootstrapUserStep(fqdn, data_location))
-    plan3.append(SaveJujuUserLocallyStep(fqdn, data_location))
-    plan3.append(
-        RegisterJujuUserStep(
-            client, fqdn, deployment.controller, data_location, replace=True
+        plan3 = []
+        plan3.append(
+            AddJujuModelStep(
+                jhelper, deployment.openstack_machines_model, cloud_name, proxy_settings
+            )
         )
-    )
-    run_plan(plan3, console)
+        plan3.append(
+            AddJujuMachineStep(
+                juju_controller_ip, deployment.openstack_machines_model, jhelper
+            )
+        )
+        run_plan(plan3, console)
 
-    deployment.reload_credentials()
-    jhelper = JujuHelper(deployment.get_connected_controller())
-    plan4 = []
-    plan4.append(
-        AddJujuSpaceStep(
-            jhelper,
-            deployment.openstack_machines_model,
-            deployment.get_space(Networks.MANAGEMENT),
-            [management_cidr],
+        plan4 = []
+        plan4.append(
+            AddJujuSpaceStep(
+                jhelper,
+                deployment.openstack_machines_model,
+                deployment.get_space(Networks.MANAGEMENT),
+                [management_cidr],
+            )
         )
-    )
-    plan4.append(
-        UpdateJujuModelConfigStep(
-            jhelper,
-            deployment.openstack_machines_model,
-            {
-                "default-space": deployment.get_space(Networks.MANAGEMENT),
-            },
+        plan4.append(
+            UpdateJujuModelConfigStep(
+                jhelper,
+                deployment.openstack_machines_model,
+                {
+                    "default-space": deployment.get_space(Networks.MANAGEMENT),
+                },
+            )
         )
-    )
-    plan4.append(
-        # TODO(gboutry): fix when LP#2067617 is released
-        # This should be replaced by a juju controller set config
-        # when the previous bug is fixed
-        # Binding controller's endpoints to the management space
-        BindJujuApplicationStep(
-            jhelper,
-            deployment.openstack_machines_model,
-            "controller",
-            deployment.get_space(Networks.MANAGEMENT),
+    else:
+        plan1 = []
+        plan1.append(AddCloudJujuStep(cloud_name, cloud_definition, juju_controller))
+        plan1.append(
+            BootstrapJujuStep(
+                client,
+                cloud_name,
+                cloud_type,
+                deployment.controller,
+                bootstrap_args=juju_bootstrap_args,
+                proxy_settings=proxy_settings,
+            )
         )
-    )
+        run_plan(plan1, console)
+
+        plan2 = []
+        plan2.append(CreateJujuUserStep(fqdn))
+        plan2.append(
+            ClusterUpdateJujuControllerStep(client, deployment.controller, False)
+        )
+        plan2_results = run_plan(plan2, console)
+
+        token = get_step_message(plan2_results, CreateJujuUserStep)
+
+        plan3 = []
+        plan3.append(ClusterAddJujuUserStep(client, fqdn, token))
+        plan3.append(BackupBootstrapUserStep(fqdn, data_location))
+        plan3.append(SaveJujuUserLocallyStep(fqdn, data_location))
+        plan3.append(
+            RegisterJujuUserStep(
+                client, fqdn, deployment.controller, data_location, replace=True
+            )
+        )
+        run_plan(plan3, console)
+
+        deployment.reload_credentials()
+        jhelper = JujuHelper(deployment.get_connected_controller())
+        plan4 = []
+        plan4.append(
+            AddJujuSpaceStep(
+                jhelper,
+                deployment.openstack_machines_model,
+                deployment.get_space(Networks.MANAGEMENT),
+                [management_cidr],
+            )
+        )
+        plan4.append(
+            UpdateJujuModelConfigStep(
+                jhelper,
+                deployment.openstack_machines_model,
+                {
+                    "default-space": deployment.get_space(Networks.MANAGEMENT),
+                },
+            )
+        )
+        plan4.append(
+            # TODO(gboutry): fix when LP#2067617 is released
+            # This should be replaced by a juju controller set config
+            # when the previous bug is fixed
+            # Binding controller's endpoints to the management space
+            BindJujuApplicationStep(
+                jhelper,
+                deployment.openstack_machines_model,
+                "controller",
+                deployment.get_space(Networks.MANAGEMENT),
+            )
+        )
+
     plan4.append(PromptRegionStep(client, preseed, accept_defaults))
     # Deploy sunbeam machine charm
     sunbeam_machine_tfhelper = deployment.get_tfhelper("sunbeam-machine-plan")
@@ -568,6 +652,7 @@ def add(ctx: click.Context, name: str, format: str) -> None:
         JujuLoginStep(deployment.juju_account),
         ClusterAddNodeStep(client, name),
         CreateJujuUserStep(name),
+        JujuGrantModelAccessStep(jhelper, name, deployment.openstack_machines_model),
         JujuGrantModelAccessStep(jhelper, name, OPENSTACK_MODEL),
     ]
 
@@ -663,30 +748,37 @@ def join(
     data_location = Snap().paths.user_data
     client = deployment.get_client()
 
-    plan1 = [
+    plan1 = [ClusterJoinNodeStep(client, token, ip, name, roles_str)]
+    run_plan(plan1, console)
+
+    # Loads juju controller
+    deployment.reload_credentials()
+    plan2 = [
         JujuLoginStep(deployment.juju_account),
-        ClusterJoinNodeStep(client, token, ip, name, roles_str),
         SaveJujuUserLocallyStep(name, data_location),
         RegisterJujuUserStep(client, name, deployment.controller, data_location),
-        AddJujuMachineStep(ip, deployment.infrastructure_model),
     ]
-    plan1_results = run_plan(plan1, console)
+    run_plan(plan2, console)
+
+    # Loads juju account
+    deployment.reload_credentials()
+    jhelper = JujuHelper(deployment.get_connected_controller())
+    plan3 = [AddJujuMachineStep(ip, deployment.openstack_machines_model, jhelper)]
+    plan3_results = run_plan(plan3, console)
 
     deployment.reload_credentials()
-
     # Get manifest object once the cluster is joined
     manifest = deployment.get_manifest()
     preseed = manifest.deployment
 
     machine_id = -1
-    machine_id_result = get_step_message(plan1_results, AddJujuMachineStep)
+    machine_id_result = get_step_message(plan3_results, AddJujuMachineStep)
     if machine_id_result is not None:
         machine_id = int(machine_id_result)
 
-    jhelper = JujuHelper(deployment.get_connected_controller())
-    plan2 = []
-    plan2.append(ClusterUpdateNodeStep(client, name, machine_id=machine_id))
-    plan2.append(
+    plan4 = []
+    plan4.append(ClusterUpdateNodeStep(client, name, machine_id=machine_id))
+    plan4.append(
         AddSunbeamMachineUnitsStep(
             client, name, jhelper, deployment.openstack_machines_model
         ),
@@ -694,25 +786,25 @@ def join(
 
     if is_control_node:
         if k8s_provider == "k8s":
-            plan2.append(
+            plan4.append(
                 AddK8SUnitsStep(
                     client, name, jhelper, deployment.openstack_machines_model
                 )
             )
         else:
-            plan2.append(
+            plan4.append(
                 AddMicrok8sUnitsStep(
                     client, name, jhelper, deployment.openstack_machines_model
                 )
             )
 
     if is_storage_node:
-        plan2.append(
+        plan4.append(
             AddMicrocephUnitsStep(
                 client, name, jhelper, deployment.openstack_machines_model
             )
         )
-        plan2.append(
+        plan4.append(
             ConfigureMicrocephOSDStep(
                 client,
                 name,
@@ -724,7 +816,7 @@ def join(
         )
 
     if is_compute_node:
-        plan2.extend(
+        plan4.extend(
             [
                 AddHypervisorUnitsStep(
                     client, name, jhelper, deployment.openstack_machines_model
@@ -740,7 +832,7 @@ def join(
             ]
         )
 
-    run_plan(plan2, console)
+    run_plan(plan4, console)
 
     click.echo(f"Node joined cluster with roles: {pretty_roles}")
 
@@ -819,7 +911,7 @@ def remove(ctx: click.Context, name: str, force: bool) -> None:
             RemoveHypervisorUnitStep(
                 client, name, jhelper, deployment.openstack_machines_model, force
             ),
-            RemoveJujuMachineStep(client, name, deployment.infrastructure_model),
+            RemoveJujuMachineStep(client, name, deployment.openstack_machines_model),
             # Cannot remove user as the same user name cannot be resued,
             # so commenting the RemoveJujuUserStep
             # RemoveJujuUserStep(name),

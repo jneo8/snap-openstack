@@ -45,12 +45,14 @@ from sunbeam.jobs.common import (
     ResultType,
     convert_proxy_to_model_configs,
 )
+from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import (
     CONTROLLER_MODEL,
     ApplicationNotFoundException,
     ControllerNotFoundException,
     JujuAccount,
     JujuAccountNotFound,
+    JujuController,
     JujuException,
     JujuHelper,
     JujuWaitException,
@@ -1052,11 +1054,13 @@ class UnregisterJujuController(BaseStep, JujuStepHelper):
 class AddJujuMachineStep(BaseStep, JujuStepHelper):
     """Add machine in juju."""
 
-    def __init__(self, ip: str, model: str):
+    def __init__(self, ip: str, model: str, jhelper: JujuHelper):
         super().__init__("Add machine", "Adding machine to Juju model")
 
         self.machine_ip = ip
         self.model = model
+        self.jhelper = jhelper
+        self.model_with_owner = None
 
         home = os.environ.get("SNAP_REAL_HOME")
         os.environ["JUJU_DATA"] = f"{home}/.local/share/juju"
@@ -1068,7 +1072,15 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
         try:
-            machines = self._juju_cmd("machines", "-m", self.model)
+            self.model_with_owner = run_sync(
+                self.jhelper.get_model_name_with_owner(self.model)
+            )
+        except Exception as e:
+            LOG.debug(str(e))
+            return Result(ResultType.FAILED, "Model not found")
+
+        try:
+            machines = self._juju_cmd("machines", "-m", self.model_with_owner)
             LOG.debug(f"Found machines: {machines}")
             machines = machines.get("machines", {})
 
@@ -1098,7 +1110,7 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
         try:
             child = pexpect.spawn(
                 self._get_juju_binary(),
-                ["add-machine", "-m", self.model, f"ssh:{self.machine_ip}"],
+                ["add-machine", "-m", self.model_with_owner, f"ssh:{self.machine_ip}"],
                 PEXPECT_TIMEOUT * 5,  # 5 minutes
             )
             with open(log_file, "wb+") as f:
@@ -1126,7 +1138,7 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
             # TODO(hemanth): Need to wait until machine comes to started state
             # from planned state?
 
-            machines = self._juju_cmd("machines", "-m", self.model)
+            machines = self._juju_cmd("machines", "-m", self.model_with_owner)
             LOG.debug(f"Found machines: {machines}")
             machines = machines.get("machines", {})
             for machine, details in machines.items():
@@ -1148,7 +1160,7 @@ class RemoveJujuMachineStep(BaseStep, JujuStepHelper):
         super().__init__("Remove machine", f"Removing machine {name} from Juju model")
 
         self.client = client
-        self.name = name
+        self.node_name = name
         self.model = model
         self.machine_id = -1
 
@@ -1162,7 +1174,7 @@ class RemoveJujuMachineStep(BaseStep, JujuStepHelper):
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
         try:
-            node = self.client.cluster.get_node_info(self.name)
+            node = self.client.cluster.get_node_info(self.node_name)
             self.machine_id = node.get("machineid")
         except NodeNotExistInClusterException as e:
             return Result(ResultType.FAILED, str(e))
@@ -1301,6 +1313,26 @@ class SaveJujuUserLocallyStep(BaseStep):
             user=self.username,
             password=password,
         )
+        juju_account.write(self.data_location)
+
+        return Result(ResultType.COMPLETED)
+
+
+class SaveJujuRemoteUserLocallyStep(SaveJujuUserLocallyStep):
+    """Save remote juju user locally in accounts yaml file."""
+
+    def __init__(self, controller: str, data_location: Path):
+        super().__init__(None, data_location)
+        self.controller = controller
+
+    def run(self, status: Optional["Status"] = None) -> Result:
+        """Run the step to completion.
+
+        Invoked when the step is run and returns a ResultType to indicate
+
+        :return:
+        """
+        juju_account = JujuAccount.load(self.data_location, f"{self.controller}.yaml")
         juju_account.write(self.data_location)
 
         return Result(ResultType.COMPLETED)
@@ -1932,4 +1964,63 @@ class SwitchToController(BaseStep, JujuStepHelper):
             LOG.exception(f"Error in switching the controller to {self.controller}")
             return Result(ResultType.FAILED, str(e))
 
+        return Result(ResultType.COMPLETED)
+
+
+class SaveControllerStep(BaseStep, JujuStepHelper):
+    """Save controller information locally."""
+
+    def __init__(
+        self,
+        deployment: Deployment,
+        controller: str,
+        data_location: Path,
+        is_external: bool = False,
+    ):
+        super().__init__(
+            "Save controller information",
+            "Saving controller information locally",
+        )
+        self.deployment = deployment
+        self.controller = controller
+        self.data_location = data_location
+        self.is_external = is_external
+
+    def _get_controller(self, name: str) -> JujuController | None:
+        try:
+            controller = self.get_controller(name)["details"]
+        except ControllerNotFoundException as e:
+            LOG.debug(str(e))
+            return None
+        return JujuController(
+            name=name,
+            api_endpoints=controller["api-endpoints"],
+            ca_cert=controller["ca-cert"],
+            is_external=self.is_external,
+        )
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not."""
+        if self.deployment.juju_controller is None:
+            return Result(ResultType.COMPLETED)
+
+        controller = self._get_controller(self.controller)
+        if controller is None:
+            return Result(ResultType.FAILED, f"Controller {self.controller} not found")
+
+        if controller == self.deployment.juju_controller:
+            return Result(ResultType.SKIPPED)
+
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None) -> Result:
+        """Save controller to deployment information."""
+        controller = self._get_controller(self.controller)
+        if controller is None:
+            return Result(ResultType.FAILED, f"Controller {self.controller} not found")
+
+        self.deployment.juju_controller = controller
+        self.deployment.juju_account = JujuAccount.load(
+            self.data_location, f"{self.controller}.yaml"
+        )
         return Result(ResultType.COMPLETED)

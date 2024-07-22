@@ -280,7 +280,7 @@ class RemoveMachineUnitStep(BaseStep):
     ):
         super().__init__(banner, description)
         self.client = client
-        self.name = name
+        self.node_name = name
         self.jhelper = jhelper
         self.config = config
         self.application = application
@@ -299,10 +299,10 @@ class RemoveMachineUnitStep(BaseStep):
                 ResultType.COMPLETED or ResultType.FAILED otherwise
         """
         try:
-            node = self.client.cluster.get_node_info(self.name)
+            node = self.client.cluster.get_node_info(self.node_name)
             self.machine_id = str(node.get("machineid"))
         except NodeNotExistInClusterException:
-            LOG.debug(f"Machine {self.name} does not exist, skipping.")
+            LOG.debug(f"Machine {self.node_name} does not exist, skipping.")
             return Result(ResultType.SKIPPED)
 
         try:

@@ -48,7 +48,7 @@ from sunbeam.commands.juju import (
     JUJU_CONTROLLER_CHARM,
     BootstrapJujuStep,
     ControllerNotFoundException,
-    JujuStepHelper,
+    SaveControllerStep,
     ScaleJujuStep,
 )
 from sunbeam.commands.terraform import TerraformHelper
@@ -65,7 +65,6 @@ from sunbeam.jobs.deployments import DeploymentsConfig
 from sunbeam.jobs.juju import (
     CONTROLLER_MODEL,
     ActionFailedException,
-    JujuController,
     JujuHelper,
     JujuSecretNotFound,
     LeaderNotFoundException,
@@ -1080,7 +1079,7 @@ class MaasScaleJujuStep(ScaleJujuStep):
         return Result(ResultType.COMPLETED)
 
 
-class MaasSaveControllerStep(BaseStep, JujuStepHelper):
+class MaasSaveControllerStep(SaveControllerStep):
     """Save maas controller information locally."""
 
     def __init__(
@@ -1088,40 +1087,25 @@ class MaasSaveControllerStep(BaseStep, JujuStepHelper):
         controller: str,
         deployment_name: str,
         deployments_config: DeploymentsConfig,
+        is_external: bool = False,
     ):
-        super().__init__(
-            "Save controller information",
-            "Saving controller information locally",
-        )
-        self.controller = controller
         self.deployment_name = deployment_name
         self.deployments_config = deployments_config
-
-    def _get_controller(self, name: str) -> JujuController | None:
-        try:
-            controller = self.get_controller(name)["details"]
-        except ControllerNotFoundException as e:
-            LOG.debug(str(e))
-            return None
-        return JujuController(
-            name=name,
-            api_endpoints=controller["api-endpoints"],
-            ca_cert=controller["ca-cert"],
-        )
+        deployment = self.deployments_config.get_deployment(self.deployment_name)
+        super().__init__(deployment, controller, None, is_external)
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
-        deployment = self.deployments_config.get_deployment(self.deployment_name)
-        if not maas_deployment.is_maas_deployment(deployment):
+        if not maas_deployment.is_maas_deployment(self.deployment):
             return Result(ResultType.SKIPPED)
-        if deployment.juju_controller is None:
+        if self.deployment.juju_controller is None:
             return Result(ResultType.COMPLETED)
 
         controller = self._get_controller(self.controller)
         if controller is None:
             return Result(ResultType.FAILED, f"Controller {self.controller} not found")
 
-        if controller == deployment.juju_controller:
+        if controller == self.deployment.juju_controller:
             return Result(ResultType.SKIPPED)
 
         return Result(ResultType.COMPLETED)
@@ -1132,11 +1116,7 @@ class MaasSaveControllerStep(BaseStep, JujuStepHelper):
         if controller is None:
             return Result(ResultType.FAILED, f"Controller {self.controller} not found")
 
-        deployment = self.deployments_config.get_deployment(self.deployment_name)
-        if not maas_deployment.is_maas_deployment(deployment):
-            return Result(ResultType.FAILED)
-
-        deployment.juju_controller = controller
+        self.deployment.juju_controller = controller
         self.deployments_config.write()
         return Result(ResultType.COMPLETED)
 

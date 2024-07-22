@@ -505,3 +505,28 @@ class TokenCheck(Check):
             return False
 
         return True
+
+
+class JujuControllerRegistrationCheck(Check):
+    """Check if juju controller is registered or not."""
+
+    def __init__(self, controller: str, data_location: Path):
+        super().__init__(
+            "Check Juju Controller registration",
+            "Checking if juju controller is registered",
+        )
+        self.controller = controller
+        self.data_location = data_location
+
+    def run(self) -> bool:
+        """Validate registration of juju controller.
+
+        Checks:
+            - Existence of accounts file for juju controller
+        """
+        account_file = self.data_location / f"{self.controller}.yaml"
+        if account_file.exists():
+            return True
+        else:
+            self.message = f"Juju controller {self.controller} is not registered."
+            return False
