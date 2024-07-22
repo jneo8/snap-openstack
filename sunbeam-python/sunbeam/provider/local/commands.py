@@ -668,7 +668,7 @@ def join(
         ClusterJoinNodeStep(client, token, ip, name, roles_str),
         SaveJujuUserLocallyStep(name, data_location),
         RegisterJujuUserStep(client, name, deployment.controller, data_location),
-        AddJujuMachineStep(ip),
+        AddJujuMachineStep(ip, deployment.infrastructure_model),
     ]
     plan1_results = run_plan(plan1, console)
 
@@ -819,7 +819,7 @@ def remove(ctx: click.Context, name: str, force: bool) -> None:
             RemoveHypervisorUnitStep(
                 client, name, jhelper, deployment.openstack_machines_model, force
             ),
-            RemoveJujuMachineStep(client, name),
+            RemoveJujuMachineStep(client, name, deployment.infrastructure_model),
             # Cannot remove user as the same user name cannot be resued,
             # so commenting the RemoveJujuUserStep
             # RemoveJujuUserStep(name),

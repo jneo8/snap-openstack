@@ -171,8 +171,12 @@ class JujuStepHelper:
             LOG.debug(e)
             raise ControllerNotFoundException() from e
 
-    def add_cloud(self, name: str, cloud: dict) -> bool:
-        """Add cloud to client clouds."""
+    def add_cloud(self, name: str, cloud: dict, controller: str | None) -> bool:
+        """Add cloud to client clouds.
+
+        If controller is specified, add cloud to both client
+        and given controller.
+        """
         if cloud["clouds"][name]["type"] not in ("manual", "maas"):
             return False
 
@@ -187,6 +191,8 @@ class JujuStepHelper:
                 temp.name,
                 "--client",
             ]
+            if controller:
+                cmd.extend(["--controller", controller, "--force"])
             LOG.debug(f'Running command {" ".join(cmd)}')
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
@@ -324,11 +330,12 @@ class JujuStepHelper:
 class AddCloudJujuStep(BaseStep, JujuStepHelper):
     """Add cloud definition to juju client."""
 
-    def __init__(self, cloud: str, definition: dict):
+    def __init__(self, cloud: str, definition: dict, controller: str | None = None):
         super().__init__("Add Cloud", "Adding cloud to Juju client")
 
         self.cloud = cloud
         self.definition = definition
+        self.controller = controller
 
     def is_skip(self, status: Optional["Status"] = None) -> Result:
         """Determines if the step should be skipped or not.
@@ -358,7 +365,7 @@ class AddCloudJujuStep(BaseStep, JujuStepHelper):
         :return:
         """
         try:
-            result = self.add_cloud(self.cloud, self.definition)
+            result = self.add_cloud(self.cloud, self.definition, self.controller)
             if not result:
                 return Result(ResultType.FAILED, "Unable to create cloud")
         except subprocess.CalledProcessError as e:
@@ -1045,10 +1052,11 @@ class UnregisterJujuController(BaseStep, JujuStepHelper):
 class AddJujuMachineStep(BaseStep, JujuStepHelper):
     """Add machine in juju."""
 
-    def __init__(self, ip: str):
+    def __init__(self, ip: str, model: str):
         super().__init__("Add machine", "Adding machine to Juju model")
 
         self.machine_ip = ip
+        self.model = model
 
         home = os.environ.get("SNAP_REAL_HOME")
         os.environ["JUJU_DATA"] = f"{home}/.local/share/juju"
@@ -1060,7 +1068,7 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
         try:
-            machines = self._juju_cmd("machines", "-m", CONTROLLER_MODEL)
+            machines = self._juju_cmd("machines", "-m", self.model)
             LOG.debug(f"Found machines: {machines}")
             machines = machines.get("machines", {})
 
@@ -1090,7 +1098,7 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
         try:
             child = pexpect.spawn(
                 self._get_juju_binary(),
-                ["add-machine", "-m", CONTROLLER_MODEL, f"ssh:{self.machine_ip}"],
+                ["add-machine", "-m", self.model, f"ssh:{self.machine_ip}"],
                 PEXPECT_TIMEOUT * 5,  # 5 minutes
             )
             with open(log_file, "wb+") as f:
@@ -1118,7 +1126,7 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
             # TODO(hemanth): Need to wait until machine comes to started state
             # from planned state?
 
-            machines = self._juju_cmd("machines", "-m", CONTROLLER_MODEL)
+            machines = self._juju_cmd("machines", "-m", self.model)
             LOG.debug(f"Found machines: {machines}")
             machines = machines.get("machines", {})
             for machine, details in machines.items():
@@ -1136,11 +1144,12 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
 class RemoveJujuMachineStep(BaseStep, JujuStepHelper):
     """Remove machine in juju."""
 
-    def __init__(self, client: Client, name: str):
+    def __init__(self, client: Client, name: str, model: str):
         super().__init__("Remove machine", f"Removing machine {name} from Juju model")
 
         self.client = client
         self.name = name
+        self.model = model
         self.machine_id = -1
 
         home = os.environ.get("SNAP_REAL_HOME")
@@ -1159,7 +1168,7 @@ class RemoveJujuMachineStep(BaseStep, JujuStepHelper):
             return Result(ResultType.FAILED, str(e))
 
         try:
-            machines = self._juju_cmd("machines", "-m", CONTROLLER_MODEL)
+            machines = self._juju_cmd("machines", "-m", self.model)
             LOG.debug(f"Found machines: {machines}")
             machines = machines.get("machines", {})
 
@@ -1191,7 +1200,7 @@ class RemoveJujuMachineStep(BaseStep, JujuStepHelper):
                 self._get_juju_binary(),
                 "remove-machine",
                 "-m",
-                CONTROLLER_MODEL,
+                self.model,
                 str(self.machine_id),
                 "--no-prompt",
             ]
@@ -1491,11 +1500,16 @@ class AddJujuModelStep(BaseStep):
     """Add model with configs."""
 
     def __init__(
-        self, jhelper: JujuHelper, model: str, proxy_settings: dict | None = None
+        self,
+        jhelper: JujuHelper,
+        model: str,
+        cloud: str,
+        proxy_settings: dict | None = None,
     ):
         super().__init__(f"Add model {model}", f"Adding model {model}")
         self.jhelper = jhelper
         self.model = model
+        self.cloud = cloud
         self.proxy_settings = proxy_settings or {}
 
     def is_skip(self, status: Optional["Status"] = None) -> Result:
@@ -1511,7 +1525,11 @@ class AddJujuModelStep(BaseStep):
         """Add model with configs."""
         try:
             model_config = convert_proxy_to_model_configs(self.proxy_settings)
-            run_sync(self.jhelper.add_model(self.model, config=model_config))
+            run_sync(
+                self.jhelper.add_model(
+                    self.model, cloud=self.cloud, config=model_config
+                )
+            )
             return Result(ResultType.COMPLETED)
         except Exception as e:
             return Result(ResultType.FAILED, str(e))

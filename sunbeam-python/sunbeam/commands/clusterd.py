@@ -530,6 +530,7 @@ class ClusterUpdateJujuControllerStep(BaseStep, JujuStepHelper):
         controller = self.get_controller(self.controller)["details"]
 
         juju_controller = JujuController(
+            name=self.controller,
             api_endpoints=self.filter_ips(controller["api-endpoints"], self.networks),
             ca_cert=controller["ca-cert"],
         )

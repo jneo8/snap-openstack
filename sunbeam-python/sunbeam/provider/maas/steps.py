@@ -1104,6 +1104,7 @@ class MaasSaveControllerStep(BaseStep, JujuStepHelper):
             LOG.debug(str(e))
             return None
         return JujuController(
+            name=name,
             api_endpoints=controller["api-endpoints"],
             ca_cert=controller["ca-cert"],
         )

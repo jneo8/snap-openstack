@@ -202,6 +202,7 @@ class JujuAccount(pydantic.BaseModel):
 
 
 class JujuController(pydantic.BaseModel):
+    name: str
     api_endpoints: List[str]
     ca_cert: str
 
@@ -261,17 +262,22 @@ class JujuHelper:
                 raise ModelNotFoundException(f"Model {model!r} not found")
             raise e
 
-    async def add_model(self, model: str, config: dict | None = None) -> Model:
+    async def add_model(
+        self, model: str, cloud: str | None = None, config: dict | None = None
+    ) -> Model:
         """Add a model.
 
         :model: Name of the model
+        :cloud: Name of the cloud
         :config: model configuration
         """
         # TODO(gboutry): workaround until we manage public ssh keys properly
         old_home = os.environ["HOME"]
         os.environ["HOME"] = os.environ["SNAP_REAL_HOME"]
         try:
-            return await self.controller.add_model(model, config=config)
+            return await self.controller.add_model(
+                model, cloud_name=cloud, config=config
+            )
         finally:
             os.environ["HOME"] = old_home
 
@@ -1132,6 +1138,7 @@ class JujuHelper:
         cloud_yaml["clouds"][cloud_name] = {
             "type": "manual",
             "endpoint": ip_address,
+            "auth-types": ["empty"],
         }
         return cloud_yaml
 

@@ -122,6 +122,10 @@ class LocalDeployment(Deployment):
     @property
     def controller(self) -> str:
         """Return the controller name."""
+        if self.juju_controller:
+            return self.juju_controller.name
+
+        # Juju controller not yet set, return defaults
         return CONTROLLER
 
     def get_client(self) -> Client:
