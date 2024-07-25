@@ -341,7 +341,7 @@ def bootstrap(
     plan4.append(
         AddJujuSpaceStep(
             jhelper,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
             deployment.get_space(Networks.MANAGEMENT),
             [management_cidr],
         )
@@ -349,7 +349,7 @@ def bootstrap(
     plan4.append(
         UpdateJujuModelConfigStep(
             jhelper,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
             {
                 "default-space": deployment.get_space(Networks.MANAGEMENT),
             },
@@ -362,7 +362,7 @@ def bootstrap(
         # Binding controller's endpoints to the management space
         BindJujuApplicationStep(
             jhelper,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
             "controller",
             deployment.get_space(Networks.MANAGEMENT),
         )
@@ -378,14 +378,14 @@ def bootstrap(
             sunbeam_machine_tfhelper,
             jhelper,
             manifest,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
             refresh=True,
             proxy_settings=proxy_settings,
         )
     )
     plan4.append(
         AddSunbeamMachineUnitsStep(
-            client, fqdn, jhelper, deployment.infrastructure_model
+            client, fqdn, jhelper, deployment.openstack_machines_model
         )
     )
 
@@ -399,19 +399,19 @@ def bootstrap(
                 k8s_tfhelper,
                 jhelper,
                 manifest,
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
                 accept_defaults=accept_defaults,
                 deployment_preseed=preseed,
             )
         )
         plan4.append(
-            AddK8SUnitsStep(client, fqdn, jhelper, deployment.infrastructure_model)
+            AddK8SUnitsStep(client, fqdn, jhelper, deployment.openstack_machines_model)
         )
         plan4.append(
-            EnableK8SFeatures(client, jhelper, deployment.infrastructure_model)
+            EnableK8SFeatures(client, jhelper, deployment.openstack_machines_model)
         )
         plan4.append(
-            StoreK8SKubeConfigStep(client, jhelper, deployment.infrastructure_model)
+            StoreK8SKubeConfigStep(client, jhelper, deployment.openstack_machines_model)
         )
         plan4.append(AddK8SCloudStep(client, jhelper))
     else:
@@ -424,16 +424,20 @@ def bootstrap(
                 k8s_tfhelper,
                 jhelper,
                 manifest,
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
                 accept_defaults=accept_defaults,
                 deployment_preseed=preseed,
             )
         )
         plan4.append(
-            AddMicrok8sUnitsStep(client, fqdn, jhelper, deployment.infrastructure_model)
+            AddMicrok8sUnitsStep(
+                client, fqdn, jhelper, deployment.openstack_machines_model
+            )
         )
         plan4.append(
-            StoreMicrok8sConfigStep(client, jhelper, deployment.infrastructure_model)
+            StoreMicrok8sConfigStep(
+                client, jhelper, deployment.openstack_machines_model
+            )
         )
         plan4.append(AddMicrok8sCloudStep(client, jhelper))
 
@@ -447,14 +451,14 @@ def bootstrap(
             microceph_tfhelper,
             jhelper,
             manifest,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
         )
     )
 
     if is_storage_node:
         plan4.append(
             AddMicrocephUnitsStep(
-                client, fqdn, jhelper, deployment.infrastructure_model
+                client, fqdn, jhelper, deployment.openstack_machines_model
             )
         )
         plan4.append(
@@ -462,7 +466,7 @@ def bootstrap(
                 client,
                 fqdn,
                 jhelper,
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
                 accept_defaults=accept_defaults,
                 deployment_preseed=preseed,
             )
@@ -479,7 +483,7 @@ def bootstrap(
                 manifest,
                 topology,
                 database,
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
                 proxy_settings=proxy_settings,
             )
         )
@@ -493,7 +497,7 @@ def bootstrap(
                 microceph_tfhelper,
                 jhelper,
                 manifest,
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
                 refresh=True,
             )
         )
@@ -519,13 +523,13 @@ def bootstrap(
             openstack_tfhelper,
             jhelper,
             manifest,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
         )
     )
     if is_compute_node:
         plan5.append(
             AddHypervisorUnitsStep(
-                client, fqdn, jhelper, deployment.infrastructure_model
+                client, fqdn, jhelper, deployment.openstack_machines_model
             )
         )
 
@@ -684,26 +688,28 @@ def join(
     plan2.append(ClusterUpdateNodeStep(client, name, machine_id=machine_id))
     plan2.append(
         AddSunbeamMachineUnitsStep(
-            client, name, jhelper, deployment.infrastructure_model
+            client, name, jhelper, deployment.openstack_machines_model
         ),
     )
 
     if is_control_node:
         if k8s_provider == "k8s":
             plan2.append(
-                AddK8SUnitsStep(client, name, jhelper, deployment.infrastructure_model)
+                AddK8SUnitsStep(
+                    client, name, jhelper, deployment.openstack_machines_model
+                )
             )
         else:
             plan2.append(
                 AddMicrok8sUnitsStep(
-                    client, name, jhelper, deployment.infrastructure_model
+                    client, name, jhelper, deployment.openstack_machines_model
                 )
             )
 
     if is_storage_node:
         plan2.append(
             AddMicrocephUnitsStep(
-                client, name, jhelper, deployment.infrastructure_model
+                client, name, jhelper, deployment.openstack_machines_model
             )
         )
         plan2.append(
@@ -711,7 +717,7 @@ def join(
                 client,
                 name,
                 jhelper,
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
                 accept_defaults=accept_defaults,
                 deployment_preseed=preseed,
             )
@@ -721,13 +727,13 @@ def join(
         plan2.extend(
             [
                 AddHypervisorUnitsStep(
-                    client, name, jhelper, deployment.infrastructure_model
+                    client, name, jhelper, deployment.openstack_machines_model
                 ),
                 LocalSetHypervisorUnitsOptionsStep(
                     client,
                     name,
                     jhelper,
-                    deployment.infrastructure_model,
+                    deployment.openstack_machines_model,
                     join_mode=True,
                     deployment_preseed=preseed,
                 ),
@@ -788,28 +794,30 @@ def remove(ctx: click.Context, name: str, force: bool) -> None:
     plan = [
         JujuLoginStep(deployment.juju_account),
         RemoveSunbeamMachineStep(
-            client, name, jhelper, deployment.infrastructure_model
+            client, name, jhelper, deployment.openstack_machines_model
         ),
     ]
 
     if k8s_provider == "k8s":
         plan.append(
-            RemoveK8SUnitStep(client, name, jhelper, deployment.infrastructure_model)
+            RemoveK8SUnitStep(
+                client, name, jhelper, deployment.openstack_machines_model
+            )
         )
     else:
         plan.append(
             RemoveMicrok8sUnitStep(
-                client, name, jhelper, deployment.infrastructure_model
+                client, name, jhelper, deployment.openstack_machines_model
             )
         )
 
     plan.extend(
         [
             RemoveMicrocephUnitStep(
-                client, name, jhelper, deployment.infrastructure_model
+                client, name, jhelper, deployment.openstack_machines_model
             ),
             RemoveHypervisorUnitStep(
-                client, name, jhelper, deployment.infrastructure_model, force
+                client, name, jhelper, deployment.openstack_machines_model, force
             ),
             RemoveJujuMachineStep(client, name),
             # Cannot remove user as the same user name cannot be resued,
@@ -908,7 +916,7 @@ def configure_cmd(
             client,
             jhelper,
             ext_network=answer_file,
-            model=deployment.infrastructure_model,
+            model=deployment.openstack_machines_model,
         ),
     ]
     node = client.cluster.get_node_info(name)
@@ -919,7 +927,7 @@ def configure_cmd(
                 client,
                 name,
                 jhelper,
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
                 # Accept preseed file but do not allow 'accept_defaults' as nic
                 # selection may vary from machine to machine and is potentially
                 # destructive if it takes over an unintended nic.

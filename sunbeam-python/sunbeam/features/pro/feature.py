@@ -210,7 +210,7 @@ class ProFeature(EnableDisableFeature):
                 jhelper,
                 self.manifest,
                 self.token,
-                self.deployment.infrastructure_model,
+                self.deployment.openstack_machines_model,
             ),
         ]
 

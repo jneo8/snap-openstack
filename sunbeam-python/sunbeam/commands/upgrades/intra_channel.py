@@ -139,7 +139,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
                 self.deployment.get_tfhelper("sunbeam-machine-plan"),
                 self.jhelper,
                 self.manifest,
-                self.deployment.infrastructure_model,
+                self.deployment.openstack_machines_model,
                 refresh=True,
             ),
         ]
@@ -154,7 +154,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
                         self.deployment.get_tfhelper("k8s-plan"),
                         self.jhelper,
                         self.manifest,
-                        self.deployment.infrastructure_model,
+                        self.deployment.openstack_machines_model,
                         refresh=True,
                     ),
                 ]
@@ -169,7 +169,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
                         self.deployment.get_tfhelper("microk8s-plan"),
                         self.jhelper,
                         self.manifest,
-                        self.deployment.infrastructure_model,
+                        self.deployment.openstack_machines_model,
                         refresh=True,
                     ),
                 ]
@@ -184,7 +184,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
                     self.deployment.get_tfhelper("microceph-plan"),
                     self.jhelper,
                     self.manifest,
-                    self.deployment.infrastructure_model,
+                    self.deployment.openstack_machines_model,
                     refresh=True,
                 ),
                 TerraformInitStep(self.deployment.get_tfhelper("hypervisor-plan")),
@@ -193,7 +193,7 @@ class LatestInChannelCoordinator(UpgradeCoordinator):
                     self.deployment.get_tfhelper("hypervisor-plan"),
                     self.jhelper,
                     self.manifest,
-                    self.deployment.infrastructure_model,
+                    self.deployment.openstack_machines_model,
                 ),
                 UpgradeFeatures(self.deployment, upgrade_release=False),
             ]

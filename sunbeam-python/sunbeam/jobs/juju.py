@@ -54,6 +54,7 @@ from sunbeam.versions import JUJU_BASE
 
 LOG = logging.getLogger(__name__)
 CONTROLLER_MODEL = "admin/controller"
+CONTROLLER_APPLICATION = "controller"
 CONTROLLER = "sunbeam-controller"
 JUJU_CONTROLLER_KEY = "JujuController"
 ACCOUNT_FILE = "account.yaml"

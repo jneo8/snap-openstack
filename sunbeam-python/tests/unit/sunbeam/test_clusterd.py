@@ -633,21 +633,21 @@ class TestDeploySunbeamClusterdApplicationStep:
         result = step.is_skip()
         assert result.result_type == ResultType.SKIPPED
 
-    def test_run_when_no_controller_machines_found(self, manifest, model):
+    def test_run_when_no_machines_found(self, manifest, model):
         jhelper = AsyncMock()
         jhelper.get_application.return_value = AsyncMock()
+        jhelper.get_machines.return_value = {}
         step = DeploySunbeamClusterdApplicationStep(jhelper, manifest, model)
-        step._get_controller_machines = MagicMock(return_value=[])
         result = step.run()
         assert result.result_type == ResultType.FAILED
-        assert result.message == "No controller machines found"
+        assert result.message == f"No machines found in {model} model"
 
-    def test_run_when_controller_machines_found(self, manifest, model):
+    def test_run_when_machines_found(self, manifest, model):
         jhelper = AsyncMock()
         jhelper.get_application.return_value = AsyncMock()
+        jhelper.get_machines.return_value = {"1": "m1", "2": "m2", "3": "m3"}
         manifest.software.charms = {"sunbeam-clusterd": Mock(config={})}
         step = DeploySunbeamClusterdApplicationStep(jhelper, manifest, model)
-        step._get_controller_machines = MagicMock(return_value=["1", "2", "3"])
         result = step.run()
         assert result.result_type == ResultType.COMPLETED
 

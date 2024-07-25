@@ -1487,13 +1487,13 @@ class JujuLoginStep(BaseStep, JujuStepHelper):
         return Result(ResultType.COMPLETED)
 
 
-class AddInfrastructureModelStep(BaseStep):
-    """Add infrastructure model."""
+class AddJujuModelStep(BaseStep):
+    """Add model with configs."""
 
     def __init__(
         self, jhelper: JujuHelper, model: str, proxy_settings: dict | None = None
     ):
-        super().__init__("Add infrastructure model", "Adding infrastructure model")
+        super().__init__(f"Add model {model}", f"Adding model {model}")
         self.jhelper = jhelper
         self.model = model
         self.proxy_settings = proxy_settings or {}
@@ -1508,7 +1508,7 @@ class AddInfrastructureModelStep(BaseStep):
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Optional["Status"] = None) -> Result:
-        """Add infrastructure model."""
+        """Add model with configs."""
         try:
             model_config = convert_proxy_to_model_configs(self.proxy_settings)
             run_sync(self.jhelper.add_model(self.model, config=model_config))

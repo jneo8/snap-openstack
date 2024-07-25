@@ -115,8 +115,8 @@ class LocalDeployment(Deployment):
         self.clusterd_certpair = self._load_cert_pair()
 
     @property
-    def infrastructure_model(self) -> str:
-        """Return the infrastructure model name."""
+    def openstack_machines_model(self) -> str:
+        """Return the openstack machines model name."""
         return "controller"
 
     @property

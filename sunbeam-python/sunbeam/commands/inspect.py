@@ -63,7 +63,7 @@ def inspect(ctx: click.Context) -> None:
 
     plan = []
     with tempfile.TemporaryDirectory() as tmpdirname:
-        for model in [deployment.infrastructure_model, OPENSTACK_MODEL]:
+        for model in [deployment.openstack_machines_model, OPENSTACK_MODEL]:
             status_file = Path(tmpdirname) / f"juju_status_{model}.out"
             debug_file = Path(tmpdirname) / f"debug_log_{model}.out"
             plan.extend(

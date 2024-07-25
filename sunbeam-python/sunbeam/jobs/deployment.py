@@ -97,8 +97,8 @@ class Deployment(pydantic.BaseModel):
     _tfhelpers: dict[str, TerraformHelper] = pydantic.PrivateAttr(default={})
 
     @property
-    def infrastructure_model(self) -> str:
-        """Return the infrastructure model name."""
+    def openstack_machines_model(self) -> str:
+        """Return the openstack machines model name."""
         return NotImplemented
 
     @property
