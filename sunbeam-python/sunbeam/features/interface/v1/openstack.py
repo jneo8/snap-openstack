@@ -48,7 +48,13 @@ from sunbeam.jobs.common import (
     update_status_background,
 )
 from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
+from sunbeam.jobs.juju import (
+    ApplicationNotFoundException,
+    JujuHelper,
+    JujuWaitException,
+    TimeoutException,
+    run_sync,
+)
 from sunbeam.jobs.manifest import AddManifestStep, Manifest
 
 LOG = logging.getLogger(__name__)
@@ -517,6 +523,49 @@ class DisableOpenStackApplicationStep(BaseStep, JujuStepHelper):
             )
         except TimeoutException as e:
             LOG.debug(f"Failed to destroy {apps}", exc_info=True)
+            return Result(ResultType.FAILED, str(e))
+
+        return Result(ResultType.COMPLETED)
+
+
+class WaitForApplicationsStep(BaseStep):
+    """Wait for Applications to settle."""
+
+    def __init__(self, jhelper: JujuHelper, apps: list, model: str, timeout: int = 300):
+        super().__init__(
+            "Wait for apps to settle", "Waiting for the applications to settle"
+        )
+        self.jhelper = jhelper
+        self.apps = apps
+        self.model = model
+        self.timeout = timeout
+
+    def run(self, status: Optional[Status] = None) -> Result:
+        """Wait for applications to be idle."""
+        LOG.debug(f"Application monitored for readiness: {self.apps}")
+        units = []
+        accepted_unit_status = {"agent": ["idle"], "workload": ["active"]}
+        try:
+            for app in self.apps:
+                try:
+                    application = run_sync(
+                        self.jhelper.get_application(app, self.model)
+                    )
+                    units.extend(application.units)
+                except ApplicationNotFoundException:
+                    # Ignore if the application is not found
+                    LOG.debug(f"Application {app} not found")
+
+            run_sync(
+                self.jhelper.wait_units_ready(
+                    units,
+                    self.model,
+                    accepted_status=accepted_unit_status,
+                    timeout=self.timeout,
+                )
+            )
+        except (JujuWaitException, TimeoutException) as e:
+            LOG.debug(str(e))
             return Result(ResultType.FAILED, str(e))
 
         return Result(ResultType.COMPLETED)
