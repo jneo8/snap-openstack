@@ -285,6 +285,8 @@ class PatchLoadBalancerServicesStep(BaseStep):
         )
         self.client = client
         self.lb_annotation = K8SHelper.get_loadbalancer_annotation()
+        if self.client.cluster.list_nodes_by_role("storage"):
+            self.SERVICES.append("traefik-rgw")
 
     def _get_service(self, service_name: str, find_lb: bool = True) -> Service:
         """Look up a service by name, optionally looking for a LoadBalancer service."""
