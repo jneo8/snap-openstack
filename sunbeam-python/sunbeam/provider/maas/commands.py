@@ -49,7 +49,7 @@ from sunbeam.commands.hypervisor import (
 from sunbeam.commands.juju import (
     AddCloudJujuStep,
     AddCredentialsJujuStep,
-    AddInfrastructureModelStep,
+    AddJujuModelStep,
     DownloadJujuControllerCharmStep,
     IntegrateJujuApplicationsStep,
     JujuLoginStep,
@@ -106,6 +106,7 @@ from sunbeam.jobs.common import (
 from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment, Networks
 from sunbeam.jobs.deployments import DeploymentsConfig, deployment_path
 from sunbeam.jobs.juju import (
+    CONTROLLER_APPLICATION,
     CONTROLLER_MODEL,
     JujuAccount,
     JujuHelper,
@@ -137,6 +138,7 @@ from sunbeam.provider.maas.steps import (
     MaasBootstrapJujuStep,
     MaasClusterStatusStep,
     MaasConfigureMicrocephOSDStep,
+    MaasDeployInfraMachinesStep,
     MaasDeployK8SApplicationStep,
     MaasDeployMachinesStep,
     MaasDeployMicrok8sApplicationStep,
@@ -356,22 +358,25 @@ def bootstrap(
     if deployment.juju_controller is None:
         console.print("Controller should have been saved in previous step.")
         sys.exit(1)
+
     jhelper = JujuHelper(deployment.get_connected_controller())
     plan2 = []
+    plan2.append(AddJujuModelStep(jhelper, deployment.infra_model, proxy_settings))
+    plan2.append(
+        MaasDeployInfraMachinesStep(maas_client, jhelper, deployment.infra_model)
+    )
     plan2.append(
         DeployCertificatesProviderApplicationStep(
-            jhelper, manifest, CONTROLLER_MODEL.split("/")[-1]
+            jhelper, manifest, deployment.infra_model
         )
     )
     plan2.append(
-        DeploySunbeamClusterdApplicationStep(
-            jhelper, manifest, CONTROLLER_MODEL.split("/")[-1]
-        )
+        DeploySunbeamClusterdApplicationStep(jhelper, manifest, deployment.infra_model)
     )
     plan2.append(
         IntegrateJujuApplicationsStep(
             jhelper,
-            CONTROLLER_MODEL.split("/")[-1],
+            deployment.infra_model,
             CERTIFICATES_APPLICATION,
             CLUSTERD_APPLICATION,
             "certificates",
@@ -393,7 +398,12 @@ def bootstrap(
     plan3.append(MaasAddMachinesToClusterdStep(client, maas_client))
     plan3.append(
         UpdateJujuMachineIDStep(
-            client, jhelper, CONTROLLER_MODEL.split("/")[-1], CLUSTERD_APPLICATION
+            client, jhelper, CONTROLLER_MODEL.split("/")[-1], CONTROLLER_APPLICATION
+        )
+    )
+    plan3.append(
+        UpdateJujuMachineIDStep(
+            client, jhelper, deployment.infra_model, CLUSTERD_APPLICATION
         )
     )
     run_plan(plan3, console)
@@ -493,13 +503,11 @@ def deploy(
     plan = []
     plan.append(AddManifestStep(client, manifest_path))
     plan.append(
-        AddInfrastructureModelStep(
-            jhelper, deployment.infrastructure_model, proxy_settings
-        )
+        AddJujuModelStep(jhelper, deployment.openstack_machines_model, proxy_settings)
     )
     plan.append(MaasAddMachinesToClusterdStep(client, maas_client))
     plan.append(
-        MaasDeployMachinesStep(client, jhelper, deployment.infrastructure_model)
+        MaasDeployMachinesStep(client, jhelper, deployment.openstack_machines_model)
     )
     run_plan(plan, console)
 
@@ -537,14 +545,14 @@ def deploy(
             tfhelper_sunbeam_machine,
             jhelper,
             manifest,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
             refresh=True,
             proxy_settings=proxy_settings,
         )
     )
     plan2.append(
         AddSunbeamMachineUnitsStep(
-            client, workers, jhelper, deployment.infrastructure_model
+            client, workers, jhelper, deployment.openstack_machines_model
         )
     )
     plan2.append(TerraformInitStep(tfhelper_k8s))
@@ -557,13 +565,15 @@ def deploy(
                 tfhelper_k8s,
                 jhelper,
                 manifest,
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
                 preseed,
                 accept_defaults,
             )
         )
         plan2.append(
-            AddK8SUnitsStep(client, control, jhelper, deployment.infrastructure_model)
+            AddK8SUnitsStep(
+                client, control, jhelper, deployment.openstack_machines_model
+            )
         )
         plan2.append(
             MaasEnableK8SFeatures(
@@ -572,11 +582,11 @@ def deploy(
                 jhelper,
                 str(deployment.network_mapping[Networks.PUBLIC.value]),
                 deployment.public_api_label,
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
             )
         )
         plan2.append(
-            StoreK8SKubeConfigStep(client, jhelper, deployment.infrastructure_model)
+            StoreK8SKubeConfigStep(client, jhelper, deployment.openstack_machines_model)
         )
         plan2.append(AddK8SCloudStep(client, jhelper))
     else:
@@ -588,18 +598,20 @@ def deploy(
                 tfhelper_k8s,
                 jhelper,
                 manifest,
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
                 preseed,
                 accept_defaults,
             )
         )
         plan2.append(
             AddMicrok8sUnitsStep(
-                client, control, jhelper, deployment.infrastructure_model
+                client, control, jhelper, deployment.openstack_machines_model
             )
         )
         plan2.append(
-            StoreMicrok8sConfigStep(client, jhelper, deployment.infrastructure_model)
+            StoreMicrok8sConfigStep(
+                client, jhelper, deployment.openstack_machines_model
+            )
         )
         plan2.append(AddMicrok8sCloudStep(client, jhelper))
 
@@ -611,11 +623,13 @@ def deploy(
             tfhelper_microceph,
             jhelper,
             manifest,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
         )
     )
     plan2.append(
-        AddMicrocephUnitsStep(client, storage, jhelper, deployment.infrastructure_model)
+        AddMicrocephUnitsStep(
+            client, storage, jhelper, deployment.openstack_machines_model
+        )
     )
     plan2.append(
         MaasConfigureMicrocephOSDStep(
@@ -623,7 +637,7 @@ def deploy(
             maas_client,
             jhelper,
             storage,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
         )
     )
     plan2.append(TerraformInitStep(tfhelper_openstack_deploy))
@@ -636,7 +650,7 @@ def deploy(
             topology,
             # maas deployment always deploys multiple databases
             "large",
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
             proxy_settings=proxy_settings,
         )
     )
@@ -650,7 +664,7 @@ def deploy(
             tfhelper_microceph,
             jhelper,
             manifest,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
             refresh=True,
         )
     )
@@ -665,12 +679,12 @@ def deploy(
             tfhelper_openstack_deploy,
             jhelper,
             manifest,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
         )
     )
     plan2.append(
         AddHypervisorUnitsStep(
-            client, compute, jhelper, deployment.infrastructure_model
+            client, compute, jhelper, deployment.openstack_machines_model
         )
     )
     plan2.append(SetBootstrapped(client))
@@ -763,14 +777,14 @@ def configure_cmd(
             client,
             jhelper,
             ext_network=answer_file,
-            model=deployment.infrastructure_model,
+            model=deployment.openstack_machines_model,
         ),
         MaasSetHypervisorUnitsOptionsStep(
             client,
             maas_client,
             compute,
             jhelper,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
             preseed,
         ),
     ]

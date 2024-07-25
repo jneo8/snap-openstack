@@ -95,7 +95,7 @@ def _update_proxy(proxy: dict, deployment: Deployment):
             deployment.get_tfhelper("sunbeam-machine-plan"),
             jhelper,
             manifest,
-            deployment.infrastructure_model,
+            deployment.openstack_machines_model,
             refresh=True,
             proxy_settings=proxy_settings,
         )
@@ -108,7 +108,7 @@ def _update_proxy(proxy: dict, deployment: Deployment):
     if deployment.type == MAAS_TYPE:
         plan.append(
             UpdateJujuModelConfigStep(
-                jhelper, deployment.infrastructure_model, model_config
+                jhelper, deployment.openstack_machines_model, model_config
             )
         )
     else:

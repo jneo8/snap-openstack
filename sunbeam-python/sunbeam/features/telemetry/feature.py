@@ -107,7 +107,7 @@ class TelemetryFeature(OpenStackControlPlaneFeature):
                     tfhelper_hypervisor,
                     jhelper,
                     self.manifest,
-                    self.deployment.infrastructure_model,
+                    self.deployment.openstack_machines_model,
                 ),
             ]
         )
@@ -128,7 +128,7 @@ class TelemetryFeature(OpenStackControlPlaneFeature):
                 tfhelper_hypervisor,
                 jhelper,
                 self.manifest,
-                self.deployment.infrastructure_model,
+                self.deployment.openstack_machines_model,
             ),
         ]
 

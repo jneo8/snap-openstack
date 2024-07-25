@@ -39,6 +39,7 @@ class RoleTags(enum.Enum):
     COMPUTE = "compute"
     STORAGE = "storage"
     JUJU_CONTROLLER = "juju-controller"
+    INFRA = "infra"
 
     @classmethod
     def values(cls) -> list[str]:
@@ -67,6 +68,9 @@ ROLE_NETWORK_MAPPING = {
         Networks.STORAGE_CLUSTER,
     ],
     RoleTags.JUJU_CONTROLLER: [
+        Networks.MANAGEMENT,
+    ],
+    RoleTags.INFRA: [
         Networks.MANAGEMENT,
     ],
 }
@@ -138,9 +142,14 @@ class MaasDeployment(Deployment):
         return AddMaasDeployment
 
     @property
-    def infrastructure_model(self) -> str:
-        """Return the infrastructure model name."""
+    def openstack_machines_model(self) -> str:
+        """Return the openstack machines model name."""
         return "openstack-machines"
+
+    @property
+    def infra_model(self) -> str:
+        """Return the openstack infra model name."""
+        return "openstack-infra"
 
     def get_client(self) -> Client:
         """Return a client for the deployment."""

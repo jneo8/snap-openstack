@@ -80,7 +80,7 @@ def format_status(
 ) -> list[rich.console.RenderableType]:
     """Return a list renderables for the status.
 
-    Mandatory columns are always displayed on the infrastructure model, even if no
+    Mandatory columns are always displayed on the openstack machines model, even if no
     member of the cluster has that role.
 
     Status format is:
@@ -101,7 +101,7 @@ def format_status(
             column_set: set[str] = set()
             for status_name in model_status.values():
                 column_set.update(status_name.get("status", {}).keys())
-            if model == deployment.infrastructure_model:
+            if model == deployment.openstack_machines_model:
                 column_set.update(mandatory_columns)
             columns: list[str] = sorted(column_set, key=functools.cmp_to_key(_cmp))
             for column in columns:

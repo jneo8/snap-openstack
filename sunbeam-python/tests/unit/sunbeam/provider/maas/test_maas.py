@@ -38,6 +38,7 @@ from sunbeam.provider.maas.steps import (
     MaasAddMachinesToClusterdStep,
     MaasBootstrapJujuStep,
     MaasConfigureMicrocephOSDStep,
+    MaasDeployInfraMachinesStep,
     MaasDeployK8SApplicationStep,
     MaasDeployMachinesStep,
     MaasScaleJujuStep,
@@ -841,6 +842,13 @@ class TestMaasDeployMachinesStep:
         result = maas_deploy_machines_step.is_skip()
         assert result.result_type == ResultType.SKIPPED
 
+    def test_is_skip_with_infra_nodes(self, maas_deploy_machines_step):
+        maas_deploy_machines_step.client.cluster.list_nodes.return_value = [
+            {"name": "test_node", "machineid": 1, "role": ["infra"]}
+        ]
+        result = maas_deploy_machines_step.is_skip()
+        assert result.result_type == ResultType.SKIPPED
+
     def test_is_skip_with_existing_machine_id(self, maas_deploy_machines_step):
         maas_deploy_machines_step.client.cluster.list_nodes.return_value = [
             {"name": "test_node", "machineid": 1}
@@ -882,6 +890,73 @@ class TestMaasDeployMachinesStep:
         result = maas_deploy_machines_step.run()
         assert result.result_type == ResultType.COMPLETED
         assert maas_deploy_machines_step.client.cluster.update_node_info.call_count == 4
+        assert (
+            maas_deploy_machines_step.jhelper.wait_all_machines_deployed.call_count == 1
+        )
+
+
+class TestMaasDeployInfraMachinesStep:
+    @pytest.fixture
+    def maas_deploy_machines_step(self):
+        maas_client = Mock()
+        jhelper = AsyncMock()
+        model = "test_model"
+        return MaasDeployInfraMachinesStep(maas_client, jhelper, model)
+
+    def test_is_skip(self, mocker, maas_deploy_machines_step):
+        mocker.patch(
+            "sunbeam.provider.maas.client.list_machines",
+            return_value=[
+                {
+                    "hostname": "test_node1",
+                    "system_id": "1st",
+                    "roles": [RoleTags.INFRA.value],
+                }
+            ],
+        )
+        maas_deploy_machines_step.jhelper.get_machines.return_value = {}
+        result = maas_deploy_machines_step.is_skip()
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_is_skip_no_infra_nodes(self, mocker, maas_deploy_machines_step):
+        mocker.patch("sunbeam.provider.maas.client.list_machines", return_value=[])
+        maas_deploy_machines_step.jhelper.get_machines.return_value = {}
+        result = maas_deploy_machines_step.is_skip()
+        assert result.result_type == ResultType.FAILED
+
+    def test_is_skip_all_infra_nodes_deployed(self, mocker, maas_deploy_machines_step):
+        mocker.patch(
+            "sunbeam.provider.maas.client.list_machines",
+            return_value=[
+                {
+                    "hostname": "test_node1",
+                    "system_id": "1st",
+                    "roles": [RoleTags.INFRA.value],
+                }
+            ],
+        )
+        maas_deploy_machines_step.jhelper.get_machines.return_value = {
+            "1": Mock(hostname="test_node1")
+        }
+        result = maas_deploy_machines_step.is_skip()
+        assert result.result_type == ResultType.SKIPPED
+
+    def test_run(self, mocker, maas_deploy_machines_step):
+        maas_deploy_machines_step.machines_to_deploy = [
+            {
+                "hostname": "test_node1",
+                "system_id": "1st",
+                "roles": [RoleTags.INFRA.value],
+            },
+            {
+                "hostname": "test_node2",
+                "system_id": "2nd",
+                "roles": [RoleTags.INFRA.value],
+            },
+        ]
+        result = maas_deploy_machines_step.run()
+        assert result.result_type == ResultType.COMPLETED
+        assert maas_deploy_machines_step.jhelper.add_machine.call_count == 2
         assert (
             maas_deploy_machines_step.jhelper.wait_all_machines_deployed.call_count == 1
         )

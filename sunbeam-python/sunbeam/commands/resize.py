@@ -62,13 +62,13 @@ def resize(ctx: click.Context, topology: str, force: bool = False) -> None:
                     microceph_tfhelper,
                     jhelper,
                     manifest,
-                    deployment.infrastructure_model,
+                    deployment.openstack_machines_model,
                     refresh=True,
                 ),
                 SetCephMgrPoolSizeStep(
                     client,
                     jhelper,
-                    deployment.infrastructure_model,
+                    deployment.openstack_machines_model,
                 ),
             ]
         )
@@ -83,7 +83,7 @@ def resize(ctx: click.Context, topology: str, force: bool = False) -> None:
                 manifest,
                 topology,
                 "auto",
-                deployment.infrastructure_model,
+                deployment.openstack_machines_model,
                 force=force,
             ),
         ]

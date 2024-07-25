@@ -193,7 +193,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
 class LocalClusterStatusStep(ClusterStatusStep):
     def models(self) -> list[str]:
         """List of models to query status from."""
-        return [self.deployment.infrastructure_model]
+        return [self.deployment.openstack_machines_model]
 
     @cache
     def _has_storage(self) -> bool:
@@ -215,7 +215,9 @@ class LocalClusterStatusStep(ClusterStatusStep):
     def _update_microcluster_status(self, status: dict, microcluster_status: dict):
         """How to update microcluster status in the status dict."""
         for member, member_status in microcluster_status.items():
-            for node_status in status[self.deployment.infrastructure_model].values():
+            for node_status in status[
+                self.deployment.openstack_machines_model
+            ].values():
                 if node_status.get("name") != member:
                     continue
                 node_status["clusterd-status"] = member_status

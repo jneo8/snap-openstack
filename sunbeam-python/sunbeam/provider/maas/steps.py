@@ -487,7 +487,9 @@ class MachineRequirementsCheck(DiagnosticsCheck):
 
     def run(self) -> DiagnosticsResult:
         """Check machine meets requirements."""
-        if [maas_deployment.RoleTags.JUJU_CONTROLLER.value] == self.machine["roles"]:
+        if [maas_deployment.RoleTags.JUJU_CONTROLLER.value] == self.machine[
+            "roles"
+        ] or [maas_deployment.RoleTags.INFRA.value] == self.machine["roles"]:
             memory_min = RAM_4_GB_IN_MB
             core_min = 2
         else:
@@ -1151,6 +1153,7 @@ class MaasSaveClusterdCredentialsStep(BaseStep):
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
         deployment = self.deployments_config.get_deployment(self.deployment_name)
+        self.model = deployment.infra_model
         if not maas_deployment.is_maas_deployment(deployment):
             return Result(ResultType.SKIPPED)
         return Result(ResultType.COMPLETED)
@@ -1160,10 +1163,11 @@ class MaasSaveClusterdCredentialsStep(BaseStep):
 
         async def _get_credentials() -> dict:
             leader_unit = await self.jhelper.get_leader_unit(
-                CLUSTERD_APPLICATION, "controller"
+                CLUSTERD_APPLICATION,
+                self.model,
             )
             result = await self.jhelper.run_action(
-                leader_unit, "controller", "get-credentials"
+                leader_unit, self.model, "get-credentials"
             )
             if result.get("return-code", 0) > 1:
                 raise ValueError("Failed to retrieve credentials")
@@ -1184,7 +1188,7 @@ class MaasSaveClusterdCredentialsStep(BaseStep):
         if private_key_secret := credentials.get("private-key-secret"):
             try:
                 secret = run_sync(
-                    self.jhelper.get_secret("controller", private_key_secret)
+                    self.jhelper.get_secret(self.model, private_key_secret)
                 )
             except JujuSecretNotFound as e:
                 return Result(ResultType.FAILED, str(e))
@@ -1239,6 +1243,7 @@ class MaasAddMachinesToClusterdStep(BaseStep):
             if set(machine["roles"]).intersection(
                 {
                     maas_deployment.RoleTags.JUJU_CONTROLLER.value,
+                    maas_deployment.RoleTags.INFRA.value,
                     maas_deployment.RoleTags.CONTROL.value,
                     maas_deployment.RoleTags.COMPUTE.value,
                     maas_deployment.RoleTags.STORAGE.value,
@@ -1297,7 +1302,10 @@ class MaasDeployMachinesStep(BaseStep):
         for node in clusterd_nodes:
             node_machine_id = node["machineid"]
             role = node.get("role")
-            if role and maas_deployment.RoleTags.JUJU_CONTROLLER.value in role:
+            if role and (
+                maas_deployment.RoleTags.JUJU_CONTROLLER.value in role
+                or maas_deployment.RoleTags.INFRA.value in role
+            ):
                 # Juju Controllers should not be deployed by this step
                 nodes_to_deploy.remove(node)
                 continue
@@ -1355,6 +1363,65 @@ class MaasDeployMachinesStep(BaseStep):
                         node["name"], machineid=int(juju_machine.id)
                     )
                     break
+        try:
+            run_sync(self.jhelper.wait_all_machines_deployed(self.model))
+        except TimeoutException:
+            LOG.debug("Timeout waiting for machines to deploy", exc_info=True)
+            return Result(ResultType.FAILED, "Timeout waiting for machines to deploy.")
+        return Result(ResultType.COMPLETED)
+
+
+class MaasDeployInfraMachinesStep(BaseStep):
+    """Deploy infra machines."""
+
+    def __init__(
+        self, maas_client: maas_client.MaasClient, jhelper: JujuHelper, model: str
+    ):
+        super().__init__("Deploy Infra machines", "Deploying infra machines")
+        self.maas_client = maas_client
+        self.jhelper = jhelper
+        self.model = model
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not."""
+        maas_machines = maas_client.list_machines(self.maas_client)
+        LOG.debug(f"Machines fetched: {maas_machines}")
+        filtered_machines = []
+        for machine in maas_machines:
+            if set(machine["roles"]).intersection(
+                {
+                    maas_deployment.RoleTags.INFRA.value,
+                }
+            ):
+                filtered_machines.append(machine)
+        LOG.debug(f"Machines containing infra role: {filtered_machines}")
+        if filtered_machines is None or len(filtered_machines) == 0:
+            return Result(ResultType.FAILED, "Maas deployment has no infra machines.")
+
+        self.machines_to_deploy = filtered_machines.copy()
+        juju_machines = run_sync(self.jhelper.get_machines(self.model))
+        LOG.debug(f"Machines already deployed: {juju_machines}")
+
+        for filtered_machine in filtered_machines:
+            for id, deployed_machine in juju_machines.items():
+                if filtered_machine["hostname"] == deployed_machine.hostname:
+                    self.machines_to_deploy.remove(filtered_machine)
+
+        if not self.machines_to_deploy:
+            return Result(ResultType.SKIPPED)
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None = None) -> Result:
+        """Deploy machines in Juju."""
+        for machine in self.machines_to_deploy:
+            self.update_status(status, f"deploying {machine['hostname']}")
+            LOG.debug(f"Adding machine {machine['hostname']} to model {self.model}")
+            run_sync(
+                self.jhelper.add_machine(
+                    "system-id=" + machine["system_id"], self.model
+                )
+            )
+
         try:
             run_sync(self.jhelper.wait_all_machines_deployed(self.model))
         except TimeoutException:
@@ -2057,7 +2124,11 @@ class MaasClusterStatusStep(ClusterStatusStep):
 
     def models(self) -> list[str]:
         """List of models to query status from."""
-        return [self._controller_model(), self.deployment.infrastructure_model]
+        return [
+            self._controller_model(),
+            self.deployment.infra_model,
+            self.deployment.openstack_machines_model,
+        ]
 
     def _update_microcluster_status(self, status: dict, microcluster_status: dict):
         """How to update microcluster status in the status dict.
@@ -2066,7 +2137,7 @@ class MaasClusterStatusStep(ClusterStatusStep):
         to the machine to display the correct status.
         """
         for member, member_status in microcluster_status.items():
-            for node_status in status[self._controller_model()].values():
+            for node_status in status[self.deployment.infra_model].values():
                 clusterd_status = node_status.get("applications", {}).get(
                     clusterd.APPLICATION
                 )

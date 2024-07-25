@@ -49,14 +49,6 @@ class DeployCertificatesProviderApplicationStep(BaseStep):
         self.model = model
         self.app = APPLICATION
 
-    def _get_controller_machines(self) -> list[str]:
-        """Get controller machines."""
-        controller = run_sync(self.jhelper.get_application("controller", self.model))
-        machines = []
-        for unit in controller.units:
-            machines.append(str(unit.machine.id))
-        return sorted(machines)
-
     def is_skip(self, status: Status | None = None) -> Result:
         """Check whether or not to deploy tls operator."""
         try:
@@ -66,12 +58,13 @@ class DeployCertificatesProviderApplicationStep(BaseStep):
         return Result(ResultType.SKIPPED)
 
     def run(self, status: Status | None = None) -> Result:
-        """Deploy sunbeam clusterd to controller machines."""
-        self.update_status(status, "fetching controller application")
-        machines = self._get_controller_machines()
+        """Deploy sunbeam clusterd to infra machines."""
+        self.update_status(status, "fetching infra machines")
+        clusterd_machines = run_sync(self.jhelper.get_machines(self.model))
+        machines = list(clusterd_machines.keys())
 
         if len(machines) == 0:
-            return Result(ResultType.FAILED, "No controller machines found")
+            return Result(ResultType.FAILED, f"No machines found in {self.model} model")
 
         # Deploy on first controller machine
         machines = machines[:1]

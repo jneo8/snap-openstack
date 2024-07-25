@@ -265,7 +265,7 @@ class DeployGrafanaAgentStep(BaseStep, JujuStepHelper):
         self.jhelper = jhelper
         self.manifest = self.feature.manifest
         self.client = self.feature.deployment.get_client()
-        self.model = self.feature.deployment.infrastructure_model
+        self.model = self.feature.deployment.openstack_machines_model
 
     def run(self, status: Optional[Status] = None) -> Result:
         """Execute configuration using terraform."""
@@ -361,7 +361,7 @@ class RemoveGrafanaAgentStep(BaseStep, JujuStepHelper):
         self.tfhelper = tfhelper
         self.jhelper = jhelper
         self.manifest = self.feature.manifest
-        self.model = self.feature.deployment.infrastructure_model
+        self.model = self.feature.deployment.openstack_machines_model
 
     def run(self, status: Optional[Status] = None) -> Result:
         """Execute configuration using terraform."""
@@ -602,7 +602,7 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
             TerraformInitStep(tfhelper_grafana_agent),
             RemoveGrafanaAgentStep(self, tfhelper_grafana_agent, jhelper),
             RemoveSaasApplicationsStep(
-                jhelper, self.deployment.infrastructure_model, OBSERVABILITY_MODEL
+                jhelper, self.deployment.openstack_machines_model, OBSERVABILITY_MODEL
             ),
         ]
 
