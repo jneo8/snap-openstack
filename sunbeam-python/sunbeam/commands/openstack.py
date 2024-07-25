@@ -17,9 +17,10 @@ import asyncio
 import logging
 from typing import Optional
 
+from lightkube.config.kubeconfig import KubeConfig
 from lightkube.core import exceptions
 from lightkube.core.client import Client as KubeClient
-from lightkube.core.client import KubeConfig
+from lightkube.core.exceptions import ApiError
 from lightkube.resources.core_v1 import Service
 from rich.console import Console
 from rich.status import Status
@@ -285,6 +286,18 @@ class PatchLoadBalancerServicesStep(BaseStep):
         self.client = client
         self.lb_annotation = K8SHelper.get_loadbalancer_annotation()
 
+    def _get_service(self, service_name: str, find_lb: bool = True) -> Service:
+        """Look up a service by name, optionally looking for a LoadBalancer service."""
+        search_service = service_name
+        if find_lb:
+            search_service += "-lb"
+        try:
+            return self.kube.get(Service, search_service)
+        except ApiError as e:
+            if e.status.code == 404 and search_service.endswith("-lb"):
+                return self._get_service(service_name, find_lb=False)
+            raise e
+
     def is_skip(self, status: Optional[Status] = None) -> Result:
         """Determines if the step should be skipped or not.
 
@@ -305,9 +318,19 @@ class PatchLoadBalancerServicesStep(BaseStep):
             return Result(ResultType.FAILED, str(e))
 
         for service_name in self.SERVICES:
-            service = self.kube.get(Service, service_name)
+            try:
+                service = self._get_service(service_name, find_lb=True)
+            except ApiError as e:
+                return Result(ResultType.FAILED, str(e))
+            if not service.metadata:
+                return Result(
+                    ResultType.FAILED, f"k8s service {service_name!r} has no metadata"
+                )
             service_annotations = service.metadata.annotations
-            if self.lb_annotation not in service_annotations:
+            if (
+                service_annotations is None
+                or self.lb_annotation not in service_annotations
+            ):
                 return Result(ResultType.COMPLETED)
 
         return Result(ResultType.SKIPPED)
@@ -315,9 +338,33 @@ class PatchLoadBalancerServicesStep(BaseStep):
     def run(self, status: Optional[Status] = None) -> Result:
         """Patch LoadBalancer services annotations with LB IP."""
         for service_name in self.SERVICES:
-            service = self.kube.get(Service, service_name)
+            try:
+                service = self._get_service(service_name, find_lb=True)
+            except ApiError as e:
+                return Result(ResultType.FAILED, str(e))
+            if not service.metadata:
+                return Result(
+                    ResultType.FAILED, f"k8s service {service_name!r} has no metadata"
+                )
+            service_name = str(service.metadata.name)
             service_annotations = service.metadata.annotations
+            if service_annotations is None:
+                service_annotations = {}
             if self.lb_annotation not in service_annotations:
+                if not service.status:
+                    return Result(
+                        ResultType.FAILED, f"k8s service {service_name!r} has no status"
+                    )
+                if not service.status.loadBalancer:
+                    return Result(
+                        ResultType.FAILED,
+                        f"k8s service {service_name!r} has no loadBalancer status",
+                    )
+                if not service.status.loadBalancer.ingress:
+                    return Result(
+                        ResultType.FAILED,
+                        f"k8s service {service_name!r} has no loadBalancer ingress",
+                    )
                 loadbalancer_ip = service.status.loadBalancer.ingress[0].ip
                 service_annotations[self.lb_annotation] = loadbalancer_ip
                 LOG.debug(f"Patching {service_name!r} to use IP {loadbalancer_ip!r}")
