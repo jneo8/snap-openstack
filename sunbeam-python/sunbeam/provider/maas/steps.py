@@ -851,6 +851,13 @@ class DeploymentTopologyCheck(DiagnosticsCheck):
         )
         checks.append(
             DeploymentRolesCheck(
+                self.machines,
+                "juju controllers",
+                maas_deployment.RoleTags.INFRA.value,
+            )
+        )
+        checks.append(
+            DeploymentRolesCheck(
                 self.machines, "control nodes", maas_deployment.RoleTags.CONTROL.value
             )
         )
