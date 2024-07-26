@@ -28,7 +28,7 @@ from rich.console import Console
 from rich.table import Table
 from snaphelpers import Snap
 
-from sunbeam.commands import cluster_status, utils
+from sunbeam.commands import cluster_status
 from sunbeam.commands import resize as resize_cmds
 from sunbeam.commands.bootstrap_state import SetBootstrapped
 from sunbeam.commands.certificates import APPLICATION as CERTIFICATES_APPLICATION
@@ -108,7 +108,6 @@ from sunbeam.jobs.deployments import DeploymentsConfig, deployment_path
 from sunbeam.jobs.juju import (
     CONTROLLER_APPLICATION,
     CONTROLLER_MODEL,
-    JujuAccount,
     JujuHelper,
     ModelNotFoundException,
     run_sync,
@@ -134,6 +133,7 @@ from sunbeam.provider.maas.steps import (
     DeploymentMachinesCheck,
     DeploymentNetworkingCheck,
     DeploymentTopologyCheck,
+    JujuControllerCheck,
     MaasAddMachinesToClusterdStep,
     MaasBootstrapJujuStep,
     MaasClusterStatusStep,
@@ -242,9 +242,17 @@ class MaasProvider(ProviderBase):
     help="Manifest file.",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
+@click.option(
+    "-c",
+    "--controller",
+    "juju_controller",
+    type=str,
+    help="Juju controller name",
+)
 @click.pass_context
 def bootstrap(
     ctx: click.Context,
+    juju_controller: str | None = None,
     manifest_path: Path | None = None,
     accept_defaults: bool = False,
 ) -> None:
@@ -276,28 +284,37 @@ def bootstrap(
 
     preflight_checks = []
     preflight_checks.append(NetworkMappingCompleteCheck(deployment))
+    preflight_checks.append(JujuControllerCheck(deployment, juju_controller))
     run_preflight_checks(preflight_checks, console)
 
+    data_location = Snap().paths.user_data
     cloud_definition = JujuHelper.maas_cloud(deployment.name, deployment.url)
     credentials_definition = JujuHelper.maas_credential(
         cloud=deployment.name,
         credential=deployment.name,
         maas_apikey=deployment.token,
     )
-    if deployment.juju_account is None:
-        password = utils.random_string(32)
-        deployment.juju_account = JujuAccount(user="admin", password=password)
-        deployments.update_deployment(deployment)
-        deployments.write()
 
     # Handle proxy settings
     plan = []
+    plan.append(
+        MaasSaveControllerStep(
+            juju_controller,
+            deployment.name,
+            deployments,
+            data_location,
+            bool(juju_controller),
+        )
+    )
     plan.append(
         PromptForProxyStep(
             deployment, accept_defaults=accept_defaults, deployment_preseed=preseed
         )
     )
     plan_results = run_plan(plan, console)
+
+    # Reload deployment to get credentials
+    deployment = deployments.get_deployment(deployment.name)
     proxy_from_user = get_step_message(plan_results, PromptForProxyStep)
     if (
         isinstance(proxy_from_user, dict)
@@ -313,40 +330,50 @@ def bootstrap(
         proxy_settings = {}
 
     plan = []
-    plan.append(AddCloudJujuStep(deployment.name, cloud_definition))
+    plan.append(AddCloudJujuStep(deployment.name, cloud_definition, juju_controller))
     plan.append(
         AddCredentialsJujuStep(
             cloud=deployment.name,
             credentials=deployment.name,
             definition=credentials_definition,
+            controller=juju_controller,
         )
     )
-    # Workaround for bug https://bugs.launchpad.net/juju/+bug/2044481
-    # Remove the below step and dont pass controller charm as bootstrap
-    # arguments once the above bug is fixed
-    if proxy_settings:
-        plan.append(DownloadJujuControllerCharmStep(proxy_settings))
-    plan.append(
-        MaasBootstrapJujuStep(
-            maas_client,
-            deployment.name,
-            cloud_definition["clouds"][deployment.name]["type"],
-            deployment.controller,
-            deployment.juju_account.password,
-            manifest.software.juju.bootstrap_args,
-            proxy_settings=proxy_settings,
+
+    if not juju_controller:
+        # Workaround for bug https://bugs.launchpad.net/juju/+bug/2044481
+        # Remove the below step and dont pass controller charm as bootstrap
+        # arguments once the above bug is fixed
+        if proxy_settings:
+            plan.append(DownloadJujuControllerCharmStep(proxy_settings))
+        plan.append(
+            MaasBootstrapJujuStep(
+                maas_client,
+                deployment.name,
+                cloud_definition["clouds"][deployment.name]["type"],
+                deployment.controller,
+                deployment.juju_account.password,
+                manifest.software.juju.bootstrap_args,
+                proxy_settings=proxy_settings,
+            )
         )
-    )
-    plan.append(
-        MaasScaleJujuStep(
-            maas_client,
-            deployment.controller,
-            manifest.software.juju.scale_args,
+        plan.append(
+            MaasScaleJujuStep(
+                maas_client,
+                deployment.controller,
+                manifest.software.juju.scale_args,
+            )
         )
-    )
-    plan.append(
-        MaasSaveControllerStep(deployment.controller, deployment.name, deployments)
-    )
+        plan.append(
+            MaasSaveControllerStep(
+                deployment.controller,
+                deployment.name,
+                deployments,
+                data_location,
+                False,
+            )
+        )
+
     run_plan(plan, console)
 
     # Reload deployment to get credentials
@@ -361,7 +388,15 @@ def bootstrap(
 
     jhelper = JujuHelper(deployment.get_connected_controller())
     plan2 = []
-    plan2.append(AddJujuModelStep(jhelper, deployment.infra_model, proxy_settings))
+    plan2.append(
+        AddJujuModelStep(
+            jhelper,
+            deployment.infra_model,
+            deployment.name,
+            deployment.name,
+            proxy_settings,
+        )
+    )
     plan2.append(
         MaasDeployInfraMachinesStep(maas_client, jhelper, deployment.infra_model)
     )
@@ -396,11 +431,13 @@ def bootstrap(
     plan3 = []
     plan3.append(AddManifestStep(client, manifest_path))
     plan3.append(MaasAddMachinesToClusterdStep(client, maas_client))
-    plan3.append(
-        UpdateJujuMachineIDStep(
-            client, jhelper, CONTROLLER_MODEL.split("/")[-1], CONTROLLER_APPLICATION
+    if not juju_controller:
+        plan3.append(
+            UpdateJujuMachineIDStep(
+                client, jhelper, CONTROLLER_MODEL.split("/")[-1], CONTROLLER_APPLICATION
+            )
         )
-    )
+
     plan3.append(
         UpdateJujuMachineIDStep(
             client, jhelper, deployment.infra_model, CLUSTERD_APPLICATION
@@ -506,6 +543,7 @@ def deploy(
         AddJujuModelStep(
             jhelper,
             deployment.openstack_machines_model,
+            deployment.name,
             deployment.name,
             proxy_settings,
         )

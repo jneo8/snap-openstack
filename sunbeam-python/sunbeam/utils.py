@@ -20,7 +20,9 @@ import ipaddress
 import json
 import logging
 import re
+import secrets
 import socket
+import string
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -354,3 +356,9 @@ def get_local_cidr_matching_token(token: str) -> str:
         except ValueError:
             pass
     raise ValueError("No local networks found matching join token addresses.")
+
+
+def random_string(length: int) -> str:
+    """Utility function to generate secure random string."""
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for i in range(length))

@@ -19,6 +19,7 @@ import click
 from rich.console import Console
 from snaphelpers import Snap
 
+from sunbeam.clusterd.client import Client
 from sunbeam.commands.juju import RegisterRemoteJujuUserStep, UnregisterJujuController
 from sunbeam.jobs.common import run_plan
 from sunbeam.jobs.deployment import Deployment
@@ -40,7 +41,10 @@ console = Console()
 def register_controller(ctx: click.Context, name: str, token: str, force: bool) -> None:
     """Register existing Juju controller."""
     deployment: Deployment = ctx.obj
-    client = deployment.get_client()
+    try:
+        client = deployment.get_client()
+    except ValueError:
+        client = Client.from_socket()
     data_location = Snap().paths.user_data
 
     plan = [

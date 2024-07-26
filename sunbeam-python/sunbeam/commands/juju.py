@@ -60,6 +60,7 @@ from sunbeam.jobs.juju import (
     TimeoutException,
     run_sync,
 )
+from sunbeam.utils import random_string
 from sunbeam.versions import JUJU_BASE, JUJU_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -203,7 +204,7 @@ class JujuStepHelper:
 
         return True
 
-    def add_credential(self, cloud: str, credential: dict):
+    def add_credential(self, cloud: str, credential: dict, controller: str | None):
         """Add credential to client credentials."""
         with tempfile.NamedTemporaryFile() as temp:
             temp.write(yaml.dump(credential).encode("utf-8"))
@@ -216,6 +217,8 @@ class JujuStepHelper:
                 temp.name,
                 "--client",
             ]
+            if controller:
+                cmd.extend(["--controller", controller])
             LOG.debug(f'Running command {" ".join(cmd)}')
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
@@ -380,12 +383,15 @@ class AddCloudJujuStep(BaseStep, JujuStepHelper):
 class AddCredentialsJujuStep(BaseStep, JujuStepHelper):
     """Add credentials definition to juju client."""
 
-    def __init__(self, cloud: str, credentials: str, definition: dict):
+    def __init__(
+        self, cloud: str, credentials: str, definition: dict, controller: str | None
+    ):
         super().__init__("Add Credentials", "Adding credentials to Juju client")
 
         self.cloud = cloud
         self.credentials_name = credentials
         self.definition = definition
+        self.controller = controller
 
     def is_skip(self, status: Optional["Status"] = None) -> Result:
         """Determines if the step should be skipped or not.
@@ -393,15 +399,21 @@ class AddCredentialsJujuStep(BaseStep, JujuStepHelper):
         :return: ResultType.SKIPPED if the Step should be skipped,
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
+        local = not bool(self.controller)
         try:
-            credentials = self.get_credentials(self.cloud, local=True)
+            credentials = self.get_credentials(self.cloud, local=local)
         except subprocess.CalledProcessError as e:
+            # credentials not found
+            if "not found" in e.stderr:
+                return Result(ResultType.COMPLETED)
+
             LOG.exception(
                 "Error determining whether to skip the bootstrap "
                 "process. Defaulting to not skip."
             )
             LOG.warning(e.stderr)
             return Result(ResultType.FAILED, str(e))
+
         client_creds = credentials.get("client-credentials", {})
         cloud_credentials = client_creds.get(self.cloud, {}).get(
             "cloud-credentials", {}
@@ -418,7 +430,7 @@ class AddCredentialsJujuStep(BaseStep, JujuStepHelper):
         :return:
         """
         try:
-            self.add_credential(self.cloud, self.definition)
+            self.add_credential(self.cloud, self.definition, self.controller)
         except subprocess.CalledProcessError as e:
             LOG.exception("Error adding credentials to Juju")
             LOG.warning(e.stderr)
@@ -1536,12 +1548,14 @@ class AddJujuModelStep(BaseStep):
         jhelper: JujuHelper,
         model: str,
         cloud: str,
+        credential: str | None = None,
         proxy_settings: dict | None = None,
     ):
         super().__init__(f"Add model {model}", f"Adding model {model}")
         self.jhelper = jhelper
         self.model = model
         self.cloud = cloud
+        self.credential = credential
         self.proxy_settings = proxy_settings or {}
 
     def is_skip(self, status: Optional["Status"] = None) -> Result:
@@ -1559,7 +1573,10 @@ class AddJujuModelStep(BaseStep):
             model_config = convert_proxy_to_model_configs(self.proxy_settings)
             run_sync(
                 self.jhelper.add_model(
-                    self.model, cloud=self.cloud, config=model_config
+                    self.model,
+                    cloud=self.cloud,
+                    credential=self.credential,
+                    config=model_config,
                 )
             )
             return Result(ResultType.COMPLETED)
@@ -1973,7 +1990,7 @@ class SaveControllerStep(BaseStep, JujuStepHelper):
     def __init__(
         self,
         deployment: Deployment,
-        controller: str,
+        controller: str | None,
         data_location: Path,
         is_external: bool = False,
     ):
@@ -2001,26 +2018,34 @@ class SaveControllerStep(BaseStep, JujuStepHelper):
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
-        if self.deployment.juju_controller is None:
+        if self.controller is None:
+            # juju controller not yet bootstrapped and is not pointed to external
             return Result(ResultType.COMPLETED)
 
-        controller = self._get_controller(self.controller)
-        if controller is None:
+        self.controller_details = self._get_controller(self.controller)
+        if self.controller_details is None:
             return Result(ResultType.FAILED, f"Controller {self.controller} not found")
 
-        if controller == self.deployment.juju_controller:
+        if self.controller_details == self.deployment.juju_controller:
             return Result(ResultType.SKIPPED)
 
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Status | None) -> Result:
         """Save controller to deployment information."""
-        controller = self._get_controller(self.controller)
-        if controller is None:
-            return Result(ResultType.FAILED, f"Controller {self.controller} not found")
+        if self.controller:
+            # details can be filled only when controller exists
+            self.deployment.juju_controller = self.controller_details
 
-        self.deployment.juju_controller = controller
-        self.deployment.juju_account = JujuAccount.load(
-            self.data_location, f"{self.controller}.yaml"
-        )
+        if self.deployment.juju_account is None:
+            if self.is_external:
+                self.deployment.juju_account = JujuAccount.load(
+                    self.data_location, f"{self.controller}.yaml"
+                )
+            else:
+                password = random_string(32)
+                self.deployment.juju_account = JujuAccount(
+                    user="admin", password=password
+                )
+
         return Result(ResultType.COMPLETED)

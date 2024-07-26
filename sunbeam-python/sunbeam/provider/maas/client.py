@@ -239,6 +239,18 @@ def list_machines_by_zone(client: MaasClient) -> dict[str, list[dict]]:
     return _group_machines_by_zone(machines_raw)
 
 
+def list_machines_by_matching_roles(client: MaasClient, roles: list[str]) -> list:
+    """List machines with given roles."""
+    filtered_machines = []
+    machines = list_machines(client)
+    for machine in machines:
+        machine_roles = set(machine["roles"]).intersection(RoleTags.values())
+        if machine_roles.intersection(roles):
+            filtered_machines.append(machine)
+
+    return filtered_machines
+
+
 def list_spaces(client: MaasClient) -> list[dict]:
     """List spaces in deployment, return consumable list of dicts."""
     spaces_raw = client.list_spaces()

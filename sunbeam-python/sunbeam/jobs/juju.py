@@ -264,12 +264,17 @@ class JujuHelper:
             raise e
 
     async def add_model(
-        self, model: str, cloud: str | None = None, config: dict | None = None
+        self,
+        model: str,
+        cloud: str | None = None,
+        credential: str | None = None,
+        config: dict | None = None,
     ) -> Model:
         """Add a model.
 
         :model: Name of the model
         :cloud: Name of the cloud
+        :credential: Name of the credential
         :config: model configuration
         """
         # TODO(gboutry): workaround until we manage public ssh keys properly
@@ -277,7 +282,7 @@ class JujuHelper:
         os.environ["HOME"] = os.environ["SNAP_REAL_HOME"]
         try:
             return await self.controller.add_model(
-                model, cloud_name=cloud, config=config
+                model, cloud_name=cloud, credential_name=credential, config=config
             )
         finally:
             os.environ["HOME"] = old_home

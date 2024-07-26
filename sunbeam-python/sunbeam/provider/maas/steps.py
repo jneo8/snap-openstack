@@ -21,6 +21,7 @@ import ipaddress
 import logging
 import ssl
 import textwrap
+from pathlib import Path
 
 from maas.client import bones
 from rich.console import Console
@@ -845,13 +846,6 @@ class DeploymentTopologyCheck(DiagnosticsCheck):
             DeploymentRolesCheck(
                 self.machines,
                 "juju controllers",
-                maas_deployment.RoleTags.JUJU_CONTROLLER.value,
-            )
-        )
-        checks.append(
-            DeploymentRolesCheck(
-                self.machines,
-                "juju controllers",
                 maas_deployment.RoleTags.INFRA.value,
             )
         )
@@ -928,6 +922,42 @@ class NetworkMappingCompleteCheck(Check):
             )
             return False
         return True
+
+
+class JujuControllerCheck(Check):
+    """Check for juju controller node if required."""
+
+    def __init__(self, deployment: maas_deployment.MaasDeployment, juju_controller):
+        super().__init__(
+            "Check for juju controller", "Checking if juju controller node is requred"
+        )
+        self.deployment = deployment
+        self.controller = juju_controller
+        self.maas_client = maas_client.MaasClient.from_deployment(deployment)
+
+    def run(self) -> bool:
+        """Check if juju controller is required."""
+        machines = maas_client.list_machines_by_matching_roles(
+            self.maas_client, [maas_deployment.RoleTags.JUJU_CONTROLLER.value]
+        )
+        if self.controller and machines:
+            hostnames = [m.get("hostname") for m in machines]
+            self.message = (
+                "WARNING: Machines with tag juju-controller not used in deployment: "
+                f"{hostnames}"
+            )
+            LOG.warning(self.message)
+            return False
+
+        if not self.controller and not machines:
+            self.message = (
+                "A deployment needs to have at least 3 juju controllers to be "
+                "a part of an openstack deployment. You need to add more "
+                "juju-controller to the deployment using juju-controller tag."
+            )
+            return False
+
+        return False
 
 
 class MaasBootstrapJujuStep(BootstrapJujuStep):
@@ -1087,36 +1117,24 @@ class MaasSaveControllerStep(SaveControllerStep):
         controller: str,
         deployment_name: str,
         deployments_config: DeploymentsConfig,
+        data_location: Path,
         is_external: bool = False,
     ):
         self.deployment_name = deployment_name
         self.deployments_config = deployments_config
         deployment = self.deployments_config.get_deployment(self.deployment_name)
-        super().__init__(deployment, controller, None, is_external)
+        super().__init__(deployment, controller, data_location, is_external)
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
         if not maas_deployment.is_maas_deployment(self.deployment):
             return Result(ResultType.SKIPPED)
-        if self.deployment.juju_controller is None:
-            return Result(ResultType.COMPLETED)
 
-        controller = self._get_controller(self.controller)
-        if controller is None:
-            return Result(ResultType.FAILED, f"Controller {self.controller} not found")
-
-        if controller == self.deployment.juju_controller:
-            return Result(ResultType.SKIPPED)
-
-        return Result(ResultType.COMPLETED)
+        return super().is_skip(status)
 
     def run(self, status: Status | None) -> Result:
         """Save controller to deployment information."""
-        controller = self._get_controller(self.controller)
-        if controller is None:
-            return Result(ResultType.FAILED, f"Controller {self.controller} not found")
-
-        self.deployment.juju_controller = controller
+        super().run(status)
         self.deployments_config.write()
         return Result(ResultType.COMPLETED)
 
@@ -2112,11 +2130,18 @@ class MaasClusterStatusStep(ClusterStatusStep):
 
     def models(self) -> list[str]:
         """List of models to query status from."""
-        return [
+        models = [
             self._controller_model(),
             self.deployment.infra_model,
             self.deployment.openstack_machines_model,
         ]
+        if (
+            self.deployment.juju_controller
+            and self.deployment.juju_controller.is_external
+        ):
+            models.remove(self._controller_model())
+
+        return models
 
     def _update_microcluster_status(self, status: dict, microcluster_status: dict):
         """How to update microcluster status in the status dict.
