@@ -789,7 +789,7 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
-        client: Client,
+        client: Client | None,
         name: str,
         controller: str,
         data_location: Path,
@@ -938,7 +938,6 @@ class RegisterRemoteJujuUserStep(RegisterJujuUserStep):
 
     def __init__(
         self,
-        client: Client,
         token: str,
         controller: str,
         data_location: Path,
@@ -946,7 +945,7 @@ class RegisterRemoteJujuUserStep(RegisterJujuUserStep):
     ):
         # User name not required to register a user. Pass empty string to
         # base class as user name
-        super().__init__(client, "", controller, data_location, replace)
+        super().__init__(None, "", controller, data_location, replace)
         self.registration_token = token
         self.account_file = f"{self.controller}.yaml"
 
