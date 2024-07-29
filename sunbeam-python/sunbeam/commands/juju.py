@@ -331,6 +331,17 @@ class JujuStepHelper:
         else:
             return False
 
+    def get_model_name_with_owner(self, model: str) -> str:
+        """Return model name with owner name.
+
+        :param model: Model name
+
+        Raises ModelNotFoundException if model does not exist.
+        """
+        model_with_owner = run_sync(self.jhelper.get_model_name_with_owner(model))
+
+        return model_with_owner
+
 
 class AddCloudJujuStep(BaseStep, JujuStepHelper):
     """Add cloud definition to juju client."""
@@ -700,9 +711,7 @@ class JujuGrantModelAccessStep(BaseStep, JujuStepHelper):
         :return:
         """
         try:
-            model_with_owner = run_sync(
-                self.jhelper.get_model_name_with_owner(self.model)
-            )
+            model_with_owner = self.get_model_name_with_owner(self.model)
             # Grant write access to the model
             # Without this step, the user is not able to view the model created
             # by other users.
@@ -1083,10 +1092,8 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
         try:
-            self.model_with_owner = run_sync(
-                self.jhelper.get_model_name_with_owner(self.model)
-            )
-        except Exception as e:
+            self.model_with_owner = self.get_model_name_with_owner(self.model)
+        except ModelNotFoundException as e:
             LOG.debug(str(e))
             return Result(ResultType.FAILED, "Model not found")
 

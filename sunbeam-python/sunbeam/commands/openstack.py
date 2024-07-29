@@ -137,10 +137,9 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
         """Create terraform variables related to storage."""
         tfvars = {}
         if storage_nodes:
+            model_with_owner = self.get_model_name_with_owner(self.machine_model)
             tfvars["enable-ceph"] = True
-            tfvars["ceph-offer-url"] = (
-                f"admin/{self.machine_model}.{microceph.APPLICATION}"
-            )
+            tfvars["ceph-offer-url"] = f"{model_with_owner}.{microceph.APPLICATION}"
             tfvars["ceph-osd-replication-count"] = microceph.ceph_replica_scale(
                 len(storage_nodes)
             )
