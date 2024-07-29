@@ -19,10 +19,9 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from sunbeam.clusterd.service import ConfigItemNotFoundException
-from sunbeam.commands.k8s import SERVICE_LB_ANNOTATION
 from sunbeam.commands.openstack import (
     DeployControlPlaneStep,
-    PatchLoadBalancerServicesStep,
+    OpenStackPatchLoadBalancerServicesStep,
     ReapplyOpenStackTerraformPlanStep,
     compute_ha_scale,
     compute_ingress_scale,
@@ -35,6 +34,7 @@ from sunbeam.jobs.juju import (
     JujuWaitException,
     TimeoutException,
 )
+from sunbeam.jobs.k8s import SERVICE_LB_ANNOTATION
 
 TOPOLOGY = "single"
 DATABASE = "single"
@@ -60,7 +60,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
     def __init__(self, methodName: str = "runTest") -> None:
         super().__init__(methodName)
         self.snap_mock = Mock()
-        self.snap = patch("sunbeam.commands.k8s.Snap", self.snap_mock)
+        self.snap = patch("sunbeam.jobs.k8s.Snap", self.snap_mock)
 
     def setUp(self):
         self.jhelper = AsyncMock()
@@ -278,7 +278,7 @@ class PatchLoadBalancerServicesStepTest(unittest.TestCase):
     def __init__(self, methodName: str = "runTest") -> None:
         super().__init__(methodName)
         self.read_config = patch(
-            "sunbeam.commands.openstack.read_config",
+            "sunbeam.jobs.steps.read_config",
             Mock(
                 return_value={
                     "apiVersion": "v1",
@@ -304,10 +304,11 @@ class PatchLoadBalancerServicesStepTest(unittest.TestCase):
             ),
         )
         self.snap_mock = Mock()
-        self.snap = patch("sunbeam.commands.k8s.Snap", self.snap_mock)
+        self.snap = patch("sunbeam.jobs.k8s.Snap", self.snap_mock)
 
     def setUp(self):
         self.client = Mock()
+        self.client.cluster.list_nodes_by_role.return_value = ["node-1"]
         self.read_config.start()
         self.snap.start()
 
@@ -318,7 +319,7 @@ class PatchLoadBalancerServicesStepTest(unittest.TestCase):
     def test_is_skip(self):
         self.snap_mock().config.get.return_value = "k8s"
         with patch(
-            "sunbeam.commands.openstack.KubeClient",
+            "sunbeam.jobs.steps.KubeClient",
             new=Mock(
                 return_value=Mock(
                     get=Mock(
@@ -331,38 +332,38 @@ class PatchLoadBalancerServicesStepTest(unittest.TestCase):
                 )
             ),
         ):
-            step = PatchLoadBalancerServicesStep(self.client)
+            step = OpenStackPatchLoadBalancerServicesStep(self.client)
             result = step.is_skip()
         assert result.result_type == ResultType.SKIPPED
 
     def test_is_skip_missing_annotation(self):
         self.snap_mock().config.get.return_value = "k8s"
         with patch(
-            "sunbeam.commands.openstack.KubeClient",
+            "sunbeam.jobs.steps.KubeClient",
             new=Mock(
                 return_value=Mock(
                     get=Mock(return_value=Mock(metadata=Mock(annotations={})))
                 )
             ),
         ):
-            step = PatchLoadBalancerServicesStep(self.client)
+            step = OpenStackPatchLoadBalancerServicesStep(self.client)
             result = step.is_skip()
         assert result.result_type == ResultType.COMPLETED
 
     def test_is_skip_missing_config(self):
         self.snap_mock().config.get.return_value = "k8s"
         with patch(
-            "sunbeam.commands.openstack.read_config",
+            "sunbeam.jobs.steps.read_config",
             new=Mock(side_effect=ConfigItemNotFoundException),
         ):
-            step = PatchLoadBalancerServicesStep(self.client)
+            step = OpenStackPatchLoadBalancerServicesStep(self.client)
             result = step.is_skip()
         assert result.result_type == ResultType.FAILED
 
     def test_run(self):
         self.snap_mock().config.get.return_value = "k8s"
         with patch(
-            "sunbeam.commands.openstack.KubeClient",
+            "sunbeam.jobs.steps.KubeClient",
             new=Mock(
                 return_value=Mock(
                     get=Mock(
@@ -376,7 +377,7 @@ class PatchLoadBalancerServicesStepTest(unittest.TestCase):
                 )
             ),
         ):
-            step = PatchLoadBalancerServicesStep(self.client)
+            step = OpenStackPatchLoadBalancerServicesStep(self.client)
             step.is_skip()
             result = step.run()
         assert result.result_type == ResultType.COMPLETED

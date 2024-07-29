@@ -17,11 +17,6 @@ import asyncio
 import logging
 from typing import Optional
 
-from lightkube.config.kubeconfig import KubeConfig
-from lightkube.core import exceptions
-from lightkube.core.client import Client as KubeClient
-from lightkube.core.exceptions import ApiError
-from lightkube.resources.core_v1 import Service
 from rich.console import Console
 from rich.status import Status
 
@@ -29,7 +24,7 @@ import sunbeam.commands.microceph as microceph
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import ConfigItemNotFoundException
 from sunbeam.commands.juju import JujuStepHelper
-from sunbeam.commands.k8s import CREDENTIAL_SUFFIX, K8SHelper
+from sunbeam.commands.k8s import CREDENTIAL_SUFFIX
 from sunbeam.commands.terraform import TerraformException, TerraformHelper
 from sunbeam.jobs.common import (
     RAM_32_GB_IN_KB,
@@ -43,6 +38,7 @@ from sunbeam.jobs.common import (
     update_status_background,
 )
 from sunbeam.jobs.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
+from sunbeam.jobs.k8s import K8SHelper
 from sunbeam.jobs.manifest import Manifest
 from sunbeam.jobs.questions import (
     PromptQuestion,
@@ -50,6 +46,7 @@ from sunbeam.jobs.questions import (
     load_answers,
     write_answers,
 )
+from sunbeam.jobs.steps import PatchLoadBalancerServicesStep
 
 LOG = logging.getLogger(__name__)
 OPENSTACK_MODEL = "openstack"
@@ -271,108 +268,23 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
         return Result(ResultType.COMPLETED)
 
 
-class PatchLoadBalancerServicesStep(BaseStep):
-    SERVICES = ["traefik", "traefik-public", "rabbitmq", "ovn-relay"]
-    MODEL = OPENSTACK_MODEL
-
+class OpenStackPatchLoadBalancerServicesStep(PatchLoadBalancerServicesStep):
     def __init__(
         self,
         client: Client,
     ):
-        super().__init__(
-            "Patch LoadBalancer services",
-            "Patch LoadBalancer service annotations",
-        )
-        self.client = client
-        self.lb_annotation = K8SHelper.get_loadbalancer_annotation()
+        super().__init__(client)
+
+    def services(self):
+        """List of services to patch."""
+        services = ["traefik", "traefik-public", "rabbitmq", "ovn-relay"]
         if self.client.cluster.list_nodes_by_role("storage"):
-            self.SERVICES.append("traefik-rgw")
+            services.append("traefik-rgw")
+        return services
 
-    def _get_service(self, service_name: str, find_lb: bool = True) -> Service:
-        """Look up a service by name, optionally looking for a LoadBalancer service."""
-        search_service = service_name
-        if find_lb:
-            search_service += "-lb"
-        try:
-            return self.kube.get(Service, search_service)
-        except ApiError as e:
-            if e.status.code == 404 and search_service.endswith("-lb"):
-                return self._get_service(service_name, find_lb=False)
-            raise e
-
-    def is_skip(self, status: Optional[Status] = None) -> Result:
-        """Determines if the step should be skipped or not.
-
-        :return: ResultType.SKIPPED if the Step should be skipped,
-                ResultType.COMPLETED or ResultType.FAILED otherwise
-        """
-        try:
-            self.kubeconfig = read_config(self.client, K8SHelper.get_kubeconfig_key())
-        except ConfigItemNotFoundException:
-            LOG.debug("K8S kubeconfig not found", exc_info=True)
-            return Result(ResultType.FAILED, "K8S kubeconfig not found")
-
-        kubeconfig = KubeConfig.from_dict(self.kubeconfig)
-        try:
-            self.kube = KubeClient(kubeconfig, self.MODEL, trust_env=False)
-        except exceptions.ConfigError as e:
-            LOG.debug("Error creating k8s client", exc_info=True)
-            return Result(ResultType.FAILED, str(e))
-
-        for service_name in self.SERVICES:
-            try:
-                service = self._get_service(service_name, find_lb=True)
-            except ApiError as e:
-                return Result(ResultType.FAILED, str(e))
-            if not service.metadata:
-                return Result(
-                    ResultType.FAILED, f"k8s service {service_name!r} has no metadata"
-                )
-            service_annotations = service.metadata.annotations
-            if (
-                service_annotations is None
-                or self.lb_annotation not in service_annotations
-            ):
-                return Result(ResultType.COMPLETED)
-
-        return Result(ResultType.SKIPPED)
-
-    def run(self, status: Optional[Status] = None) -> Result:
-        """Patch LoadBalancer services annotations with LB IP."""
-        for service_name in self.SERVICES:
-            try:
-                service = self._get_service(service_name, find_lb=True)
-            except ApiError as e:
-                return Result(ResultType.FAILED, str(e))
-            if not service.metadata:
-                return Result(
-                    ResultType.FAILED, f"k8s service {service_name!r} has no metadata"
-                )
-            service_name = str(service.metadata.name)
-            service_annotations = service.metadata.annotations
-            if service_annotations is None:
-                service_annotations = {}
-            if self.lb_annotation not in service_annotations:
-                if not service.status:
-                    return Result(
-                        ResultType.FAILED, f"k8s service {service_name!r} has no status"
-                    )
-                if not service.status.loadBalancer:
-                    return Result(
-                        ResultType.FAILED,
-                        f"k8s service {service_name!r} has no loadBalancer status",
-                    )
-                if not service.status.loadBalancer.ingress:
-                    return Result(
-                        ResultType.FAILED,
-                        f"k8s service {service_name!r} has no loadBalancer ingress",
-                    )
-                loadbalancer_ip = service.status.loadBalancer.ingress[0].ip
-                service_annotations[self.lb_annotation] = loadbalancer_ip
-                LOG.debug(f"Patching {service_name!r} to use IP {loadbalancer_ip!r}")
-                self.kube.patch(Service, service_name, obj=service)
-
-        return Result(ResultType.COMPLETED)
+    def model(self):
+        """Name of the model to use."""
+        return OPENSTACK_MODEL
 
 
 class ReapplyOpenStackTerraformPlanStep(BaseStep, JujuStepHelper):

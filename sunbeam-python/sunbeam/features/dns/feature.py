@@ -21,7 +21,7 @@ from packaging.version import Version
 from rich.console import Console
 
 from sunbeam.clusterd.service import ClusterServiceUnavailableException
-from sunbeam.commands.openstack import OPENSTACK_MODEL, PatchLoadBalancerServicesStep
+from sunbeam.commands.openstack import OPENSTACK_MODEL
 from sunbeam.commands.terraform import TerraformInitStep
 from sunbeam.features.interface.v1.openstack import (
     ApplicationChannelData,
@@ -33,6 +33,7 @@ from sunbeam.jobs.common import run_plan
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import JujuHelper, run_sync
 from sunbeam.jobs.manifest import AddManifestStep, CharmManifest, SoftwareConfig
+from sunbeam.jobs.steps import PatchLoadBalancerServicesStep
 from sunbeam.versions import BIND_CHANNEL, OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -40,7 +41,13 @@ console = Console()
 
 
 class PatchBindLoadBalancerStep(PatchLoadBalancerServicesStep):
-    SERVICES = ["bind"]
+    def services(self) -> list[str]:
+        """List of services to patch."""
+        return ["bind"]
+
+    def model(self) -> str:
+        """Name of the model to use."""
+        return OPENSTACK_MODEL
 
 
 class DnsFeature(OpenStackControlPlaneFeature):

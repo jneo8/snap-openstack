@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import ipaddress
 import logging
 from typing import Optional
 
@@ -36,6 +35,11 @@ from sunbeam.jobs.juju import (
     UnsupportedKubeconfigException,
     run_sync,
 )
+from sunbeam.jobs.k8s import (
+    MICROK8S_CLOUD,
+    MICROK8S_KUBECONFIG_KEY,
+    validate_cidr_or_ip_range,
+)
 from sunbeam.jobs.manifest import Manifest
 from sunbeam.jobs.steps import (
     AddMachineUnitsStep,
@@ -44,34 +48,12 @@ from sunbeam.jobs.steps import (
 )
 
 LOG = logging.getLogger(__name__)
-MICROK8S_CLOUD = "sunbeam-microk8s"
 APPLICATION = "microk8s"
 MICROK8S_APP_TIMEOUT = 180  # 3 minutes, managing the application should be fast
 MICROK8S_UNIT_TIMEOUT = 1200  # 20 minutes, adding / removing units can take a long time
 CREDENTIAL_SUFFIX = "-creds"
-MICROK8S_DEFAULT_STORAGECLASS = "microk8s-hostpath"
-MICROK8S_KUBECONFIG_KEY = "Microk8sConfig"
 MICROK8S_CONFIG_KEY = "TerraformVarsMicrok8s"
 MICROK8S_ADDONS_CONFIG_KEY = "TerraformVarsMicrok8sAddons"
-METALLB_ANNOTATION = "metallb.universe.tf/loadBalancerIPs"
-
-
-def validate_cidr_or_ip_range(ip_ranges: str):
-    for ip_range in ip_ranges.split(","):
-        ips = ip_range.split("-")
-        if len(ips) == 1:
-            if "/" not in ips[0]:
-                raise ValueError(
-                    "Invalid CIDR definition, must be in the form 'ip/mask'"
-                )
-            ipaddress.ip_network(ips[0])
-        elif len(ips) == 2:
-            ipaddress.ip_address(ips[0])
-            ipaddress.ip_address(ips[1])
-        else:
-            raise ValueError(
-                "Invalid IP range, must be in the form of 'ip-ip' or 'cidr'"
-            )
 
 
 def microk8s_addons_questions():

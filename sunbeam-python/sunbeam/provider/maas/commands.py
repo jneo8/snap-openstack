@@ -73,7 +73,7 @@ from sunbeam.commands.mysql import ConfigureMySQLStep
 from sunbeam.commands.openstack import (
     OPENSTACK_MODEL,
     DeployControlPlaneStep,
-    PatchLoadBalancerServicesStep,
+    OpenStackPatchLoadBalancerServicesStep,
     PromptRegionStep,
 )
 from sunbeam.commands.proxy import PromptForProxyStep
@@ -669,7 +669,7 @@ def deploy(
         )
     )
     plan2.append(ConfigureMySQLStep(jhelper))
-    plan2.append(PatchLoadBalancerServicesStep(client))
+    plan2.append(OpenStackPatchLoadBalancerServicesStep(client))
     plan2.append(TerraformInitStep(tfhelper_hypervisor_deploy))
     plan2.append(
         DeployHypervisorApplicationStep(

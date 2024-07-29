@@ -56,7 +56,7 @@ def observabilityfeature():
 
 @pytest.fixture()
 def ssnap():
-    with patch("sunbeam.commands.k8s.Snap") as p:
+    with patch("sunbeam.jobs.k8s.Snap") as p:
         yield p
 
 

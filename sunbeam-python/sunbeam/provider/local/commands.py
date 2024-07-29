@@ -91,7 +91,7 @@ from sunbeam.commands.mysql import ConfigureMySQLStep
 from sunbeam.commands.openstack import (
     OPENSTACK_MODEL,
     DeployControlPlaneStep,
-    PatchLoadBalancerServicesStep,
+    OpenStackPatchLoadBalancerServicesStep,
     PromptRegionStep,
 )
 from sunbeam.commands.proxy import PromptForProxyStep
@@ -508,7 +508,7 @@ def bootstrap(
 
     if is_control_node:
         plan5.append(ConfigureMySQLStep(jhelper))
-        plan5.append(PatchLoadBalancerServicesStep(client))
+        plan5.append(OpenStackPatchLoadBalancerServicesStep(client))
 
     # NOTE(jamespage):
     # As with MicroCeph, always deploy the openstack-hypervisor charm
