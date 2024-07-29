@@ -16,21 +16,12 @@
 import ipaddress
 import logging
 
-import click
 import yaml
 from rich.console import Console
-from snaphelpers import Snap
 
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import ConfigItemNotFoundException
 from sunbeam.commands.juju import JujuStepHelper
-from sunbeam.commands.microk8s import (
-    METALLB_ANNOTATION,
-    MICROK8S_CLOUD,
-    MICROK8S_DEFAULT_STORAGECLASS,
-    MICROK8S_KUBECONFIG_KEY,
-    validate_cidr_or_ip_range,
-)
 from sunbeam.commands.terraform import TerraformHelper
 from sunbeam.jobs.common import (
     BaseStep,
@@ -50,6 +41,7 @@ from sunbeam.jobs.juju import (
     UnsupportedKubeconfigException,
     run_sync,
 )
+from sunbeam.jobs.k8s import K8S_CLOUD, K8S_KUBECONFIG_KEY, validate_cidr_or_ip_range
 from sunbeam.jobs.manifest import Manifest
 from sunbeam.jobs.questions import (
     PromptQuestion,
@@ -64,19 +56,14 @@ from sunbeam.jobs.steps import (
 )
 
 LOG = logging.getLogger(__name__)
-K8S_CLOUD = "sunbeam-k8s"
-K8S_DEFAULT_STORAGECLASS = "csi-rawfile-default"
 K8S_CONFIG_KEY = "TerraformVarsK8S"
 K8S_ADDONS_CONFIG_KEY = "TerraformVarsK8SAddons"
-K8S_KUBECONFIG_KEY = "K8SKubeConfig"
 APPLICATION = "k8s"
 K8S_APP_TIMEOUT = 180  # 3 minutes, managing the application should be fast
 K8S_UNIT_TIMEOUT = 1200  # 20 minutes, adding / removing units can take a long time
 K8S_ENABLE_ADDONS_TIMEOUT = 180  # 3 minutes
 CREDENTIAL_SUFFIX = "-creds"
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
-SERVICE_LB_ANNOTATION = "io.cilium/lb-ipam-ips"
-SUPPORTED_K8S_PROVIDERS = ["k8s", "microk8s"]
 
 
 def validate_cidrs(ip_ranges: str, separator: str = ","):
@@ -446,54 +433,3 @@ class StoreK8SKubeConfigStep(BaseStep, JujuStepHelper):
             return Result(ResultType.FAILED, str(e))
 
         return Result(ResultType.COMPLETED)
-
-
-class K8SHelper:
-    """K8S Helper that provides cloud constants."""
-
-    @classmethod
-    def get_provider(cls) -> str:
-        """Return k8s provider from snap settings."""
-        provider = Snap().config.get("k8s.provider")
-        if provider not in SUPPORTED_K8S_PROVIDERS:
-            raise click.ClickException(
-                f"k8s provider should be one of {SUPPORTED_K8S_PROVIDERS}"
-            )
-
-        return provider
-
-    @classmethod
-    def get_cloud(cls) -> str:
-        """Return cloud name matching provider."""
-        match cls.get_provider():
-            case "k8s":
-                return K8S_CLOUD
-            case _:
-                return MICROK8S_CLOUD
-
-    @classmethod
-    def get_default_storageclass(cls) -> str:
-        """Return storageclass matching provider."""
-        match cls.get_provider():
-            case "k8s":
-                return K8S_DEFAULT_STORAGECLASS
-            case _:
-                return MICROK8S_DEFAULT_STORAGECLASS
-
-    @classmethod
-    def get_kubeconfig_key(cls) -> str:
-        """Return kubeconfig key matching provider."""
-        match cls.get_provider():
-            case "k8s":
-                return K8S_KUBECONFIG_KEY
-            case _:
-                return MICROK8S_KUBECONFIG_KEY
-
-    @classmethod
-    def get_loadbalancer_annotation(cls) -> str:
-        """Return loadbalancer annotation matching provider."""
-        match cls.get_provider():
-            case "k8s":
-                return SERVICE_LB_ANNOTATION
-            case _:
-                return METALLB_ANNOTATION

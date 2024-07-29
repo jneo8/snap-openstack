@@ -13,9 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import abc
 import logging
 from typing import Optional
 
+from lightkube.config.kubeconfig import KubeConfig
+from lightkube.core import exceptions
+from lightkube.core.client import Client as KubeClient
+from lightkube.core.exceptions import ApiError
+from lightkube.resources.core_v1 import Service
 from rich.status import Status
 
 from sunbeam.clusterd.client import Client
@@ -32,6 +38,7 @@ from sunbeam.jobs.juju import (
     TimeoutException,
     run_sync,
 )
+from sunbeam.jobs.k8s import K8SHelper
 from sunbeam.jobs.manifest import Manifest
 
 LOG = logging.getLogger(__name__)
@@ -332,5 +339,117 @@ class RemoveMachineUnitStep(BaseStep):
         except (ApplicationNotFoundException, TimeoutException) as e:
             LOG.warning(str(e))
             return Result(ResultType.FAILED, str(e))
+
+        return Result(ResultType.COMPLETED)
+
+
+class PatchLoadBalancerServicesStep(BaseStep, abc.ABC):
+    def __init__(
+        self,
+        client: Client,
+    ):
+        super().__init__(
+            "Patch LoadBalancer services",
+            "Patch LoadBalancer service annotations",
+        )
+        self.client = client
+        self.lb_annotation = K8SHelper.get_loadbalancer_annotation()
+
+    @abc.abstractmethod
+    def services(self) -> list[str]:
+        """List of services to patch."""
+        pass
+
+    @abc.abstractmethod
+    def model(self) -> str:
+        """Name of the model to use.
+
+        This must resolve to a namespaces in the cluster.
+        """
+        pass
+
+    def _get_service(self, service_name: str, find_lb: bool = True) -> Service:
+        """Look up a service by name, optionally looking for a LoadBalancer service."""
+        search_service = service_name
+        if find_lb:
+            search_service += "-lb"
+        try:
+            return self.kube.get(Service, search_service)
+        except ApiError as e:
+            if e.status.code == 404 and search_service.endswith("-lb"):
+                return self._get_service(service_name, find_lb=False)
+            raise e
+
+    def is_skip(self, status: Optional[Status] = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        try:
+            self.kubeconfig = read_config(self.client, K8SHelper.get_kubeconfig_key())
+        except ConfigItemNotFoundException:
+            LOG.debug("K8S kubeconfig not found", exc_info=True)
+            return Result(ResultType.FAILED, "K8S kubeconfig not found")
+
+        kubeconfig = KubeConfig.from_dict(self.kubeconfig)
+        try:
+            self.kube = KubeClient(kubeconfig, self.model(), trust_env=False)
+        except exceptions.ConfigError as e:
+            LOG.debug("Error creating k8s client", exc_info=True)
+            return Result(ResultType.FAILED, str(e))
+
+        for service_name in self.services():
+            try:
+                service = self._get_service(service_name, find_lb=True)
+            except ApiError as e:
+                return Result(ResultType.FAILED, str(e))
+            if not service.metadata:
+                return Result(
+                    ResultType.FAILED, f"k8s service {service_name!r} has no metadata"
+                )
+            service_annotations = service.metadata.annotations
+            if (
+                service_annotations is None
+                or self.lb_annotation not in service_annotations
+            ):
+                return Result(ResultType.COMPLETED)
+
+        return Result(ResultType.SKIPPED)
+
+    def run(self, status: Optional[Status] = None) -> Result:
+        """Patch LoadBalancer services annotations with LB IP."""
+        for service_name in self.services():
+            try:
+                service = self._get_service(service_name, find_lb=True)
+            except ApiError as e:
+                return Result(ResultType.FAILED, str(e))
+            if not service.metadata:
+                return Result(
+                    ResultType.FAILED, f"k8s service {service_name!r} has no metadata"
+                )
+            service_name = str(service.metadata.name)
+            service_annotations = service.metadata.annotations
+            if service_annotations is None:
+                service_annotations = {}
+            if self.lb_annotation not in service_annotations:
+                if not service.status:
+                    return Result(
+                        ResultType.FAILED, f"k8s service {service_name!r} has no status"
+                    )
+                if not service.status.loadBalancer:
+                    return Result(
+                        ResultType.FAILED,
+                        f"k8s service {service_name!r} has no loadBalancer status",
+                    )
+                if not service.status.loadBalancer.ingress:
+                    return Result(
+                        ResultType.FAILED,
+                        f"k8s service {service_name!r} has no loadBalancer ingress",
+                    )
+                loadbalancer_ip = service.status.loadBalancer.ingress[0].ip
+                service_annotations[self.lb_annotation] = loadbalancer_ip
+                LOG.debug(f"Patching {service_name!r} to use IP {loadbalancer_ip!r}")
+                self.kube.patch(Service, service_name, obj=service)
 
         return Result(ResultType.COMPLETED)

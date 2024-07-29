@@ -30,8 +30,8 @@ from rich.status import Status
 
 from sunbeam.clusterd.service import ClusterServiceUnavailableException
 from sunbeam.commands.juju import JujuStepHelper
-from sunbeam.commands.k8s import CREDENTIAL_SUFFIX, K8SHelper
-from sunbeam.commands.openstack import OPENSTACK_MODEL, PatchLoadBalancerServicesStep
+from sunbeam.commands.k8s import CREDENTIAL_SUFFIX
+from sunbeam.commands.openstack import OPENSTACK_MODEL
 from sunbeam.commands.terraform import (
     TerraformException,
     TerraformHelper,
@@ -54,6 +54,7 @@ from sunbeam.jobs.common import (
 )
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
+from sunbeam.jobs.k8s import K8SHelper
 from sunbeam.jobs.manifest import (
     AddManifestStep,
     CharmManifest,
@@ -61,6 +62,7 @@ from sunbeam.jobs.manifest import (
     SoftwareConfig,
     TerraformManifest,
 )
+from sunbeam.jobs.steps import PatchLoadBalancerServicesStep
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -388,8 +390,13 @@ class RemoveGrafanaAgentStep(BaseStep, JujuStepHelper):
 
 
 class PatchCosLoadBalancerStep(PatchLoadBalancerServicesStep):
-    SERVICES = ["traefik"]
-    MODEL = OBSERVABILITY_MODEL
+    def services(self) -> list[str]:
+        """List of services to patch."""
+        return ["traefik"]
+
+    def model(self) -> str:
+        """Name of the model to use."""
+        return OBSERVABILITY_MODEL
 
 
 class ObservabilityFeature(OpenStackControlPlaneFeature):
