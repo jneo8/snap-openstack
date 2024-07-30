@@ -146,25 +146,38 @@ class JujuStepHelper:
             cmd.append(cloud)
         return self._juju_cmd(*cmd)
 
-    def get_controllers(self, clouds: list) -> list:
-        """Get controllers hosted on given clouds."""
-        existing_controllers = []
+    def get_controllers(self, clouds: list | None = None) -> list:
+        """Get controllers hosted on given clouds.
 
+        if clouds is None, return all the controllers.
+        """
         controllers = self._juju_cmd("controllers")
-        LOG.debug(f"Found controllers: {controllers.keys()}")
-        LOG.debug(controllers)
-
         controllers = controllers.get("controllers", {})
-        if controllers:
-            for name, details in controllers.items():
-                if details["cloud"] in clouds:
-                    existing_controllers.append(name)
+        if clouds is None:
+            return list(controllers.keys())
 
+        existing_controllers = [
+            name for name, details in controllers.items() if details["cloud"] in clouds
+        ]
         LOG.debug(
-            f"There are {len(existing_controllers)} existing k8s "
+            f"There are {len(existing_controllers)} existing {clouds} "
             f"controllers running: {existing_controllers}"
         )
         return existing_controllers
+
+    def get_external_controllers(self) -> list:
+        """Get all external controllers registered."""
+        snap = Snap()
+        data_location = snap.paths.user_data
+        external_controllers = []
+
+        controllers = self.get_controllers()
+        for controller in controllers:
+            account_file = data_location / f"{controller}.yaml"
+            if account_file.exists():
+                external_controllers.append(controller)
+
+        return external_controllers
 
     def get_controller(self, controller: str) -> dict:
         """Get controller definition."""

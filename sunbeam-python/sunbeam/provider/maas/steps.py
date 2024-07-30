@@ -49,6 +49,7 @@ from sunbeam.commands.juju import (
     JUJU_CONTROLLER_CHARM,
     BootstrapJujuStep,
     ControllerNotFoundException,
+    JujuStepHelper,
     SaveControllerStep,
     ScaleJujuStep,
 )
@@ -842,6 +843,19 @@ class DeploymentTopologyCheck(DiagnosticsCheck):
             ]
         machines_by_zone = maas_client._group_machines_by_zone(self.machines)
         checks = []
+        if JujuStepHelper().get_external_controllers():
+            LOG.info(
+                "External juju controllers registered, skipping DeploymentRoleCheck "
+                "for juju controllers"
+            )
+        else:
+            checks.append(
+                DeploymentRolesCheck(
+                    self.machines,
+                    "juju controllers",
+                    maas_deployment.RoleTags.JUJU_CONTROLLER.value,
+                )
+            )
         checks.append(
             DeploymentRolesCheck(
                 self.machines,
@@ -937,8 +951,8 @@ class JujuControllerCheck(Check):
 
     def run(self) -> bool:
         """Check if juju controller is required."""
-        machines = maas_client.list_machines_by_matching_roles(
-            self.maas_client, [maas_deployment.RoleTags.JUJU_CONTROLLER.value]
+        machines = maas_client.list_machines(
+            self.maas_client, tags=maas_deployment.RoleTags.JUJU_CONTROLLER.value
         )
         if self.controller and machines:
             hostnames = [m.get("hostname") for m in machines]
@@ -947,7 +961,7 @@ class JujuControllerCheck(Check):
                 f"{hostnames}"
             )
             LOG.warning(self.message)
-            return False
+            return True
 
         if not self.controller and not machines:
             self.message = (
@@ -957,7 +971,7 @@ class JujuControllerCheck(Check):
             )
             return False
 
-        return False
+        return True
 
 
 class MaasBootstrapJujuStep(BootstrapJujuStep):
