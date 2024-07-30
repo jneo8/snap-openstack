@@ -21,7 +21,6 @@ from snaphelpers import Snap
 
 from sunbeam.commands.juju import RegisterRemoteJujuUserStep, UnregisterJujuController
 from sunbeam.jobs.common import run_plan
-from sunbeam.jobs.deployment import Deployment
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -39,14 +38,8 @@ console = Console()
 @click.pass_context
 def register_controller(ctx: click.Context, name: str, token: str, force: bool) -> None:
     """Register existing Juju controller."""
-    deployment: Deployment = ctx.obj
-    client = deployment.get_client()
     data_location = Snap().paths.user_data
-
-    plan = [
-        RegisterRemoteJujuUserStep(client, token, name, data_location, replace=force)
-    ]
-
+    plan = [RegisterRemoteJujuUserStep(token, name, data_location, replace=force)]
     run_plan(plan, console)
     console.print(f"Controller {name} registered")
 
@@ -57,8 +50,6 @@ def register_controller(ctx: click.Context, name: str, token: str, force: bool) 
 def unregister_controller(ctx: click.Context, name: str) -> None:
     """Unregister external Juju controller."""
     data_location = Snap().paths.user_data
-
     plan = [UnregisterJujuController(name, data_location)]
-
     run_plan(plan, console)
     console.print(f"Controller {name} unregistered")

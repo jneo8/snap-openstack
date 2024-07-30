@@ -117,11 +117,18 @@ class LocalDeployment(Deployment):
     @property
     def openstack_machines_model(self) -> str:
         """Return the openstack machines model name."""
+        if self.juju_controller and self.juju_controller.is_external:
+            return "openstack-machines"
+
         return "controller"
 
     @property
     def controller(self) -> str:
         """Return the controller name."""
+        if self.juju_controller and self.juju_controller.is_external:
+            return self.juju_controller.name
+
+        # Juju controller not yet set, return defaults
         return CONTROLLER
 
     def get_client(self) -> Client:

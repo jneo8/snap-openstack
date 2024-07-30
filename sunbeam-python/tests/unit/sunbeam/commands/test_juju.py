@@ -264,7 +264,7 @@ class TestAddCloudJujuStep:
         step = juju.AddCloudJujuStep(cloud_name, cloud_definition)
 
         with patch.object(step, "get_clouds") as mock_get_clouds:
-            mock_get_clouds.return_value = [cloud_name]
+            mock_get_clouds.side_effect = [[cloud_name]]
             result = step.is_skip()
 
         mock_get_clouds.assert_called_once_with("my-cloud-type", local=True)
@@ -292,7 +292,54 @@ class TestAddCloudJujuStep:
         mock_get_clouds.assert_called_once_with("my-cloud-type", local=True)
         assert result.result_type == ResultType.FAILED
 
+    def test_is_skip_when_cloud_not_found_in_controller(self):
+        controller_name = "test-controller"
+        cloud_name = "my-cloud"
+        cloud_definition = {
+            "clouds": {
+                cloud_name: {
+                    "type": "my-cloud-type",
+                    # Add other required fields for the cloud definition
+                }
+            }
+        }
+        step = juju.AddCloudJujuStep(cloud_name, cloud_definition, controller_name)
+
+        with patch.object(step, "get_clouds") as mock_get_clouds:
+            mock_get_clouds.side_effect = [[cloud_name], []]
+            result = step.is_skip()
+
+        mock_get_clouds.assert_any_call("my-cloud-type", local=True)
+        mock_get_clouds.assert_any_call(
+            "my-cloud-type", local=False, controller=controller_name
+        )
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_is_skip_when_cloud_found_in_client_and_controller(self):
+        controller_name = "test-controller"
+        cloud_name = "my-cloud"
+        cloud_definition = {
+            "clouds": {
+                cloud_name: {
+                    "type": "my-cloud-type",
+                    # Add other required fields for the cloud definition
+                }
+            }
+        }
+        step = juju.AddCloudJujuStep(cloud_name, cloud_definition, controller_name)
+
+        with patch.object(step, "get_clouds") as mock_get_clouds:
+            mock_get_clouds.side_effect = [[cloud_name], [cloud_name]]
+            result = step.is_skip()
+
+        mock_get_clouds.assert_any_call("my-cloud-type", local=True)
+        mock_get_clouds.assert_any_call(
+            "my-cloud-type", local=False, controller=controller_name
+        )
+        assert result.result_type == ResultType.SKIPPED
+
     def test_run(self):
+        controller_name = "test-controller"
         cloud_name = "my-cloud"
         cloud_definition = {
             "clouds": {
@@ -302,17 +349,20 @@ class TestAddCloudJujuStep:
                 }
             }
         }
-        step = juju.AddCloudJujuStep(cloud_name, cloud_definition)
+        step = juju.AddCloudJujuStep(cloud_name, cloud_definition, controller_name)
 
         with patch.object(step, "add_cloud") as mock_add_cloud:
             mock_add_cloud.return_value = True
 
             result = step.run()
 
-        mock_add_cloud.assert_called_once_with("my-cloud", cloud_definition)
+        mock_add_cloud.assert_called_once_with(
+            "my-cloud", cloud_definition, controller_name
+        )
         assert result.result_type == ResultType.COMPLETED
 
     def test_run_when_exception_raised(self):
+        controller_name = "test-controller"
         cloud_name = "my-cloud"
         cloud_definition = {
             "clouds": {
@@ -322,17 +372,50 @@ class TestAddCloudJujuStep:
                 }
             }
         }
-        step = juju.AddCloudJujuStep(cloud_name, cloud_definition)
+        step = juju.AddCloudJujuStep(cloud_name, cloud_definition, controller_name)
 
         with patch.object(step, "add_cloud") as mock_add_cloud:
             mock_add_cloud.side_effect = subprocess.CalledProcessError(
-                cmd="juju add-cloud", returncode=1, output="Error output"
+                cmd="juju add-cloud",
+                returncode=1,
+                output="Error output",
+                stderr="Error output",
             )
 
             result = step.run()
 
-        mock_add_cloud.assert_called_once_with("my-cloud", cloud_definition)
+        mock_add_cloud.assert_called_once_with(
+            "my-cloud", cloud_definition, controller_name
+        )
         assert result.result_type == ResultType.FAILED
+
+    def test_run_when_already_exists_in_client(self):
+        controller_name = "test-controller"
+        cloud_name = "my-cloud"
+        cloud_definition = {
+            "clouds": {
+                "my-cloud": {
+                    "type": "my-cloud-type",
+                    # Add other required fields for the cloud definition
+                }
+            }
+        }
+        step = juju.AddCloudJujuStep(cloud_name, cloud_definition, controller_name)
+
+        with patch.object(step, "add_cloud") as mock_add_cloud:
+            mock_add_cloud.side_effect = subprocess.CalledProcessError(
+                cmd="juju add-cloud",
+                returncode=1,
+                output="Error output",
+                stderr="local cloud already exists",
+            )
+
+            result = step.run()
+
+        mock_add_cloud.assert_called_once_with(
+            "my-cloud", cloud_definition, controller_name
+        )
+        assert result.result_type == ResultType.COMPLETED
 
 
 class TestAddCredentialsJujuStep:
@@ -340,8 +423,9 @@ class TestAddCredentialsJujuStep:
         cloud = "my-cloud"
         credentials = "my-credentials"
         definition = {"key": "value"}
+        controller = None
 
-        step = juju.AddCredentialsJujuStep(cloud, credentials, definition)
+        step = juju.AddCredentialsJujuStep(cloud, credentials, definition, controller)
 
         mocker.patch.object(step, "get_credentials", return_value={})
         result = step.is_skip()
@@ -353,8 +437,9 @@ class TestAddCredentialsJujuStep:
         cloud = "my-cloud"
         credentials = "my-credentials"
         definition = {"key": "value"}
+        controller = None
 
-        step = juju.AddCredentialsJujuStep(cloud, credentials, definition)
+        step = juju.AddCredentialsJujuStep(cloud, credentials, definition, controller)
 
         mocker.patch.object(
             step,
@@ -374,21 +459,23 @@ class TestAddCredentialsJujuStep:
         cloud = "my-cloud"
         credentials = "my-credentials"
         definition = {"key": "value"}
+        controller = None
 
-        step = juju.AddCredentialsJujuStep(cloud, credentials, definition)
+        step = juju.AddCredentialsJujuStep(cloud, credentials, definition, controller)
 
         mocker.patch.object(step, "add_credential")
         result = step.run()
 
-        step.add_credential.assert_called_once_with(cloud, definition)
+        step.add_credential.assert_called_once_with(cloud, definition, controller)
         assert result.result_type == ResultType.COMPLETED
 
     def test_run_failed(self, mocker):
         cloud = "my-cloud"
         credentials = "my-credentials"
         definition = {"key": "value"}
+        controller = None
 
-        step = juju.AddCredentialsJujuStep(cloud, credentials, definition)
+        step = juju.AddCredentialsJujuStep(cloud, credentials, definition, controller)
 
         mocker.patch.object(
             step,
@@ -397,7 +484,120 @@ class TestAddCredentialsJujuStep:
         )
         result = step.run()
 
-        step.add_credential.assert_called_once_with(cloud, definition)
+        step.add_credential.assert_called_once_with(cloud, definition, controller)
+        assert result.result_type == ResultType.FAILED
+
+    def test_is_skip_with_controller(self, mocker):
+        cloud = "my-cloud"
+        credentials = "my-credentials"
+        definition = {"key": "value"}
+        controller = "my-controller"
+
+        step = juju.AddCredentialsJujuStep(cloud, credentials, definition, controller)
+
+        mocker.patch.object(step, "get_credentials", return_value={})
+        result = step.is_skip()
+
+        step.get_credentials.assert_called_once_with(cloud, local=False)
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_is_skip_with_controller_when_credentials_exist(self, mocker):
+        cloud = "my-cloud"
+        credentials = "my-credentials"
+        definition = {"key": "value"}
+        controller = "my-controller"
+
+        step = juju.AddCredentialsJujuStep(cloud, credentials, definition, controller)
+
+        mocker.patch.object(
+            step,
+            "get_credentials",
+            return_value={
+                "client-credentials": {
+                    cloud: {"cloud-credentials": {credentials: {"key": "value"}}}
+                },
+                "controller-credentials": {
+                    cloud: {"cloud-credentials": {credentials: {"key": "value"}}}
+                },
+            },
+        )
+        result = step.is_skip()
+
+        step.get_credentials.assert_called_once_with(cloud, local=False)
+        assert result.result_type == ResultType.SKIPPED
+
+    def test_is_skip_with_controller_when_crendetials_not_found_in_controller(
+        self, mocker
+    ):
+        cloud = "my-cloud"
+        credentials = "my-credentials"
+        definition = {"key": "value"}
+        controller = "my-controller"
+
+        step = juju.AddCredentialsJujuStep(cloud, credentials, definition, controller)
+
+        mocker.patch.object(
+            step,
+            "get_credentials",
+            side_effect=subprocess.CalledProcessError(
+                1, "command", stderr="controller not found"
+            ),
+        )
+        result = step.is_skip()
+
+        step.get_credentials.assert_called_once_with(cloud, local=False)
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_is_skip_with_controller_when_error_in_controller(self, mocker):
+        cloud = "my-cloud"
+        credentials = "my-credentials"
+        definition = {"key": "value"}
+        controller = "my-controller"
+
+        step = juju.AddCredentialsJujuStep(cloud, credentials, definition, controller)
+
+        mocker.patch.object(
+            step,
+            "get_credentials",
+            side_effect=subprocess.CalledProcessError(
+                1, "command", stderr="unknown error"
+            ),
+        )
+        result = step.is_skip()
+
+        step.get_credentials.assert_called_once_with(cloud, local=False)
+        assert result.result_type == ResultType.FAILED
+
+    def test_run_with_controller(self, mocker):
+        cloud = "my-cloud"
+        credentials = "my-credentials"
+        definition = {"key": "value"}
+        controller = "my-controller"
+
+        step = juju.AddCredentialsJujuStep(cloud, credentials, definition, controller)
+
+        mocker.patch.object(step, "add_credential")
+        result = step.run()
+
+        step.add_credential.assert_called_once_with(cloud, definition, controller)
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_run_with_controller_failed(self, mocker):
+        cloud = "my-cloud"
+        credentials = "my-credentials"
+        definition = {"key": "value"}
+        controller = "my-controller"
+
+        step = juju.AddCredentialsJujuStep(cloud, credentials, definition, controller)
+
+        mocker.patch.object(
+            step,
+            "add_credential",
+            side_effect=subprocess.CalledProcessError(1, "command"),
+        )
+        result = step.run()
+
+        step.add_credential.assert_called_once_with(cloud, definition, controller)
         assert result.result_type == ResultType.FAILED
 
 

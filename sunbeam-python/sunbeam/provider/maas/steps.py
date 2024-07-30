@@ -21,6 +21,7 @@ import ipaddress
 import logging
 import ssl
 import textwrap
+from pathlib import Path
 
 from maas.client import bones
 from rich.console import Console
@@ -49,6 +50,7 @@ from sunbeam.commands.juju import (
     BootstrapJujuStep,
     ControllerNotFoundException,
     JujuStepHelper,
+    SaveControllerStep,
     ScaleJujuStep,
 )
 from sunbeam.commands.terraform import TerraformHelper
@@ -63,9 +65,7 @@ from sunbeam.jobs.common import (
 from sunbeam.jobs.deployment import CertPair, Networks
 from sunbeam.jobs.deployments import DeploymentsConfig
 from sunbeam.jobs.juju import (
-    CONTROLLER_MODEL,
     ActionFailedException,
-    JujuController,
     JujuHelper,
     JujuSecretNotFound,
     LeaderNotFoundException,
@@ -842,13 +842,19 @@ class DeploymentTopologyCheck(DiagnosticsCheck):
             ]
         machines_by_zone = maas_client._group_machines_by_zone(self.machines)
         checks = []
-        checks.append(
-            DeploymentRolesCheck(
-                self.machines,
-                "juju controllers",
-                maas_deployment.RoleTags.JUJU_CONTROLLER.value,
+        if JujuStepHelper().get_external_controllers():
+            LOG.info(
+                "External juju controllers registered, skipping DeploymentRoleCheck "
+                "for juju controllers"
             )
-        )
+        else:
+            checks.append(
+                DeploymentRolesCheck(
+                    self.machines,
+                    "juju controllers",
+                    maas_deployment.RoleTags.JUJU_CONTROLLER.value,
+                )
+            )
         checks.append(
             DeploymentRolesCheck(
                 self.machines,
@@ -928,6 +934,42 @@ class NetworkMappingCompleteCheck(Check):
                 " Complete network mapping to using `sunbeam deployment space map...`."
             )
             return False
+        return True
+
+
+class JujuControllerCheck(Check):
+    """Check for juju controller node if required."""
+
+    def __init__(self, deployment: maas_deployment.MaasDeployment, juju_controller):
+        super().__init__(
+            "Check for juju controller", "Checking if juju controller node is requred"
+        )
+        self.deployment = deployment
+        self.controller = juju_controller
+        self.maas_client = maas_client.MaasClient.from_deployment(deployment)
+
+    def run(self) -> bool:
+        """Check if juju controller is required."""
+        machines = maas_client.list_machines(
+            self.maas_client, tags=maas_deployment.RoleTags.JUJU_CONTROLLER.value
+        )
+        if self.controller and machines:
+            hostnames = [m.get("hostname") for m in machines]
+            self.message = (
+                "WARNING: Machines with tag juju-controller not used in deployment: "
+                f"{hostnames}"
+            )
+            LOG.warning(self.message)
+            return True
+
+        if not self.controller and not machines:
+            self.message = (
+                "A deployment needs to have at least 3 juju controllers to be "
+                "a part of an openstack deployment. You need to add more "
+                "juju-controller to the deployment using juju-controller tag."
+            )
+            return False
+
         return True
 
 
@@ -1080,7 +1122,7 @@ class MaasScaleJujuStep(ScaleJujuStep):
         return Result(ResultType.COMPLETED)
 
 
-class MaasSaveControllerStep(BaseStep, JujuStepHelper):
+class MaasSaveControllerStep(SaveControllerStep):
     """Save maas controller information locally."""
 
     def __init__(
@@ -1088,54 +1130,24 @@ class MaasSaveControllerStep(BaseStep, JujuStepHelper):
         controller: str,
         deployment_name: str,
         deployments_config: DeploymentsConfig,
+        data_location: Path,
+        is_external: bool = False,
     ):
-        super().__init__(
-            "Save controller information",
-            "Saving controller information locally",
-        )
-        self.controller = controller
         self.deployment_name = deployment_name
         self.deployments_config = deployments_config
-
-    def _get_controller(self, name: str) -> JujuController | None:
-        try:
-            controller = self.get_controller(name)["details"]
-        except ControllerNotFoundException as e:
-            LOG.debug(str(e))
-            return None
-        return JujuController(
-            api_endpoints=controller["api-endpoints"],
-            ca_cert=controller["ca-cert"],
-        )
+        deployment = self.deployments_config.get_deployment(self.deployment_name)
+        super().__init__(deployment, controller, data_location, is_external)
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
-        deployment = self.deployments_config.get_deployment(self.deployment_name)
-        if not maas_deployment.is_maas_deployment(deployment):
-            return Result(ResultType.SKIPPED)
-        if deployment.juju_controller is None:
-            return Result(ResultType.COMPLETED)
-
-        controller = self._get_controller(self.controller)
-        if controller is None:
-            return Result(ResultType.FAILED, f"Controller {self.controller} not found")
-
-        if controller == deployment.juju_controller:
+        if not maas_deployment.is_maas_deployment(self.deployment):
             return Result(ResultType.SKIPPED)
 
-        return Result(ResultType.COMPLETED)
+        return super().is_skip(status)
 
     def run(self, status: Status | None) -> Result:
         """Save controller to deployment information."""
-        controller = self._get_controller(self.controller)
-        if controller is None:
-            return Result(ResultType.FAILED, f"Controller {self.controller} not found")
-
-        deployment = self.deployments_config.get_deployment(self.deployment_name)
-        if not maas_deployment.is_maas_deployment(deployment):
-            return Result(ResultType.FAILED)
-
-        deployment.juju_controller = controller
+        super().run(status)
         self.deployments_config.write()
         return Result(ResultType.COMPLETED)
 
@@ -2126,13 +2138,9 @@ class MaasUserQuestions(BaseStep):
 
 
 class MaasClusterStatusStep(ClusterStatusStep):
-    def _controller_model(self) -> str:
-        return CONTROLLER_MODEL.split("/")[1]
-
     def models(self) -> list[str]:
         """List of models to query status from."""
         return [
-            self._controller_model(),
             self.deployment.infra_model,
             self.deployment.openstack_machines_model,
         ]

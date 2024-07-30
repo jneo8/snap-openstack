@@ -454,7 +454,7 @@ class ClusterAddJujuUserStep(BaseStep):
 class ClusterUpdateJujuControllerStep(BaseStep, JujuStepHelper):
     """Save Juju controller in cluster database."""
 
-    def __init__(self, client: Client, controller: str):
+    def __init__(self, client: Client, controller: str, is_external: bool = False):
         super().__init__(
             "Add Juju controller to cluster DB",
             "Adding Juju controller to cluster database",
@@ -462,6 +462,7 @@ class ClusterUpdateJujuControllerStep(BaseStep, JujuStepHelper):
 
         self.client = client
         self.controller = controller
+        self.is_external = is_external
 
     def _extract_ip(self, ip) -> Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
         """Extract ip from ipv4 or ipv6 ip:port."""
@@ -530,8 +531,10 @@ class ClusterUpdateJujuControllerStep(BaseStep, JujuStepHelper):
         controller = self.get_controller(self.controller)["details"]
 
         juju_controller = JujuController(
+            name=self.controller,
             api_endpoints=self.filter_ips(controller["api-endpoints"], self.networks),
             ca_cert=controller["ca-cert"],
+            is_external=self.is_external,
         )
         try:
             juju_controller.write(self.client)

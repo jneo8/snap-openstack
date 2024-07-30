@@ -202,8 +202,10 @@ class JujuAccount(pydantic.BaseModel):
 
 
 class JujuController(pydantic.BaseModel):
+    name: str
     api_endpoints: List[str]
     ca_cert: str
+    is_external: bool
 
     def to_dict(self):
         """Return self as dict."""
@@ -261,17 +263,27 @@ class JujuHelper:
                 raise ModelNotFoundException(f"Model {model!r} not found")
             raise e
 
-    async def add_model(self, model: str, config: dict | None = None) -> Model:
+    async def add_model(
+        self,
+        model: str,
+        cloud: str | None = None,
+        credential: str | None = None,
+        config: dict | None = None,
+    ) -> Model:
         """Add a model.
 
         :model: Name of the model
+        :cloud: Name of the cloud
+        :credential: Name of the credential
         :config: model configuration
         """
         # TODO(gboutry): workaround until we manage public ssh keys properly
         old_home = os.environ["HOME"]
         os.environ["HOME"] = os.environ["SNAP_REAL_HOME"]
         try:
-            return await self.controller.add_model(model, config=config)
+            return await self.controller.add_model(
+                model, cloud_name=cloud, credential_name=credential, config=config
+            )
         finally:
             os.environ["HOME"] = old_home
 
@@ -335,9 +347,14 @@ class JujuHelper:
 
     async def get_model_name_with_owner(self, model: str) -> str:
         """Get juju model full name along with owner."""
-        model_impl = await self.get_model(model)
-        owner = model_impl.info.owner_tag.removeprefix(OWNER_TAG_PREFIX)
-        return f"{owner}/{model_impl.info.name}"
+        try:
+            model_impl = await self.get_model(model)
+            owner = model_impl.info.owner_tag.removeprefix(OWNER_TAG_PREFIX)
+            return f"{owner}/{model_impl.info.name}"
+        except Exception as e:
+            if "HTTP 400" in str(e) or "HTTP 404" in str(e):
+                raise ModelNotFoundException(f"Model {model!r} not found")
+            raise e
 
     async def get_model_status(
         self, model: str, filter: list[str] | None = None
@@ -1132,6 +1149,7 @@ class JujuHelper:
         cloud_yaml["clouds"][cloud_name] = {
             "type": "manual",
             "endpoint": ip_address,
+            "auth-types": ["empty"],
         }
         return cloud_yaml
 

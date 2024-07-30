@@ -106,6 +106,10 @@ class MaasDeployment(Deployment):
     @property
     def controller(self) -> str:
         """Return controller name."""
+        if self.juju_controller:
+            return self.juju_controller.name
+
+        # Juju controller not yet set, return defaults
         return self.name + "-controller"
 
     @property

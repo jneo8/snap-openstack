@@ -20,7 +20,9 @@ import ipaddress
 import json
 import logging
 import re
+import secrets
 import socket
+import string
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -354,3 +356,42 @@ def get_local_cidr_matching_token(token: str) -> str:
         except ValueError:
             pass
     raise ValueError("No local networks found matching join token addresses.")
+
+
+def random_string(length: int) -> str:
+    """Utility function to generate secure random string."""
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for i in range(length))
+
+
+def first_connected_server(servers: list) -> str | None:
+    """Return first connected server from this node.
+
+    servers is expected to be of format ["<ip>:<port>", ...]
+    """
+    for server in servers:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ip_port = server.rsplit(":", 1)
+        if len(ip_port) != 2:
+            LOG.debug(f"Server {server} not in <ip>:<port> format")
+            continue
+
+        ip = ipaddress.ip_address(ip_port[0])
+        port = int(ip_port[1])
+
+        try:
+            if isinstance(ip, ipaddress.IPv4Address):
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            else:
+                s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+
+            s.settimeout(30)  # 30 seconds timeout
+            s.connect((str(ip), port))
+            return server
+        except Exception as e:
+            LOG.debug(str(e))
+            LOG.debug(f"Not able to connect to {ip} {port}")
+        finally:
+            s.close()
+
+    return None

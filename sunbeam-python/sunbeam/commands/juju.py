@@ -45,12 +45,14 @@ from sunbeam.jobs.common import (
     ResultType,
     convert_proxy_to_model_configs,
 )
+from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import (
     CONTROLLER_MODEL,
     ApplicationNotFoundException,
     ControllerNotFoundException,
     JujuAccount,
     JujuAccountNotFound,
+    JujuController,
     JujuException,
     JujuHelper,
     JujuWaitException,
@@ -58,6 +60,7 @@ from sunbeam.jobs.juju import (
     TimeoutException,
     run_sync,
 )
+from sunbeam.utils import random_string
 from sunbeam.versions import JUJU_BASE, JUJU_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -115,12 +118,23 @@ class JujuStepHelper:
             LOG.debug(f"Model {model_name} not found")
             return False
 
-    def get_clouds(self, cloud_type: str, local: bool = False) -> list:
-        """Get clouds based on cloud type."""
+    def get_clouds(
+        self, cloud_type: str, local: bool = False, controller: str | None = None
+    ) -> list:
+        """Get clouds based on cloud type.
+
+        If local is True, return clouds registered in client.
+        If local is False, return clouds registered in client and controller.
+        If local is False and controller specified, return clouds registered
+        in controller.
+        """
         clouds = []
         cmd = ["clouds"]
         if local:
             cmd.append("--client")
+        else:
+            if controller:
+                cmd.extend(["--controller", controller])
         clouds_from_juju_cmd = self._juju_cmd(*cmd)
         LOG.debug(f"Available clouds in juju are {clouds_from_juju_cmd.keys()}")
 
@@ -143,25 +157,38 @@ class JujuStepHelper:
             cmd.append(cloud)
         return self._juju_cmd(*cmd)
 
-    def get_controllers(self, clouds: list) -> list:
-        """Get controllers hosted on given clouds."""
-        existing_controllers = []
+    def get_controllers(self, clouds: list | None = None) -> list:
+        """Get controllers hosted on given clouds.
 
+        if clouds is None, return all the controllers.
+        """
         controllers = self._juju_cmd("controllers")
-        LOG.debug(f"Found controllers: {controllers.keys()}")
-        LOG.debug(controllers)
-
         controllers = controllers.get("controllers", {})
-        if controllers:
-            for name, details in controllers.items():
-                if details["cloud"] in clouds:
-                    existing_controllers.append(name)
+        if clouds is None:
+            return list(controllers.keys())
 
+        existing_controllers = [
+            name for name, details in controllers.items() if details["cloud"] in clouds
+        ]
         LOG.debug(
-            f"There are {len(existing_controllers)} existing k8s "
+            f"There are {len(existing_controllers)} existing {clouds} "
             f"controllers running: {existing_controllers}"
         )
         return existing_controllers
+
+    def get_external_controllers(self) -> list:
+        """Get all external controllers registered."""
+        snap = Snap()
+        data_location = snap.paths.user_data
+        external_controllers = []
+
+        controllers = self.get_controllers()
+        for controller in controllers:
+            account_file = data_location / f"{controller}.yaml"
+            if account_file.exists():
+                external_controllers.append(controller)
+
+        return external_controllers
 
     def get_controller(self, controller: str) -> dict:
         """Get controller definition."""
@@ -171,8 +198,12 @@ class JujuStepHelper:
             LOG.debug(e)
             raise ControllerNotFoundException() from e
 
-    def add_cloud(self, name: str, cloud: dict) -> bool:
-        """Add cloud to client clouds."""
+    def add_cloud(self, name: str, cloud: dict, controller: str | None) -> bool:
+        """Add cloud to client clouds.
+
+        If controller is specified, add cloud to both client
+        and given controller.
+        """
         if cloud["clouds"][name]["type"] not in ("manual", "maas"):
             return False
 
@@ -187,6 +218,8 @@ class JujuStepHelper:
                 temp.name,
                 "--client",
             ]
+            if controller:
+                cmd.extend(["--controller", controller, "--force"])
             LOG.debug(f'Running command {" ".join(cmd)}')
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
@@ -195,7 +228,7 @@ class JujuStepHelper:
 
         return True
 
-    def add_credential(self, cloud: str, credential: dict):
+    def add_credential(self, cloud: str, credential: dict, controller: str | None):
         """Add credential to client credentials."""
         with tempfile.NamedTemporaryFile() as temp:
             temp.write(yaml.dump(credential).encode("utf-8"))
@@ -208,6 +241,8 @@ class JujuStepHelper:
                 temp.name,
                 "--client",
             ]
+            if controller:
+                cmd.extend(["--controller", controller])
             LOG.debug(f'Running command {" ".join(cmd)}')
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
@@ -320,15 +355,27 @@ class JujuStepHelper:
         else:
             return False
 
+    def get_model_name_with_owner(self, model: str) -> str:
+        """Return model name with owner name.
+
+        :param model: Model name
+
+        Raises ModelNotFoundException if model does not exist.
+        """
+        model_with_owner = run_sync(self.jhelper.get_model_name_with_owner(model))
+
+        return model_with_owner
+
 
 class AddCloudJujuStep(BaseStep, JujuStepHelper):
     """Add cloud definition to juju client."""
 
-    def __init__(self, cloud: str, definition: dict):
-        super().__init__("Add Cloud", "Adding cloud to Juju client")
+    def __init__(self, cloud: str, definition: dict, controller: str | None = None):
+        super().__init__("Add Cloud", "Adding cloud to Juju")
 
         self.cloud = cloud
         self.definition = definition
+        self.controller = controller
 
     def is_skip(self, status: Optional["Status"] = None) -> Result:
         """Determines if the step should be skipped or not.
@@ -337,6 +384,8 @@ class AddCloudJujuStep(BaseStep, JujuStepHelper):
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
         cloud_type = self.definition["clouds"][self.cloud]["type"]
+
+        # Check clouds on client
         try:
             juju_clouds = self.get_clouds(cloud_type, local=True)
         except subprocess.CalledProcessError as e:
@@ -346,7 +395,27 @@ class AddCloudJujuStep(BaseStep, JujuStepHelper):
             )
             LOG.warning(e.stderr)
             return Result(ResultType.FAILED, str(e))
-        if self.cloud in juju_clouds:
+
+        if self.cloud not in juju_clouds:
+            return Result(ResultType.COMPLETED)
+
+        if not self.controller:
+            return Result(ResultType.SKIPPED)
+
+        # Check clouds on controller
+        try:
+            juju_clouds_on_controller = self.get_clouds(
+                cloud_type, local=False, controller=self.controller
+            )
+        except subprocess.CalledProcessError as e:
+            LOG.exception(
+                "Error determining whether to skip the bootstrap "
+                "process. Defaulting to not skip."
+            )
+            LOG.warning(e.stderr)
+            return Result(ResultType.FAILED, str(e))
+
+        if self.cloud in juju_clouds_on_controller:
             return Result(ResultType.SKIPPED)
         return Result(ResultType.COMPLETED)
 
@@ -358,25 +427,42 @@ class AddCloudJujuStep(BaseStep, JujuStepHelper):
         :return:
         """
         try:
-            result = self.add_cloud(self.cloud, self.definition)
+            result = self.add_cloud(self.cloud, self.definition, self.controller)
             if not result:
                 return Result(ResultType.FAILED, "Unable to create cloud")
         except subprocess.CalledProcessError as e:
-            LOG.exception("Error adding cloud to Juju")
-            LOG.warning(e.stderr)
-            return Result(ResultType.FAILED, str(e))
+            LOG.debug(e.stderr)
+            LOG.debug(str(e))
+
+            message = None
+            if "already exists" in e.stderr:
+                return Result(ResultType.COMPLETED)
+            elif (
+                "Could not upload cloud to a controller: permission denied" in e.stderr
+            ):
+                message = (
+                    "Error in adding cloud: Missing user permissions to add cloud. "
+                    "User should have either admin or superuser privileges"
+                )
+            else:
+                message = f"Error in adding cloud: {e.stderr}"
+
+            return Result(ResultType.FAILED, message)
         return Result(ResultType.COMPLETED)
 
 
 class AddCredentialsJujuStep(BaseStep, JujuStepHelper):
     """Add credentials definition to juju client."""
 
-    def __init__(self, cloud: str, credentials: str, definition: dict):
+    def __init__(
+        self, cloud: str, credentials: str, definition: dict, controller: str | None
+    ):
         super().__init__("Add Credentials", "Adding credentials to Juju client")
 
         self.cloud = cloud
         self.credentials_name = credentials
         self.definition = definition
+        self.controller = controller
 
     def is_skip(self, status: Optional["Status"] = None) -> Result:
         """Determines if the step should be skipped or not.
@@ -384,15 +470,21 @@ class AddCredentialsJujuStep(BaseStep, JujuStepHelper):
         :return: ResultType.SKIPPED if the Step should be skipped,
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
+        local = not bool(self.controller)
         try:
-            credentials = self.get_credentials(self.cloud, local=True)
+            credentials = self.get_credentials(self.cloud, local=local)
         except subprocess.CalledProcessError as e:
+            # credentials not found
+            if "not found" in e.stderr:
+                return Result(ResultType.COMPLETED)
+
             LOG.exception(
                 "Error determining whether to skip the bootstrap "
                 "process. Defaulting to not skip."
             )
             LOG.warning(e.stderr)
             return Result(ResultType.FAILED, str(e))
+
         client_creds = credentials.get("client-credentials", {})
         cloud_credentials = client_creds.get(self.cloud, {}).get(
             "cloud-credentials", {}
@@ -409,7 +501,7 @@ class AddCredentialsJujuStep(BaseStep, JujuStepHelper):
         :return:
         """
         try:
-            self.add_credential(self.cloud, self.definition)
+            self.add_credential(self.cloud, self.definition, self.controller)
         except subprocess.CalledProcessError as e:
             LOG.exception("Error adding credentials to Juju")
             LOG.warning(e.stderr)
@@ -679,9 +771,7 @@ class JujuGrantModelAccessStep(BaseStep, JujuStepHelper):
         :return:
         """
         try:
-            model_with_owner = run_sync(
-                self.jhelper.get_model_name_with_owner(self.model)
-            )
+            model_with_owner = self.get_model_name_with_owner(self.model)
             # Grant write access to the model
             # Without this step, the user is not able to view the model created
             # by other users.
@@ -768,7 +858,7 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
-        client: Client,
+        client: Client | None,
         name: str,
         controller: str,
         data_location: Path,
@@ -858,14 +948,9 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
             pexpect.EOF,
         ]
 
-        # TOCHK: password is saved as a macroon with 24hours shelf life and juju
-        # client need to login/logout?
-        # Does saving the password in $HOME/.local/share/juju/accounts.yaml
-        # avoids login/logout?
         register_args = ["--debug", "register", self.registration_token]
         if self.replace:
             register_args.append("--replace")
-        LOG.debug(f"User registration args: {register_args}")
 
         try:
             child = pexpect.spawn(
@@ -917,7 +1002,6 @@ class RegisterRemoteJujuUserStep(RegisterJujuUserStep):
 
     def __init__(
         self,
-        client: Client,
         token: str,
         controller: str,
         data_location: Path,
@@ -925,7 +1009,7 @@ class RegisterRemoteJujuUserStep(RegisterJujuUserStep):
     ):
         # User name not required to register a user. Pass empty string to
         # base class as user name
-        super().__init__(client, "", controller, data_location, replace)
+        super().__init__(None, "", controller, data_location, replace)
         self.registration_token = token
         self.account_file = f"{self.controller}.yaml"
 
@@ -941,7 +1025,6 @@ class RegisterRemoteJujuUserStep(RegisterJujuUserStep):
         except JujuAccountNotFound:
             password = pwgen.pwgen(12)
             self.juju_account = JujuAccount(user="REPLACE_USER", password=password)
-            LOG.debug(f"Writing to file {self.juju_account}")
             self.juju_account.write(self.data_location, self.account_file)
 
         return Result(ResultType.COMPLETED)
@@ -1045,10 +1128,13 @@ class UnregisterJujuController(BaseStep, JujuStepHelper):
 class AddJujuMachineStep(BaseStep, JujuStepHelper):
     """Add machine in juju."""
 
-    def __init__(self, ip: str):
+    def __init__(self, ip: str, model: str, jhelper: JujuHelper):
         super().__init__("Add machine", "Adding machine to Juju model")
 
         self.machine_ip = ip
+        self.model = model
+        self.jhelper = jhelper
+        self.model_with_owner = None
 
         home = os.environ.get("SNAP_REAL_HOME")
         os.environ["JUJU_DATA"] = f"{home}/.local/share/juju"
@@ -1060,7 +1146,13 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
         try:
-            machines = self._juju_cmd("machines", "-m", CONTROLLER_MODEL)
+            self.model_with_owner = self.get_model_name_with_owner(self.model)
+        except ModelNotFoundException as e:
+            LOG.debug(str(e))
+            return Result(ResultType.FAILED, "Model not found")
+
+        try:
+            machines = self._juju_cmd("machines", "-m", self.model_with_owner)
             LOG.debug(f"Found machines: {machines}")
             machines = machines.get("machines", {})
 
@@ -1090,7 +1182,7 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
         try:
             child = pexpect.spawn(
                 self._get_juju_binary(),
-                ["add-machine", "-m", CONTROLLER_MODEL, f"ssh:{self.machine_ip}"],
+                ["add-machine", "-m", self.model_with_owner, f"ssh:{self.machine_ip}"],
                 PEXPECT_TIMEOUT * 5,  # 5 minutes
             )
             with open(log_file, "wb+") as f:
@@ -1118,7 +1210,7 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
             # TODO(hemanth): Need to wait until machine comes to started state
             # from planned state?
 
-            machines = self._juju_cmd("machines", "-m", CONTROLLER_MODEL)
+            machines = self._juju_cmd("machines", "-m", self.model_with_owner)
             LOG.debug(f"Found machines: {machines}")
             machines = machines.get("machines", {})
             for machine, details in machines.items():
@@ -1136,11 +1228,12 @@ class AddJujuMachineStep(BaseStep, JujuStepHelper):
 class RemoveJujuMachineStep(BaseStep, JujuStepHelper):
     """Remove machine in juju."""
 
-    def __init__(self, client: Client, name: str):
+    def __init__(self, client: Client, name: str, model: str):
         super().__init__("Remove machine", f"Removing machine {name} from Juju model")
 
         self.client = client
-        self.name = name
+        self.node_name = name
+        self.model = model
         self.machine_id = -1
 
         home = os.environ.get("SNAP_REAL_HOME")
@@ -1153,13 +1246,13 @@ class RemoveJujuMachineStep(BaseStep, JujuStepHelper):
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
         try:
-            node = self.client.cluster.get_node_info(self.name)
+            node = self.client.cluster.get_node_info(self.node_name)
             self.machine_id = node.get("machineid")
         except NodeNotExistInClusterException as e:
             return Result(ResultType.FAILED, str(e))
 
         try:
-            machines = self._juju_cmd("machines", "-m", CONTROLLER_MODEL)
+            machines = self._juju_cmd("machines", "-m", self.model)
             LOG.debug(f"Found machines: {machines}")
             machines = machines.get("machines", {})
 
@@ -1191,7 +1284,7 @@ class RemoveJujuMachineStep(BaseStep, JujuStepHelper):
                 self._get_juju_binary(),
                 "remove-machine",
                 "-m",
-                CONTROLLER_MODEL,
+                self.model,
                 str(self.machine_id),
                 "--no-prompt",
             ]
@@ -1292,6 +1385,27 @@ class SaveJujuUserLocallyStep(BaseStep):
             user=self.username,
             password=password,
         )
+        juju_account.write(self.data_location)
+
+        return Result(ResultType.COMPLETED)
+
+
+class SaveJujuRemoteUserLocallyStep(SaveJujuUserLocallyStep):
+    """Save remote juju user locally in accounts yaml file."""
+
+    def __init__(self, controller: str, data_location: Path):
+        # TODO(hemanth): Replace empty string with username
+        super().__init__("", data_location)
+        self.controller = controller
+
+    def run(self, status: Optional["Status"] = None) -> Result:
+        """Run the step to completion.
+
+        Invoked when the step is run and returns a ResultType to indicate
+
+        :return:
+        """
+        juju_account = JujuAccount.load(self.data_location, f"{self.controller}.yaml")
         juju_account.write(self.data_location)
 
         return Result(ResultType.COMPLETED)
@@ -1491,11 +1605,18 @@ class AddJujuModelStep(BaseStep):
     """Add model with configs."""
 
     def __init__(
-        self, jhelper: JujuHelper, model: str, proxy_settings: dict | None = None
+        self,
+        jhelper: JujuHelper,
+        model: str,
+        cloud: str,
+        credential: str | None = None,
+        proxy_settings: dict | None = None,
     ):
         super().__init__(f"Add model {model}", f"Adding model {model}")
         self.jhelper = jhelper
         self.model = model
+        self.cloud = cloud
+        self.credential = credential
         self.proxy_settings = proxy_settings or {}
 
     def is_skip(self, status: Optional["Status"] = None) -> Result:
@@ -1511,7 +1632,14 @@ class AddJujuModelStep(BaseStep):
         """Add model with configs."""
         try:
             model_config = convert_proxy_to_model_configs(self.proxy_settings)
-            run_sync(self.jhelper.add_model(self.model, config=model_config))
+            run_sync(
+                self.jhelper.add_model(
+                    self.model,
+                    cloud=self.cloud,
+                    credential=self.credential,
+                    config=model_config,
+                )
+            )
             return Result(ResultType.COMPLETED)
         except Exception as e:
             return Result(ResultType.FAILED, str(e))
@@ -1913,5 +2041,72 @@ class SwitchToController(BaseStep, JujuStepHelper):
         except subprocess.CalledProcessError as e:
             LOG.exception(f"Error in switching the controller to {self.controller}")
             return Result(ResultType.FAILED, str(e))
+
+        return Result(ResultType.COMPLETED)
+
+
+class SaveControllerStep(BaseStep, JujuStepHelper):
+    """Save controller information locally."""
+
+    def __init__(
+        self,
+        deployment: Deployment,
+        controller: str | None,
+        data_location: Path,
+        is_external: bool = False,
+    ):
+        super().__init__(
+            "Save controller information",
+            "Saving controller information locally",
+        )
+        self.deployment = deployment
+        self.controller = controller
+        self.data_location = data_location
+        self.is_external = is_external
+
+    def _get_controller(self, name: str) -> JujuController | None:
+        try:
+            controller = self.get_controller(name)["details"]
+        except ControllerNotFoundException as e:
+            LOG.debug(str(e))
+            return None
+        return JujuController(
+            name=name,
+            api_endpoints=controller["api-endpoints"],
+            ca_cert=controller["ca-cert"],
+            is_external=self.is_external,
+        )
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not."""
+        if self.controller is None:
+            # juju controller not yet bootstrapped and is not pointed to external
+            return Result(ResultType.COMPLETED)
+
+        self.controller_details = self._get_controller(self.controller)
+        if self.controller_details is None:
+            return Result(ResultType.FAILED, f"Controller {self.controller} not found")
+
+        if self.controller_details == self.deployment.juju_controller:
+            return Result(ResultType.SKIPPED)
+
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None) -> Result:
+        """Save controller to deployment information."""
+        if self.controller:
+            # details can be filled only when controller exists
+            self.deployment.juju_controller = self.controller_details
+
+        if self.deployment.juju_account is None:
+            if self.is_external:
+                self.deployment.juju_account = JujuAccount.load(
+                    self.data_location, f"{self.controller}.yaml"
+                )
+            else:
+                password = random_string(32)
+                self.deployment.juju_account = JujuAccount(
+                    user="admin", password=password
+                )
 
         return Result(ResultType.COMPLETED)
