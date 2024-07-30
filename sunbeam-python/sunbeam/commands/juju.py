@@ -118,12 +118,23 @@ class JujuStepHelper:
             LOG.debug(f"Model {model_name} not found")
             return False
 
-    def get_clouds(self, cloud_type: str, local: bool = False) -> list:
-        """Get clouds based on cloud type."""
+    def get_clouds(
+        self, cloud_type: str, local: bool = False, controller: str | None = None
+    ) -> list:
+        """Get clouds based on cloud type.
+
+        If local is True, return clouds registered in client.
+        If local is False, return clouds registered in client and controller.
+        If local is False and controller specified, return clouds registered
+        in controller.
+        """
         clouds = []
         cmd = ["clouds"]
         if local:
             cmd.append("--client")
+        else:
+            if controller:
+                cmd.extend(["--controller", controller])
         clouds_from_juju_cmd = self._juju_cmd(*cmd)
         LOG.debug(f"Available clouds in juju are {clouds_from_juju_cmd.keys()}")
 
@@ -360,7 +371,7 @@ class AddCloudJujuStep(BaseStep, JujuStepHelper):
     """Add cloud definition to juju client."""
 
     def __init__(self, cloud: str, definition: dict, controller: str | None = None):
-        super().__init__("Add Cloud", "Adding cloud to Juju client")
+        super().__init__("Add Cloud", "Adding cloud to Juju")
 
         self.cloud = cloud
         self.definition = definition
@@ -373,6 +384,8 @@ class AddCloudJujuStep(BaseStep, JujuStepHelper):
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
         cloud_type = self.definition["clouds"][self.cloud]["type"]
+
+        # Check clouds on client
         try:
             juju_clouds = self.get_clouds(cloud_type, local=True)
         except subprocess.CalledProcessError as e:
@@ -382,7 +395,27 @@ class AddCloudJujuStep(BaseStep, JujuStepHelper):
             )
             LOG.warning(e.stderr)
             return Result(ResultType.FAILED, str(e))
-        if self.cloud in juju_clouds:
+
+        if self.cloud not in juju_clouds:
+            return Result(ResultType.COMPLETED)
+
+        if not self.controller:
+            return Result(ResultType.SKIPPED)
+
+        # Check clouds on controller
+        try:
+            juju_clouds_on_controller = self.get_clouds(
+                cloud_type, local=False, controller=self.controller
+            )
+        except subprocess.CalledProcessError as e:
+            LOG.exception(
+                "Error determining whether to skip the bootstrap "
+                "process. Defaulting to not skip."
+            )
+            LOG.warning(e.stderr)
+            return Result(ResultType.FAILED, str(e))
+
+        if self.cloud in juju_clouds_on_controller:
             return Result(ResultType.SKIPPED)
         return Result(ResultType.COMPLETED)
 

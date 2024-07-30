@@ -264,7 +264,7 @@ class TestAddCloudJujuStep:
         step = juju.AddCloudJujuStep(cloud_name, cloud_definition)
 
         with patch.object(step, "get_clouds") as mock_get_clouds:
-            mock_get_clouds.return_value = [cloud_name]
+            mock_get_clouds.side_effect = [[cloud_name]]
             result = step.is_skip()
 
         mock_get_clouds.assert_called_once_with("my-cloud-type", local=True)
@@ -291,6 +291,52 @@ class TestAddCloudJujuStep:
 
         mock_get_clouds.assert_called_once_with("my-cloud-type", local=True)
         assert result.result_type == ResultType.FAILED
+
+    def test_is_skip_when_cloud_not_found_in_controller(self):
+        controller_name = "test-controller"
+        cloud_name = "my-cloud"
+        cloud_definition = {
+            "clouds": {
+                cloud_name: {
+                    "type": "my-cloud-type",
+                    # Add other required fields for the cloud definition
+                }
+            }
+        }
+        step = juju.AddCloudJujuStep(cloud_name, cloud_definition, controller_name)
+
+        with patch.object(step, "get_clouds") as mock_get_clouds:
+            mock_get_clouds.side_effect = [[cloud_name], []]
+            result = step.is_skip()
+
+        mock_get_clouds.assert_any_call("my-cloud-type", local=True)
+        mock_get_clouds.assert_any_call(
+            "my-cloud-type", local=False, controller=controller_name
+        )
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_is_skip_when_cloud_found_in_client_and_controller(self):
+        controller_name = "test-controller"
+        cloud_name = "my-cloud"
+        cloud_definition = {
+            "clouds": {
+                cloud_name: {
+                    "type": "my-cloud-type",
+                    # Add other required fields for the cloud definition
+                }
+            }
+        }
+        step = juju.AddCloudJujuStep(cloud_name, cloud_definition, controller_name)
+
+        with patch.object(step, "get_clouds") as mock_get_clouds:
+            mock_get_clouds.side_effect = [[cloud_name], [cloud_name]]
+            result = step.is_skip()
+
+        mock_get_clouds.assert_any_call("my-cloud-type", local=True)
+        mock_get_clouds.assert_any_call(
+            "my-cloud-type", local=False, controller=controller_name
+        )
+        assert result.result_type == ResultType.SKIPPED
 
     def test_run(self):
         controller_name = "test-controller"
