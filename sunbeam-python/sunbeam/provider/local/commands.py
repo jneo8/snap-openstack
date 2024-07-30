@@ -62,6 +62,7 @@ from sunbeam.commands.juju import (
     CreateJujuUserStep,
     JujuGrantModelAccessStep,
     JujuLoginStep,
+    JujuStepHelper,
     RegisterJujuUserStep,
     RemoveJujuMachineStep,
     SaveControllerStep,
@@ -299,19 +300,29 @@ def bootstrap(
     results = run_plan(cidr_plan, console)
     management_cidr = get_step_message(results, AskManagementCidrStep)
 
-    cloud_definition = JujuHelper.manual_cloud(
-        cloud_name, utils.get_local_ip_by_cidr(management_cidr)
-    )
-
     try:
-        juju_controller_ip = utils.get_local_ip_by_cidr(management_cidr)
+        local_management_ip = utils.get_local_ip_by_cidr(management_cidr)
     except ValueError:
         LOG.debug(
             "Failed to find local address matching join token addresses"
             ", picking local address from default route",
             exc_info=True,
         )
-        juju_controller_ip = utils.get_local_cidr_by_default_route()
+        local_management_ip = utils.get_local_cidr_by_default_route()
+
+    if juju_controller:
+        controller_details = JujuStepHelper().get_controller(juju_controller)
+        endpoints = controller_details.get("details", {}).get("api-endpoints", [])
+        controller_ip_port = utils.first_connected_server(endpoints)
+        if not controller_ip_port:
+            raise click.ClickException("Juju Controller not reachable")
+
+        controller_ip = controller_ip_port.rsplit(":", 1)[0]
+    else:
+        controller_ip = local_management_ip
+
+    LOG.debug(f"Juju Controller IP: {controller_ip}")
+    cloud_definition = JujuHelper.manual_cloud(cloud_name, controller_ip)
 
     plan = []
     if juju_controller:
@@ -360,7 +371,7 @@ def bootstrap(
         )
         plan3.append(
             AddJujuMachineStep(
-                juju_controller_ip, deployment.openstack_machines_model, jhelper
+                local_management_ip, deployment.openstack_machines_model, jhelper
             )
         )
         run_plan(plan3, console)
