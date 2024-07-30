@@ -65,7 +65,6 @@ from sunbeam.jobs.common import (
 from sunbeam.jobs.deployment import CertPair, Networks
 from sunbeam.jobs.deployments import DeploymentsConfig
 from sunbeam.jobs.juju import (
-    CONTROLLER_MODEL,
     ActionFailedException,
     JujuHelper,
     JujuSecretNotFound,
@@ -2139,23 +2138,12 @@ class MaasUserQuestions(BaseStep):
 
 
 class MaasClusterStatusStep(ClusterStatusStep):
-    def _controller_model(self) -> str:
-        return CONTROLLER_MODEL.split("/")[1]
-
     def models(self) -> list[str]:
         """List of models to query status from."""
-        models = [
-            self._controller_model(),
+        return [
             self.deployment.infra_model,
             self.deployment.openstack_machines_model,
         ]
-        if (
-            self.deployment.juju_controller
-            and self.deployment.juju_controller.is_external
-        ):
-            models.remove(self._controller_model())
-
-        return models
 
     def _update_microcluster_status(self, status: dict, microcluster_status: dict):
         """How to update microcluster status in the status dict.

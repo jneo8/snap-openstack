@@ -431,9 +431,23 @@ class AddCloudJujuStep(BaseStep, JujuStepHelper):
             if not result:
                 return Result(ResultType.FAILED, "Unable to create cloud")
         except subprocess.CalledProcessError as e:
-            LOG.exception("Error adding cloud to Juju")
-            LOG.warning(e.stderr)
-            return Result(ResultType.FAILED, str(e))
+            LOG.debug(e.stderr)
+            LOG.debug(str(e))
+
+            message = None
+            if "already exists" in e.stderr:
+                return Result(ResultType.COMPLETED)
+            elif (
+                "Could not upload cloud to a controller: permission denied" in e.stderr
+            ):
+                message = (
+                    "Error in adding cloud: Missing user permissions to add cloud. "
+                    "User should have either admin or superuser privileges"
+                )
+            else:
+                message = f"Error in adding cloud: {e.stderr}"
+
+            return Result(ResultType.FAILED, message)
         return Result(ResultType.COMPLETED)
 
 
@@ -934,14 +948,9 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
             pexpect.EOF,
         ]
 
-        # TOCHK: password is saved as a macroon with 24hours shelf life and juju
-        # client need to login/logout?
-        # Does saving the password in $HOME/.local/share/juju/accounts.yaml
-        # avoids login/logout?
         register_args = ["--debug", "register", self.registration_token]
         if self.replace:
             register_args.append("--replace")
-        LOG.debug(f"User registration args: {register_args}")
 
         try:
             child = pexpect.spawn(
@@ -1016,7 +1025,6 @@ class RegisterRemoteJujuUserStep(RegisterJujuUserStep):
         except JujuAccountNotFound:
             password = pwgen.pwgen(12)
             self.juju_account = JujuAccount(user="REPLACE_USER", password=password)
-            LOG.debug(f"Writing to file {self.juju_account}")
             self.juju_account.write(self.data_location, self.account_file)
 
         return Result(ResultType.COMPLETED)
@@ -1386,7 +1394,8 @@ class SaveJujuRemoteUserLocallyStep(SaveJujuUserLocallyStep):
     """Save remote juju user locally in accounts yaml file."""
 
     def __init__(self, controller: str, data_location: Path):
-        super().__init__(None, data_location)
+        # TODO(hemanth): Replace empty string with username
+        super().__init__("", data_location)
         self.controller = controller
 
     def run(self, status: Optional["Status"] = None) -> Result:

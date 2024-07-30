@@ -376,7 +376,10 @@ class TestAddCloudJujuStep:
 
         with patch.object(step, "add_cloud") as mock_add_cloud:
             mock_add_cloud.side_effect = subprocess.CalledProcessError(
-                cmd="juju add-cloud", returncode=1, output="Error output"
+                cmd="juju add-cloud",
+                returncode=1,
+                output="Error output",
+                stderr="Error output",
             )
 
             result = step.run()
@@ -385,6 +388,34 @@ class TestAddCloudJujuStep:
             "my-cloud", cloud_definition, controller_name
         )
         assert result.result_type == ResultType.FAILED
+
+    def test_run_when_already_exists_in_client(self):
+        controller_name = "test-controller"
+        cloud_name = "my-cloud"
+        cloud_definition = {
+            "clouds": {
+                "my-cloud": {
+                    "type": "my-cloud-type",
+                    # Add other required fields for the cloud definition
+                }
+            }
+        }
+        step = juju.AddCloudJujuStep(cloud_name, cloud_definition, controller_name)
+
+        with patch.object(step, "add_cloud") as mock_add_cloud:
+            mock_add_cloud.side_effect = subprocess.CalledProcessError(
+                cmd="juju add-cloud",
+                returncode=1,
+                output="Error output",
+                stderr="local cloud already exists",
+            )
+
+            result = step.run()
+
+        mock_add_cloud.assert_called_once_with(
+            "my-cloud", cloud_definition, controller_name
+        )
+        assert result.result_type == ResultType.COMPLETED
 
 
 class TestAddCredentialsJujuStep:
