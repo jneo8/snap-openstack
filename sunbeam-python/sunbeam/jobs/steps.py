@@ -449,6 +449,7 @@ class PatchLoadBalancerServicesStep(BaseStep, abc.ABC):
                     )
                 loadbalancer_ip = service.status.loadBalancer.ingress[0].ip
                 service_annotations[self.lb_annotation] = loadbalancer_ip
+                service.metadata.annotations = service_annotations
                 LOG.debug(f"Patching {service_name!r} to use IP {loadbalancer_ip!r}")
                 self.kube.patch(Service, service_name, obj=service)
 
