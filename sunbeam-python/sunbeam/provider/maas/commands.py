@@ -631,7 +631,7 @@ def deploy(
         plan2.append(
             StoreK8SKubeConfigStep(client, jhelper, deployment.openstack_machines_model)
         )
-        plan2.append(AddK8SCloudStep(client, jhelper))
+        plan2.append(AddK8SCloudStep(deployment, jhelper))
     else:
         plan2.append(
             MaasDeployMicrok8sApplicationStep(
@@ -656,7 +656,7 @@ def deploy(
                 client, jhelper, deployment.openstack_machines_model
             )
         )
-        plan2.append(AddMicrok8sCloudStep(client, jhelper))
+        plan2.append(AddMicrok8sCloudStep(deployment, jhelper))
 
     plan2.append(TerraformInitStep(tfhelper_microceph))
     plan2.append(
@@ -686,7 +686,7 @@ def deploy(
     plan2.append(TerraformInitStep(tfhelper_openstack_deploy))
     plan2.append(
         DeployControlPlaneStep(
-            client,
+            deployment,
             tfhelper_openstack_deploy,
             jhelper,
             manifest,

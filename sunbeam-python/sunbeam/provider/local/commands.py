@@ -133,6 +133,7 @@ from sunbeam.jobs.common import (
     validate_roles,
 )
 from sunbeam.jobs.deployment import Deployment, Networks
+from sunbeam.jobs.deployments import DeploymentsConfig, deployment_path
 from sunbeam.jobs.juju import JujuHelper, ModelNotFoundException, run_sync
 from sunbeam.jobs.manifest import AddManifestStep
 from sunbeam.provider.base import ProviderBase
@@ -251,6 +252,8 @@ def bootstrap(
     client = deployment.get_client()
     snap = Snap()
 
+    path = deployment_path(snap)
+    deployments = DeploymentsConfig.load(path)
     manifest = deployment.get_manifest(manifest_path)
 
     LOG.debug(f"Manifest used for deployment - preseed: {manifest.deployment}")
@@ -271,8 +274,6 @@ def bootstrap(
     pretty_roles = ", ".join(role.name.lower() for role in roles)
     LOG.debug(f"Bootstrap node: roles {roles_str}")
 
-    cloud_type = snap.config.get("juju.cloud.type")
-    cloud_name = snap.config.get("juju.cloud.name")
     k8s_provider = snap.config.get("k8s.provider")
     juju_bootstrap_args = manifest.software.juju.bootstrap_args
     data_location = snap.paths.user_data
@@ -294,6 +295,14 @@ def bootstrap(
         )
 
     run_preflight_checks(preflight_checks, console)
+
+    # Mark deployment as active if not yet already
+    try:
+        deployments.add_deployment(deployment)
+    except ValueError:
+        # Deployment already added, ignore
+        # This case arises when bootstrap command is run multiple times
+        pass
 
     cidr_plan = []
     cidr_plan.append(AskManagementCidrStep(client, preseed, accept_defaults))
@@ -322,15 +331,18 @@ def bootstrap(
         controller_ip = local_management_ip
 
     LOG.debug(f"Juju Controller IP: {controller_ip}")
-    cloud_definition = JujuHelper.manual_cloud(cloud_name, controller_ip)
+    cloud_definition = JujuHelper.manual_cloud(deployment.name, controller_ip)
 
     plan = []
-    if juju_controller:
-        plan.append(
-            SaveControllerStep(
-                deployment, juju_controller, data_location, bool(juju_controller)
-            )
+    plan.append(
+        SaveControllerStep(
+            juju_controller,
+            deployment.name,
+            deployments,
+            data_location,
+            bool(juju_controller),
         )
+    )
     plan.append(JujuLoginStep(deployment.juju_account))
     # bootstrapped node is always machine 0 in controller model
     plan.append(ClusterInitStep(client, roles_to_str_list(roles), 0, management_cidr))
@@ -348,7 +360,9 @@ def bootstrap(
 
     if juju_controller:
         plan1 = []
-        plan1.append(AddCloudJujuStep(cloud_name, cloud_definition, juju_controller))
+        plan1.append(
+            AddCloudJujuStep(deployment.name, cloud_definition, juju_controller)
+        )
         run_plan(plan1, console)
 
         # Not creating Juju user in external controller case because of below juju bug
@@ -366,7 +380,10 @@ def bootstrap(
         plan3 = []
         plan3.append(
             AddJujuModelStep(
-                jhelper, deployment.openstack_machines_model, cloud_name, proxy_settings
+                jhelper,
+                deployment.openstack_machines_model,
+                deployment.name,
+                proxy_settings,
             )
         )
         plan3.append(
@@ -396,12 +413,14 @@ def bootstrap(
         )
     else:
         plan1 = []
-        plan1.append(AddCloudJujuStep(cloud_name, cloud_definition, juju_controller))
+        plan1.append(
+            AddCloudJujuStep(deployment.name, cloud_definition, juju_controller)
+        )
         plan1.append(
             BootstrapJujuStep(
                 client,
-                cloud_name,
-                cloud_type,
+                deployment.name,
+                cloud_definition["clouds"][deployment.name]["type"],
                 deployment.controller,
                 bootstrap_args=juju_bootstrap_args,
                 proxy_settings=proxy_settings,
@@ -461,6 +480,16 @@ def bootstrap(
                 deployment.get_space(Networks.MANAGEMENT),
             )
         )
+        plan4.append(
+            SaveControllerStep(
+                deployment.controller,
+                deployment.name,
+                deployments,
+                data_location,
+                bool(juju_controller),
+                force=True,
+            )
+        )
 
     plan4.append(PromptRegionStep(client, preseed, accept_defaults))
     # Deploy sunbeam machine charm
@@ -508,7 +537,7 @@ def bootstrap(
         plan4.append(
             StoreK8SKubeConfigStep(client, jhelper, deployment.openstack_machines_model)
         )
-        plan4.append(AddK8SCloudStep(client, jhelper))
+        plan4.append(AddK8SCloudStep(deployment, jhelper))
     else:
         k8s_tfhelper = deployment.get_tfhelper("microk8s-plan")
         plan4.append(TerraformInitStep(k8s_tfhelper))
@@ -534,7 +563,7 @@ def bootstrap(
                 client, jhelper, deployment.openstack_machines_model
             )
         )
-        plan4.append(AddMicrok8sCloudStep(client, jhelper))
+        plan4.append(AddMicrok8sCloudStep(deployment, jhelper))
 
     # Deploy Microceph application during bootstrap irrespective of node role.
     microceph_tfhelper = deployment.get_tfhelper("microceph-plan")
@@ -572,7 +601,7 @@ def bootstrap(
         plan4.append(TerraformInitStep(openstack_tfhelper))
         plan4.append(
             DeployControlPlaneStep(
-                client,
+                deployment,
                 openstack_tfhelper,
                 jhelper,
                 manifest,

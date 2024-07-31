@@ -67,8 +67,8 @@ class TestDeployControlPlaneStep(unittest.TestCase):
         self.jhelper.run_action.return_value = {}
         self.tfhelper = Mock()
         self.manifest = Mock()
-        self.client = Mock()
-        self.client.cluster.list_nodes_by_role.side_effect = [
+        self.deployment = Mock()
+        self.deployment.get_client().cluster.list_nodes_by_role.side_effect = [
             [{"name": f"control-{i}"} for i in range(4)],
             [{"name": f"storage-{i}"} for i in range(4)],
         ]
@@ -84,7 +84,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
         )
 
         step = DeployControlPlaneStep(
-            self.client,
+            self.deployment,
             self.tfhelper,
             self.jhelper,
             self.manifest,
@@ -108,7 +108,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
         )
 
         step = DeployControlPlaneStep(
-            self.client,
+            self.deployment,
             self.tfhelper,
             self.jhelper,
             self.manifest,
@@ -131,7 +131,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
         self.jhelper.wait_until_active.side_effect = TimeoutException("timed out")
 
         step = DeployControlPlaneStep(
-            self.client,
+            self.deployment,
             self.tfhelper,
             self.jhelper,
             self.manifest,
@@ -156,7 +156,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
         )
 
         step = DeployControlPlaneStep(
-            self.client,
+            self.deployment,
             self.tfhelper,
             self.jhelper,
             self.manifest,
@@ -177,7 +177,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
     def test_is_skip_pristine(self):
         self.snap_mock().config.get.return_value = "k8s"
         step = DeployControlPlaneStep(
-            self.client,
+            self.deployment,
             self.tfhelper,
             self.jhelper,
             self.manifest,
@@ -196,7 +196,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
     def test_is_skip_subsequent_run(self):
         self.snap_mock().config.get.return_value = "k8s"
         step = DeployControlPlaneStep(
-            self.client,
+            self.deployment,
             self.tfhelper,
             self.jhelper,
             self.manifest,
@@ -215,7 +215,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
     def test_is_skip_database_changed(self):
         self.snap_mock().config.get.return_value = "k8s"
         step = DeployControlPlaneStep(
-            self.client,
+            self.deployment,
             self.tfhelper,
             self.jhelper,
             self.manifest,
@@ -234,7 +234,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
     def test_is_skip_incompatible_topology(self):
         self.snap_mock().config.get.return_value = "k8s"
         step = DeployControlPlaneStep(
-            self.client,
+            self.deployment,
             self.tfhelper,
             self.jhelper,
             self.manifest,
@@ -256,7 +256,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
     def test_is_skip_force_incompatible_topology(self):
         self.snap_mock().config.get.return_value = "k8s"
         step = DeployControlPlaneStep(
-            self.client,
+            self.deployment,
             self.tfhelper,
             self.jhelper,
             self.manifest,

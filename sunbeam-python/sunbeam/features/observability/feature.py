@@ -97,7 +97,7 @@ class DeployObservabilityStackStep(BaseStep, JujuStepHelper):
         self.manifest = self.feature.manifest
         self.client = self.feature.deployment.get_client()
         self.model = OBSERVABILITY_MODEL
-        self.cloud = K8SHelper.get_cloud()
+        self.cloud = K8SHelper.get_cloud(self.feature.deployment.name)
 
     def run(self, status: Optional[Status] = None) -> Result:
         """Execute configuration using terraform."""
@@ -165,7 +165,7 @@ class UpdateObservabilityModelConfigStep(BaseStep, JujuStepHelper):
         self.manifest = self.feature.manifest
         self.client = self.feature.deployment.get_client()
         self.model = OBSERVABILITY_MODEL
-        self.cloud = K8SHelper.get_cloud()
+        self.cloud = K8SHelper.get_cloud(self.feature.deployment.name)
 
     def run(self, status: Optional[Status] = None) -> Result:
         """Execute configuration using terraform."""
@@ -325,7 +325,7 @@ class RemoveObservabilityStackStep(BaseStep, JujuStepHelper):
         self.manifest = self.feature.manifest
         self.jhelper = jhelper
         self.model = OBSERVABILITY_MODEL
-        self.cloud = K8SHelper.get_cloud()
+        self.cloud = K8SHelper.get_cloud(self.feature.deployment.name)
 
     def run(self, status: Optional[Status] = None) -> Result:
         """Execute configuration using terraform."""

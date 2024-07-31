@@ -15,6 +15,7 @@
 
 import logging
 
+import petname
 import pydantic
 import snaphelpers
 from rich.console import Console
@@ -61,7 +62,7 @@ LOCAL_TYPE = "local"
 
 
 class LocalDeployment(Deployment):
-    name: str = "local"
+    name: str = petname.Generate()
     url: str = "local"
     type: str = LOCAL_TYPE
     _client: Client | None = pydantic.PrivateAttr(default=None)

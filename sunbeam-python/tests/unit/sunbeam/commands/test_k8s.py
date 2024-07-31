@@ -21,7 +21,7 @@ import pytest
 from sunbeam.clusterd.service import ConfigItemNotFoundException
 from sunbeam.commands.k8s import (
     CREDENTIAL_SUFFIX,
-    K8S_CLOUD,
+    K8S_CLOUD_SUFFIX,
     AddK8SCloudStep,
     StoreK8SKubeConfigStep,
 )
@@ -53,35 +53,37 @@ class TestAddK8SCloudStep(unittest.TestCase):
         super().__init__(methodName)
 
     def setUp(self):
-        self.client = Mock(cluster=Mock(get_config=Mock(return_value="{}")))
+        self.deployment = Mock()
+        self.cloud_name = f"{self.deployment.name}{K8S_CLOUD_SUFFIX}"
+        self.deployment.get_client().cluster.get_config.return_value = "{}"
         self.jhelper = AsyncMock()
 
     def test_is_skip(self):
         clouds = {}
         self.jhelper.get_clouds.return_value = clouds
 
-        step = AddK8SCloudStep(self.client, self.jhelper)
+        step = AddK8SCloudStep(self.deployment, self.jhelper)
         result = step.is_skip()
 
         assert result.result_type == ResultType.COMPLETED
 
     def test_is_skip_cloud_already_deployed(self):
-        clouds = {"cloud-sunbeam-k8s": {"endpoint": "10.0.10.1"}}
+        clouds = {f"cloud-{self.cloud_name}": {"endpoint": "10.0.10.1"}}
         self.jhelper.get_clouds.return_value = clouds
 
-        step = AddK8SCloudStep(self.client, self.jhelper)
+        step = AddK8SCloudStep(self.deployment, self.jhelper)
         result = step.is_skip()
 
         assert result.result_type == ResultType.SKIPPED
 
     def test_run(self):
         with patch("sunbeam.commands.k8s.read_config", Mock(return_value={})):
-            step = AddK8SCloudStep(self.client, self.jhelper)
+            step = AddK8SCloudStep(self.deployment, self.jhelper)
             result = step.run()
 
         self.jhelper.add_k8s_cloud.assert_called_with(
-            K8S_CLOUD,
-            f"{K8S_CLOUD}{CREDENTIAL_SUFFIX}",
+            self.cloud_name,
+            f"{self.cloud_name}{CREDENTIAL_SUFFIX}",
             {},
         )
         assert result.result_type == ResultType.COMPLETED

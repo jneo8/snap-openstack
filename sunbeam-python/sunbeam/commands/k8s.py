@@ -41,7 +41,12 @@ from sunbeam.jobs.juju import (
     UnsupportedKubeconfigException,
     run_sync,
 )
-from sunbeam.jobs.k8s import K8S_CLOUD, K8S_KUBECONFIG_KEY, validate_cidr_or_ip_range
+from sunbeam.jobs.k8s import (
+    CREDENTIAL_SUFFIX,
+    K8S_CLOUD_SUFFIX,
+    K8S_KUBECONFIG_KEY,
+    validate_cidr_or_ip_range,
+)
 from sunbeam.jobs.manifest import Manifest
 from sunbeam.jobs.questions import (
     PromptQuestion,
@@ -62,7 +67,6 @@ APPLICATION = "k8s"
 K8S_APP_TIMEOUT = 180  # 3 minutes, managing the application should be fast
 K8S_UNIT_TIMEOUT = 1200  # 20 minutes, adding / removing units can take a long time
 K8S_ENABLE_ADDONS_TIMEOUT = 180  # 3 minutes
-CREDENTIAL_SUFFIX = "-creds"
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
 
 
@@ -348,12 +352,12 @@ class EnableK8SFeatures(BaseStep):
 class AddK8SCloudStep(BaseStep, JujuStepHelper):
     _KUBECONFIG = K8S_KUBECONFIG_KEY
 
-    def __init__(self, client: Client, jhelper: JujuHelper):
+    def __init__(self, deployment: Deployment, jhelper: JujuHelper):
         super().__init__("Add K8S cloud", "Adding K8S cloud to Juju controller")
-        self.client = client
+        self.client = deployment.get_client()
         self.jhelper = jhelper
-        self.name = K8S_CLOUD
-        self.credential_name = f"{K8S_CLOUD}{CREDENTIAL_SUFFIX}"
+        self.cloud_name = f"{deployment.name}{K8S_CLOUD_SUFFIX}"
+        self.credential_name = f"{self.cloud_name}{CREDENTIAL_SUFFIX}"
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
@@ -364,7 +368,7 @@ class AddK8SCloudStep(BaseStep, JujuStepHelper):
         clouds = run_sync(self.jhelper.get_clouds())
         LOG.debug(f"Clouds registered in the controller: {clouds}")
         # TODO(hemanth): Need to check if cloud credentials are also created?
-        if f"cloud-{self.name}" in clouds.keys():
+        if f"cloud-{self.cloud_name}" in clouds.keys():
             return Result(ResultType.SKIPPED)
 
         return Result(ResultType.COMPLETED)
@@ -374,7 +378,9 @@ class AddK8SCloudStep(BaseStep, JujuStepHelper):
         try:
             kubeconfig = read_config(self.client, self._KUBECONFIG)
             run_sync(
-                self.jhelper.add_k8s_cloud(self.name, self.credential_name, kubeconfig)
+                self.jhelper.add_k8s_cloud(
+                    self.cloud_name, self.credential_name, kubeconfig
+                )
             )
         except (ConfigItemNotFoundException, UnsupportedKubeconfigException) as e:
             LOG.debug("Failed to add k8s cloud to Juju controller", exc_info=True)

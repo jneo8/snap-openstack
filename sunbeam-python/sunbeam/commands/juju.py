@@ -45,7 +45,7 @@ from sunbeam.jobs.common import (
     ResultType,
     convert_proxy_to_model_configs,
 )
-from sunbeam.jobs.deployment import Deployment
+from sunbeam.jobs.deployments import DeploymentsConfig
 from sunbeam.jobs.juju import (
     CONTROLLER_MODEL,
     ApplicationNotFoundException,
@@ -2050,19 +2050,24 @@ class SaveControllerStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
-        deployment: Deployment,
         controller: str | None,
+        deployment_name: str,
+        deployments_config: DeploymentsConfig,
         data_location: Path,
         is_external: bool = False,
+        force: bool = False,
     ):
         super().__init__(
             "Save controller information",
             "Saving controller information locally",
         )
-        self.deployment = deployment
+        self.deployment_name = deployment_name
+        self.deployments_config = deployments_config
+        self.deployment = self.deployments_config.get_deployment(self.deployment_name)
         self.controller = controller
         self.data_location = data_location
         self.is_external = is_external
+        self.force = force
 
     def _get_controller(self, name: str) -> JujuController | None:
         try:
@@ -2087,7 +2092,10 @@ class SaveControllerStep(BaseStep, JujuStepHelper):
         if self.controller_details is None:
             return Result(ResultType.FAILED, f"Controller {self.controller} not found")
 
-        if self.controller_details == self.deployment.juju_controller:
+        if (
+            not self.force
+            and self.controller_details == self.deployment.juju_controller
+        ):
             return Result(ResultType.SKIPPED)
 
         return Result(ResultType.COMPLETED)
@@ -2109,4 +2117,5 @@ class SaveControllerStep(BaseStep, JujuStepHelper):
                     user="admin", password=password
                 )
 
+        self.deployments_config.write()
         return Result(ResultType.COMPLETED)

@@ -22,8 +22,6 @@ from sunbeam.log import setup_logging
 
 LOG = logging.getLogger(__name__)
 DEFAULT_CONFIG = {
-    "juju.cloud.type": "manual",
-    "juju.cloud.name": "sunbeam",
     "daemon.group": "snap_daemon",
     "daemon.debug": False,
     "k8s.provider": "microk8s",
