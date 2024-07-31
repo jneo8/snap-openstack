@@ -22,18 +22,18 @@ from sunbeam.jobs.common import SunbeamException
 LOG = logging.getLogger(__name__)
 
 # --- Microk8s specific
-MICROK8S_CLOUD = "sunbeam-microk8s"
 MICROK8S_KUBECONFIG_KEY = "Microk8sConfig"
 MICROK8S_DEFAULT_STORAGECLASS = "microk8s-hostpath"
 METALLB_ANNOTATION = "metallb.universe.tf/loadBalancerIPs"
 
 # --- K8s specific
-K8S_CLOUD = "sunbeam-k8s"
 K8S_DEFAULT_STORAGECLASS = "csi-rawfile-default"
 K8S_KUBECONFIG_KEY = "K8SKubeConfig"
 SERVICE_LB_ANNOTATION = "io.cilium/lb-ipam-ips"
 
 SUPPORTED_K8S_PROVIDERS = ["k8s", "microk8s"]
+CREDENTIAL_SUFFIX = "-creds"
+K8S_CLOUD_SUFFIX = "-k8s"
 
 
 def validate_cidr_or_ip_range(ip_ranges: str):
@@ -69,13 +69,9 @@ class K8SHelper:
         return provider
 
     @classmethod
-    def get_cloud(cls) -> str:
+    def get_cloud(cls, deployment_name: str) -> str:
         """Return cloud name matching provider."""
-        match cls.get_provider():
-            case "k8s":
-                return K8S_CLOUD
-            case _:
-                return MICROK8S_CLOUD
+        return f"{deployment_name}{K8S_CLOUD_SUFFIX}"
 
     @classmethod
     def get_default_storageclass(cls) -> str:

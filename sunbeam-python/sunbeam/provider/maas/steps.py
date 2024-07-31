@@ -1127,16 +1127,15 @@ class MaasSaveControllerStep(SaveControllerStep):
 
     def __init__(
         self,
-        controller: str,
+        controller: str | None,
         deployment_name: str,
         deployments_config: DeploymentsConfig,
         data_location: Path,
         is_external: bool = False,
     ):
-        self.deployment_name = deployment_name
-        self.deployments_config = deployments_config
-        deployment = self.deployments_config.get_deployment(self.deployment_name)
-        super().__init__(deployment, controller, data_location, is_external)
+        super().__init__(
+            controller, deployment_name, deployments_config, data_location, is_external
+        )
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
@@ -1144,12 +1143,6 @@ class MaasSaveControllerStep(SaveControllerStep):
             return Result(ResultType.SKIPPED)
 
         return super().is_skip(status)
-
-    def run(self, status: Status | None) -> Result:
-        """Save controller to deployment information."""
-        super().run(status)
-        self.deployments_config.write()
-        return Result(ResultType.COMPLETED)
 
 
 class MaasSaveClusterdCredentialsStep(BaseStep):

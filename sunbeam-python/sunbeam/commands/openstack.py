@@ -24,7 +24,6 @@ import sunbeam.commands.microceph as microceph
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import ConfigItemNotFoundException
 from sunbeam.commands.juju import JujuStepHelper
-from sunbeam.commands.k8s import CREDENTIAL_SUFFIX
 from sunbeam.commands.terraform import TerraformException, TerraformHelper
 from sunbeam.jobs.common import (
     RAM_32_GB_IN_KB,
@@ -37,8 +36,9 @@ from sunbeam.jobs.common import (
     update_config,
     update_status_background,
 )
+from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
-from sunbeam.jobs.k8s import K8SHelper
+from sunbeam.jobs.k8s import CREDENTIAL_SUFFIX, K8SHelper
 from sunbeam.jobs.manifest import Manifest
 from sunbeam.jobs.questions import (
     PromptQuestion,
@@ -107,7 +107,7 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
-        client: Client,
+        deployment: Deployment,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
         manifest: Manifest,
@@ -121,7 +121,7 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
             "Deploying OpenStack Control Plane",
             "Deploying OpenStack Control Plane to Kubernetes (this may take a while)",
         )
-        self.client = client
+        self.client = deployment.get_client()
         self.tfhelper = tfhelper
         self.jhelper = jhelper
         self.manifest = manifest
@@ -131,7 +131,7 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
         self.proxy_settings = proxy_settings or {}
         self.force = force
         self.model = OPENSTACK_MODEL
-        self.cloud = K8SHelper.get_cloud()
+        self.cloud = K8SHelper.get_cloud(deployment.name)
 
     def get_storage_tfvars(self, storage_nodes: list[dict]) -> dict:
         """Create terraform variables related to storage."""

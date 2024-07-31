@@ -36,7 +36,8 @@ from sunbeam.jobs.juju import (
     run_sync,
 )
 from sunbeam.jobs.k8s import (
-    MICROK8S_CLOUD,
+    CREDENTIAL_SUFFIX,
+    K8S_CLOUD_SUFFIX,
     MICROK8S_KUBECONFIG_KEY,
     validate_cidr_or_ip_range,
 )
@@ -51,7 +52,6 @@ LOG = logging.getLogger(__name__)
 APPLICATION = "microk8s"
 MICROK8S_APP_TIMEOUT = 180  # 3 minutes, managing the application should be fast
 MICROK8S_UNIT_TIMEOUT = 1200  # 20 minutes, adding / removing units can take a long time
-CREDENTIAL_SUFFIX = "-creds"
 MICROK8S_CONFIG_KEY = "TerraformVarsMicrok8s"
 MICROK8S_ADDONS_CONFIG_KEY = "TerraformVarsMicrok8sAddons"
 
@@ -205,14 +205,14 @@ class RemoveMicrok8sUnitStep(RemoveMachineUnitStep):
 class AddMicrok8sCloudStep(BaseStep, JujuStepHelper):
     _CONFIG = MICROK8S_KUBECONFIG_KEY
 
-    def __init__(self, client: Client, jhelper: JujuHelper):
+    def __init__(self, deployment: Deployment, jhelper: JujuHelper):
         super().__init__(
             "Add MicroK8S cloud", "Adding MicroK8S cloud to Juju controller"
         )
-        self.client = client
+        self.client = deployment.get_client()
         self.jhelper = jhelper
-        self.cloud_name = MICROK8S_CLOUD
-        self.credential_name = f"{MICROK8S_CLOUD}{CREDENTIAL_SUFFIX}"
+        self.cloud_name = f"{deployment.name}{K8S_CLOUD_SUFFIX}"
+        self.credential_name = f"{self.cloud_name}{CREDENTIAL_SUFFIX}"
 
     def is_skip(self, status: Optional[Status] = None) -> Result:
         """Determines if the step should be skipped or not.
