@@ -38,8 +38,14 @@ from sunbeam.features.interface.utils import (
     validate_ca_certificate,
     validate_ca_chain,
 )
-from sunbeam.features.interface.v1.openstack import TerraformPlanLocation
-from sunbeam.features.interface.v1.tls import TlsFeatureGroup
+from sunbeam.features.interface.v1.openstack import (
+    TerraformPlanLocation,
+    WaitForApplicationsStep,
+)
+from sunbeam.features.interface.v1.tls import (
+    INGRESS_CHANGE_APPLICATION_TIMEOUT,
+    TlsFeatureGroup,
+)
 from sunbeam.jobs import questions
 from sunbeam.jobs.common import (
     FORMAT_TABLE,
@@ -420,6 +426,10 @@ class CaTlsFeature(TlsFeatureGroup):
         client = self.deployment.get_client()
         manifest = self.deployment.get_manifest(manifest_path)
         preseed = manifest.deployment
+        model = OPENSTACK_MODEL
+        apps_to_monitor = ["traefik", "traefik-public", "keystone"]
+        if client.cluster.list_nodes_by_role("storage"):
+            apps_to_monitor.append("traefik-rgw")
 
         try:
             config = read_config(client, CERTIFICATE_FEATURE_KEY)
@@ -437,6 +447,12 @@ class CaTlsFeature(TlsFeatureGroup):
                 self.ca,
                 self.ca_chain,
                 deployment_preseed=preseed,
+            ),
+            # On ingress change, the keystone takes time to update the service
+            # endpoint, update the identity-service relation data on every
+            # related application.
+            WaitForApplicationsStep(
+                jhelper, apps_to_monitor, model, INGRESS_CHANGE_APPLICATION_TIMEOUT
             ),
         ]
         run_plan(plan, console)

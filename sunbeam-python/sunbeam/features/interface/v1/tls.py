@@ -26,6 +26,7 @@ from sunbeam.commands.openstack import OPENSTACK_MODEL
 from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
+    WaitForApplicationsStep,
 )
 from sunbeam.jobs.common import (
     BaseStep,
@@ -44,6 +45,8 @@ from sunbeam.jobs.juju import (
 )
 
 CERTIFICATE_FEATURE_KEY = "TlsProvider"
+# Time out for keystone to settle once ingress change relation data
+INGRESS_CHANGE_APPLICATION_TIMEOUT = 900
 LOG = logging.getLogger(__name__)
 console = Console()
 
@@ -106,8 +109,21 @@ class TlsFeatureGroup(OpenStackControlPlaneFeature):
     def post_disable(self) -> None:
         """Handler to perform tasks after the feature is disabled."""
         super().post_disable()
+
+        client = self.deployment.get_client()
         jhelper = JujuHelper(self.deployment.get_connected_controller())
-        plan = [RemoveCACertsFromKeystoneStep(jhelper, self.feature_key)]
+
+        model = OPENSTACK_MODEL
+        apps_to_monitor = ["traefik", "traefik-public", "keystone"]
+        if client.cluster.list_nodes_by_role("storage"):
+            apps_to_monitor.append("traefik-rgw")
+
+        plan = [
+            RemoveCACertsFromKeystoneStep(jhelper, self.feature_key),
+            WaitForApplicationsStep(
+                jhelper, apps_to_monitor, model, INGRESS_CHANGE_APPLICATION_TIMEOUT
+            ),
+        ]
         run_plan(plan, console)
 
         config = {}
