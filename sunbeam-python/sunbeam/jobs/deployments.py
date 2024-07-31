@@ -145,6 +145,15 @@ class DeploymentsConfig(pydantic.BaseModel):
         self.active = name
         self.write()
 
+    def get_minimal_info(self) -> dict:
+        """Get deployments config with minimal information."""
+        self_dict = self.model_dump()
+        # self_dict has deployments with Deployment dict but not of provider
+        # so workaround to add each deployment based on provider
+        deployments = [d.model_dump(include={"name", "type"}) for d in self.deployments]
+        self_dict["deployments"] = deployments
+        return self_dict
+
 
 def deployment_path(snap: Snap) -> Path:
     """Path to deployments configuration."""

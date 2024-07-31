@@ -23,6 +23,10 @@ from rich.console import Console
 from snaphelpers import Snap
 
 from sunbeam import utils
+from sunbeam.clusterd.service import (
+    ClusterServiceUnavailableException,
+    ConfigItemNotFoundException,
+)
 from sunbeam.commands import cluster_status
 from sunbeam.commands import refresh as refresh_cmds
 from sunbeam.commands import resize as resize_cmds
@@ -127,9 +131,11 @@ from sunbeam.jobs.common import (
     Role,
     click_option_topology,
     get_step_message,
+    read_config,
     roles_to_str_list,
     run_plan,
     run_preflight_checks,
+    update_config,
     validate_roles,
 )
 from sunbeam.jobs.deployment import Deployment, Networks
@@ -146,6 +152,7 @@ from sunbeam.utils import CatchGroup
 
 LOG = logging.getLogger(__name__)
 console = Console()
+DEPLOYMENTS_CONFIG_KEY = "deployments"
 
 
 @click.group("cluster", context_settings=CONTEXT_SETTINGS, cls=CatchGroup)
@@ -355,6 +362,7 @@ def bootstrap(
     )
     run_plan(plan, console)
 
+    update_config(client, DEPLOYMENTS_CONFIG_KEY, deployments.get_minimal_info())
     proxy_settings = deployment.get_proxy_settings()
     LOG.debug(f"Proxy settings: {proxy_settings}")
 
@@ -785,11 +793,28 @@ def join(
         ip = utils.get_local_cidr_by_default_route()
 
     deployment: LocalDeployment = ctx.obj
-    data_location = Snap().paths.user_data
     client = deployment.get_client()
+    snap = Snap()
+
+    data_location = snap.paths.user_data
+    path = deployment_path(snap)
+    deployments = DeploymentsConfig.load(path)
 
     plan1 = [ClusterJoinNodeStep(client, token, ip, name, roles_str)]
     run_plan(plan1, console)
+
+    try:
+        deployments_from_db = read_config(client, DEPLOYMENTS_CONFIG_KEY)
+        deployment.name = deployments_from_db.get("active", "local")
+        deployments.add_deployment(deployment)
+    except (ConfigItemNotFoundException, ClusterServiceUnavailableException) as e:
+        raise click.ClickException(
+            f"Error in getting deployment details from cluster db: {str(e)}"
+        )
+    except ValueError:
+        # Deployment already added, ignore
+        # This case arises when bootstrap command is run multiple times
+        pass
 
     # Loads juju controller
     deployment.reload_credentials()
@@ -802,6 +827,7 @@ def join(
 
     # Loads juju account
     deployment.reload_credentials()
+    deployments.write()
     jhelper = JujuHelper(deployment.get_connected_controller())
     plan3 = [AddJujuMachineStep(ip, deployment.openstack_machines_model, jhelper)]
     plan3_results = run_plan(plan3, console)
