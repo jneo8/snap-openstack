@@ -76,6 +76,7 @@ from sunbeam.commands.juju import (
 )
 from sunbeam.commands.k8s import (
     AddK8SCloudStep,
+    AddK8SCredentialStep,
     AddK8SUnitsStep,
     DeployK8SApplicationStep,
     EnableK8SFeatures,
@@ -90,6 +91,7 @@ from sunbeam.commands.microceph import (
 )
 from sunbeam.commands.microk8s import (
     AddMicrok8sCloudStep,
+    AddMicrok8sCredentialStep,
     AddMicrok8sUnitsStep,
     DeployMicrok8sApplicationStep,
     RemoveMicrok8sUnitStep,
@@ -857,12 +859,14 @@ def join(
                     client, name, jhelper, deployment.openstack_machines_model
                 )
             )
+            plan4.append(AddK8SCredentialStep(deployment, jhelper))
         else:
             plan4.append(
                 AddMicrok8sUnitsStep(
                     client, name, jhelper, deployment.openstack_machines_model
                 )
             )
+            plan4.append(AddMicrok8sCredentialStep(deployment, jhelper))
 
     if is_storage_node:
         plan4.append(

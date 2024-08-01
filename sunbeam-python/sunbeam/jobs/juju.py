@@ -647,6 +647,33 @@ class JujuHelper:
         # NOTE: User, proxy, scp_options left to defaults
         await unit.scp_from(source, destination)
 
+    def _generate_juju_credential(self, user: dict) -> juju_client.CloudCredential:
+        """Geenrate juju crdential object from kubeconfig user."""
+        if "token" in user:
+            cred = juju_client.CloudCredential(
+                auth_type="oauth2", attrs={"Token": user["token"]}
+            )
+        elif "client-certificate-data" in user and "client-key-data" in user:
+            client_certificate_data = base64.b64decode(
+                user["client-certificate-data"]
+            ).decode("utf-8")
+            client_key_data = base64.b64decode(user["client-key-data"]).decode("utf-8")
+            cred = juju_client.CloudCredential(
+                auth_type="clientcertificate",
+                attrs={
+                    "ClientCertificateData": client_certificate_data,
+                    "ClientKeyData": client_key_data,
+                },
+            )
+        else:
+            LOG.error("No credentials found for user in config")
+            raise UnsupportedKubeconfigException(
+                "Unsupported user credentials, only OAuth token and ClientCertificate "
+                "are supported"
+            )
+
+        return cred
+
     async def add_k8s_cloud(
         self, cloud_name: str, credential_name: str, kubeconfig: dict
     ):
@@ -678,29 +705,21 @@ class JujuHelper:
             if "already exists" not in str(e):
                 raise e
 
-        if "token" in user:
-            cred = juju_client.CloudCredential(
-                auth_type="oauth2", attrs={"Token": user["token"]}
-            )
-        elif "client-certificate-data" in user and "client-key-data" in user:
-            client_certificate_data = base64.b64decode(
-                user["client-certificate-data"]
-            ).decode("utf-8")
-            client_key_data = base64.b64decode(user["client-key-data"]).decode("utf-8")
-            cred = juju_client.CloudCredential(
-                auth_type="clientcertificate",
-                attrs={
-                    "ClientCertificateData": client_certificate_data,
-                    "ClientKeyData": client_key_data,
-                },
-            )
-        else:
-            LOG.error("No credentials found for user in config")
-            raise UnsupportedKubeconfigException(
-                "Unsupported user credentials, only OAuth token and ClientCertificate "
-                "are supported"
-            )
+        cred = self._generate_juju_credential(user)
+        await self.controller.add_credential(
+            credential_name, credential=cred, cloud=cloud_name
+        )
 
+    async def add_k8s_credential(
+        self, cloud_name: str, credential_name: str, kubeconfig: dict
+    ):
+        """Add K8S Credential to controller."""
+        contexts = {v["name"]: v["context"] for v in kubeconfig["contexts"]}
+        users = {v["name"]: v["user"] for v in kubeconfig["users"]}
+        ctx = contexts.get(kubeconfig.get("current-context"))
+        user = users.get(ctx.get("user"))
+
+        cred = self._generate_juju_credential(user)
         await self.controller.add_credential(
             credential_name, credential=cred, cloud=cloud_name
         )

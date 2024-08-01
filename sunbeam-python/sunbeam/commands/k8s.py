@@ -15,6 +15,8 @@
 
 import ipaddress
 import logging
+import subprocess
+from typing import Optional
 
 import yaml
 from rich.console import Console
@@ -379,6 +381,55 @@ class AddK8SCloudStep(BaseStep, JujuStepHelper):
             kubeconfig = read_config(self.client, self._KUBECONFIG)
             run_sync(
                 self.jhelper.add_k8s_cloud(
+                    self.cloud_name, self.credential_name, kubeconfig
+                )
+            )
+        except (ConfigItemNotFoundException, UnsupportedKubeconfigException) as e:
+            LOG.debug("Failed to add k8s cloud to Juju controller", exc_info=True)
+            return Result(ResultType.FAILED, str(e))
+
+        return Result(ResultType.COMPLETED)
+
+
+class AddK8SCredentialStep(BaseStep, JujuStepHelper):
+    _KUBECONFIG = K8S_KUBECONFIG_KEY
+
+    def __init__(self, deployment: Deployment, jhelper: JujuHelper):
+        super().__init__(
+            "Add k8s Credential", "Adding k8s credential to juju controller"
+        )
+        self.client = deployment.get_client()
+        self.jhelper = jhelper
+        self.cloud_name = f"{deployment.name}{K8S_CLOUD_SUFFIX}"
+        self.credential_name = f"{self.cloud_name}{CREDENTIAL_SUFFIX}"
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        try:
+            credentials = self.get_credentials(cloud=self.cloud_name)
+        except subprocess.CalledProcessError as e:
+            if "not found" in e.stderr:
+                return Result(ResultType.COMPLETED)
+
+            LOG.debug(e.stderr)
+            LOG.exception("Error retrieving juju credentails from controller.")
+            return Result(ResultType.FAILED, str(e))
+
+        if self.credential_name in credentials.get("controller-credentials", {}).keys():
+            return Result(ResultType.SKIPPED)
+
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Optional[Status] = None) -> Result:
+        """Add k8s credential to Juju controller."""
+        try:
+            kubeconfig = read_config(self.client, self._KUBECONFIG)
+            run_sync(
+                self.jhelper.add_k8s_credential(
                     self.cloud_name, self.credential_name, kubeconfig
                 )
             )
