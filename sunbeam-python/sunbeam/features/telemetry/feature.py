@@ -101,6 +101,7 @@ class TelemetryFeature(OpenStackControlPlaneFeature):
             [
                 TerraformInitStep(tfhelper),
                 EnableOpenStackApplicationStep(tfhelper, jhelper, self),
+                TerraformInitStep(tfhelper_hypervisor),
                 # No need to pass any extra terraform vars for this feature
                 ReapplyHypervisorTerraformPlanStep(
                     self.deployment.get_client(),
@@ -123,6 +124,7 @@ class TelemetryFeature(OpenStackControlPlaneFeature):
         plan = [
             TerraformInitStep(tfhelper),
             DisableOpenStackApplicationStep(tfhelper, jhelper, self),
+            TerraformInitStep(tfhelper_hypervisor),
             ReapplyHypervisorTerraformPlanStep(
                 self.deployment.get_client(),
                 tfhelper_hypervisor,
