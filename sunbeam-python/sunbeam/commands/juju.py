@@ -163,7 +163,7 @@ class JujuStepHelper:
         if clouds is None, return all the controllers.
         """
         controllers = self._juju_cmd("controllers")
-        controllers = controllers.get("controllers", {})
+        controllers = controllers.get("controllers", {}) or {}
         if clouds is None:
             return list(controllers.keys())
 
