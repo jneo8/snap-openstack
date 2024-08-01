@@ -23,6 +23,7 @@ from rich.status import Status
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import ConfigItemNotFoundException
 from sunbeam.commands.juju import JujuStepHelper
+from sunbeam.commands.k8s import AddK8SCredentialStep
 from sunbeam.commands.terraform import TerraformHelper
 from sunbeam.jobs import questions
 from sunbeam.jobs.common import BaseStep, Result, ResultType, read_config, update_config
@@ -242,6 +243,10 @@ class AddMicrok8sCloudStep(BaseStep, JujuStepHelper):
             return Result(ResultType.FAILED, str(e))
 
         return Result(ResultType.COMPLETED)
+
+
+class AddMicrok8sCredentialStep(AddK8SCredentialStep):
+    _KUBECONFIG = MICROK8S_KUBECONFIG_KEY
 
 
 class StoreMicrok8sConfigStep(BaseStep, JujuStepHelper):

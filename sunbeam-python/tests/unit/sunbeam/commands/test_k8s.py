@@ -23,6 +23,7 @@ from sunbeam.commands.k8s import (
     CREDENTIAL_SUFFIX,
     K8S_CLOUD_SUFFIX,
     AddK8SCloudStep,
+    AddK8SCredentialStep,
     StoreK8SKubeConfigStep,
 )
 from sunbeam.jobs.common import ResultType
@@ -84,6 +85,51 @@ class TestAddK8SCloudStep(unittest.TestCase):
         self.jhelper.add_k8s_cloud.assert_called_with(
             self.cloud_name,
             f"{self.cloud_name}{CREDENTIAL_SUFFIX}",
+            {},
+        )
+        assert result.result_type == ResultType.COMPLETED
+
+
+class TestAddK8SCredentialStep(unittest.TestCase):
+    def __init__(self, methodName: str = "runTest") -> None:
+        super().__init__(methodName)
+
+    def setUp(self):
+        self.deployment = Mock()
+        self.deployment.name = "mydeployment"
+        self.cloud_name = f"{self.deployment.name}{K8S_CLOUD_SUFFIX}"
+        self.credential_name = f"{self.cloud_name}{CREDENTIAL_SUFFIX}"
+        self.deployment.get_client().cluster.get_config.return_value = "{}"
+        self.jhelper = AsyncMock()
+
+    def test_is_skip(self):
+        credentials = {}
+        self.jhelper.get_credentials.return_value = credentials
+
+        step = AddK8SCredentialStep(self.deployment, self.jhelper)
+        with patch.object(step, "get_credentials", return_value=credentials):
+            result = step.is_skip()
+
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_is_skip_credential_exists(self):
+        credentials = {"controller-credentials": {self.credential_name: {}}}
+        self.jhelper.get_credentials.return_value = credentials
+
+        step = AddK8SCredentialStep(self.deployment, self.jhelper)
+        with patch.object(step, "get_credentials", return_value=credentials):
+            result = step.is_skip()
+
+        assert result.result_type == ResultType.SKIPPED
+
+    def test_run(self):
+        with patch("sunbeam.commands.k8s.read_config", Mock(return_value={})):
+            step = AddK8SCredentialStep(self.deployment, self.jhelper)
+            result = step.run()
+
+        self.jhelper.add_k8s_credential.assert_called_with(
+            self.cloud_name,
+            self.credential_name,
             {},
         )
         assert result.result_type == ResultType.COMPLETED
