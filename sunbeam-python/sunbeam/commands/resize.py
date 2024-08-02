@@ -77,7 +77,7 @@ def resize(ctx: click.Context, topology: str, force: bool = False) -> None:
         [
             TerraformInitStep(openstack_tfhelper),
             DeployControlPlaneStep(
-                client,
+                deployment,
                 openstack_tfhelper,
                 jhelper,
                 manifest,
