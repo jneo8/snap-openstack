@@ -80,6 +80,11 @@ class MaasClient:
             raise ValueError(f"Machine {machine!r} not unique.")
         return machines[0]
 
+    def get_machine_volume_groups(self, machine_id: str) -> list[dict]:
+        """Get machine volume groups."""
+        machine = self._client.machines.get(machine_id)  # type: ignore
+        return machine.volume_groups._handler.read(system_id=machine.system_id)
+
     def list_spaces(self) -> list[dict]:
         """List spaces."""
         return self._client.spaces.list.__self__._handler.read()  # type: ignore
@@ -138,15 +143,41 @@ class MaasClient:
         )
 
 
-def _to_root_disk(device: dict, partition: dict | None = None) -> dict:
+def _to_root_disk(
+    physical_devices: list[dict],
+    virtual_device: dict | None,
+    partition: dict | None = None,
+) -> dict:
     """Convert device to root disk."""
     if partition:
         size = partition["size"]
+    elif virtual_device:
+        size = virtual_device["size"]
+    elif len(physical_devices) == 1:
+        size = physical_devices[0]["size"]
     else:
-        size = device["size"]
+        raise ValueError(
+            "Expected exactly one physical device when"
+            " no partition/virtual blockdevice found."
+        )
     root_disk = {
-        "name": device["name"],
-        "tags": device["tags"],
+        "physical_blockdevices": [
+            {
+                "name": device["name"],
+                "tags": device["tags"],
+                "size": device["size"],
+            }
+            for device in physical_devices
+        ],
+        "virtual_blockdevice": (
+            {
+                "name": virtual_device["name"],
+                "size": virtual_device["size"],
+                "tags": virtual_device["tags"],
+            }
+            if virtual_device
+            else None
+        ),
         "root_partition": {
             "size": size,
         },
@@ -154,10 +185,80 @@ def _to_root_disk(device: dict, partition: dict | None = None) -> dict:
     return root_disk
 
 
-def _convert_raw_machine(machine_raw: dict) -> dict:
+def _find_root_devices(client, machine: dict) -> dict | None:  # noqa: C901
+    """Find device(s) hosting the root partition.
+
+    Iterate over blockdevices and partitions to find the root partition.
+    From there, either the partition is on a physical device or a virtual device.
+    If it is a physical device, return the device.
+    If it is a virtual device, check if it is an LVM, try to find underlying physical
+    devices.
+    """
+    root_blockdevice = None
+    root_partition = None
+    blockdevices = machine["blockdevice_set"]
+
+    for blockdevice in blockdevices:
+        if fs := blockdevice.get("filesystem"):
+            if fs.get("label") == "root" or fs.get("mount_point") == "/":
+                root_blockdevice = blockdevice
+                break
+
+        for partition in blockdevice.get("partitions", []):
+            if fs := partition.get("filesystem"):
+                if fs.get("label") == "root" or fs.get("mount_point") == "/":
+                    root_blockdevice = blockdevice
+                    root_partition = partition
+                    break
+
+    if root_blockdevice is None:
+        LOG.debug("No root blockdevice found, neither physical nor virtual")
+        return None
+
+    if root_blockdevice["type"] == "physical":
+        LOG.debug("Root device is a physical device")
+        return _to_root_disk([root_blockdevice], None, root_partition)
+
+    underlying_devices = []
+
+    if root_blockdevice["type"] != "virtual":
+        LOG.debug("Unknown block device type: %r", root_blockdevice)
+        return None
+
+    volume_groups = client.get_machine_volume_groups(machine["system_id"])
+
+    for vg in volume_groups:
+        for lv in vg["logical_volumes"]:
+            if lv["id"] == root_blockdevice["id"]:
+                LOG.debug("Root device is a logical volume")
+                underlying_devices.extend(
+                    {
+                        "type": device["type"],
+                        "id": device["id"],
+                        # physical blockdevices don't have a device_id
+                        "device_id": device.get("device_id"),
+                    }
+                    for device in vg["devices"]
+                )
+    LOG.debug("underlying_devices: %r", underlying_devices)
+    physical_devices = []
+    for device in underlying_devices:
+        if device["type"] == "physical":
+            device_id = device.get("id")
+        else:
+            device_id = device.get("device_id")
+        if device_id is None:
+            LOG.debug("Unknown device_id for device: %r", device)
+            continue
+        for blockdevice in machine["physicalblockdevice_set"]:
+            if blockdevice["id"] == device_id:
+                physical_devices.append(blockdevice)
+    return _to_root_disk(physical_devices, root_blockdevice, root_partition)
+
+
+def _convert_raw_machine(machine_raw: dict, root_disk: dict | None) -> dict:
     storage_tags = StorageTags.values()
     storage_devices = {tag: [] for tag in storage_tags}
-    root_disk = None
     for blockdevice in machine_raw["blockdevice_set"]:
         for tag in blockdevice["tags"]:
             if tag in storage_tags:
@@ -167,16 +268,6 @@ def _convert_raw_machine(machine_raw: dict) -> dict:
                         "id_path": blockdevice["id_path"],
                     }
                 )
-        if root_disk is not None:
-            # root device already found, skipping
-            continue
-        if fs := blockdevice.get("filesystem"):
-            if fs.get("label") == "root":
-                root_disk = _to_root_disk(blockdevice)
-
-        for partition in blockdevice.get("partitions", []):
-            if (fs := partition.get("filesystem")) and fs.get("label") == "root":
-                root_disk = _to_root_disk(blockdevice, partition)
 
     spaces = []
     nics = []
@@ -213,14 +304,18 @@ def list_machines(client: MaasClient, **extra_args) -> list[dict]:
 
     machines = []
     for machine in machines_raw:
-        machines.append(_convert_raw_machine(machine))
+        machines.append(
+            _convert_raw_machine(machine, _find_root_devices(client, machine))
+        )
     return machines
 
 
 def get_machine(client: MaasClient, machine: str) -> dict:
     """Get machine in deployment, return consumable dict."""
     machine_raw = client.get_machine(machine)
-    machine_dict = _convert_raw_machine(machine_raw)
+    machine_dict = _convert_raw_machine(
+        machine_raw, _find_root_devices(client, machine_raw)
+    )
     LOG.debug("Retrieved machine %s: %r", machine, machine_dict)
     return machine_dict
 

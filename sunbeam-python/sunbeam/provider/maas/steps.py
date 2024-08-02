@@ -449,17 +449,53 @@ class MachineRootDiskCheck(DiagnosticsCheck):
                 machine=self.machine["hostname"],
             )
 
-        if "ssd" not in root_disk["tags"]:
+        root_partition = root_disk.get("root_partition")
+        if root_partition is None:
+            return DiagnosticsResult.fail(
+                self.name,
+                "could not determine root partition",
+                "A machine needs to have a root partition to be a"
+                " part of an openstack deployment.",
+                machine=self.machine["hostname"],
+            )
+
+        physical_devices = root_disk.get("physical_blockdevices", ())
+        virtual_device = root_disk.get("virtual_blockdevice")
+        if not physical_devices:
+            if virtual_device:
+                disk_msg = "Detected root disk to be a virtual device."
+            else:
+                disk_msg = "Could not deternine root disk to be a physical device."
+            return DiagnosticsResult.warn(
+                self.name,
+                "could not determine physical devices",
+                disk_msg
+                + " A machine root disk needs to be be backed by physical devices"
+                " be a part of an openstack deployment.",
+                machine=self.machine["hostname"],
+            )
+
+        if any("ssd" not in device.get("tags", ()) for device in physical_devices):
+            if virtual_device:
+                disk_msg = (
+                    "Detected root disk to be a virtual device backed by"
+                    " physical devices that are not all SSDs."
+                )
+            else:
+                disk_msg = (
+                    "Detected root disk to be backed by physical devices that"
+                    " are not all SSDs."
+                )
             return DiagnosticsResult.warn(
                 self.name,
                 "root disk is not a SSD",
-                "A machine root disk needs to be an SSD to be"
+                disk_msg + " A machine root disk needs to be an SSD to be"
                 " a part of an openstack deployment. Deploying "
                 "without SSD root disk can lead to performance issues.",
                 machine=self.machine["hostname"],
             )
 
-        if root_disk["root_partition"]["size"] < 500 * 1024**3:
+        if root_partition.get("size", 0) < 500 * 1024**3:
             return DiagnosticsResult.warn(
                 self.name,
                 "root disk is too small",
