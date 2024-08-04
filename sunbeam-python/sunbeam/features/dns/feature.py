@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import logging
-from typing import Optional
 
 import click
 from packaging.version import Version
@@ -29,7 +28,7 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.jobs.common import run_plan
+from sunbeam.jobs.common import BaseStep, run_plan
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import JujuHelper, run_sync
 from sunbeam.jobs.manifest import AddManifestStep, CharmManifest, SoftwareConfig
@@ -52,7 +51,7 @@ class PatchBindLoadBalancerStep(PatchLoadBalancerServicesStep):
 
 class DnsFeature(OpenStackControlPlaneFeature):
     version = Version("0.0.1")
-    nameservers: Optional[str]
+    nameservers: str | None
 
     def __init__(self, deployment: Deployment) -> None:
         super().__init__(
@@ -94,7 +93,7 @@ class DnsFeature(OpenStackControlPlaneFeature):
         """Run plans to enable feature."""
         jhelper = JujuHelper(self.deployment.get_connected_controller())
 
-        plan = []
+        plan: list[BaseStep] = []
         if self.user_manifest:
             plan.append(
                 AddManifestStep(self.deployment.get_client(), self.user_manifest)
@@ -167,7 +166,7 @@ class DnsFeature(OpenStackControlPlaneFeature):
     def dns_groups(self):
         """Manage dns."""
 
-    async def bind_address(self) -> Optional[str]:
+    async def bind_address(self) -> str | None:
         """Fetch bind address from juju."""
         model = OPENSTACK_MODEL
         application = "bind"

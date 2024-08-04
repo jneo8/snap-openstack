@@ -150,10 +150,11 @@ class TestWriteCharmLogStep:
 
         assert result.result_type == ResultType.SKIPPED
 
-    def test_run(self, mocker, snap, check_call, mock_open):
+    def test_run(self, mocker, jhelper, snap, check_call, mock_open):
         mocker.patch.object(juju, "Snap", return_value=snap)
         with tempfile.NamedTemporaryFile() as tmpfile:
             step = juju.WriteCharmLogStep(jhelper, "openstack", Path(tmpfile.name))
+            step.model_uuid = "test-uuid"
             result = step.run()
 
         assert result.result_type == ResultType.COMPLETED

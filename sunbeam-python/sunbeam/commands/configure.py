@@ -17,7 +17,6 @@ import ipaddress
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.console import Console
@@ -141,7 +140,7 @@ def ext_net_questions_local_only():
     }
 
 
-VARIABLE_DEFAULTS = {
+VARIABLE_DEFAULTS: dict[str, dict[str, str | int | bool | None]] = {
     "user": {
         "username": "demo",
         "cidr": "192.168.122.0/24",
@@ -218,7 +217,7 @@ def retrieve_admin_credentials(jhelper: JujuHelper, model: str) -> dict:
     bundle = "\n".join(ca_bundle)
 
     if bundle:
-        home = os.environ.get("SNAP_REAL_HOME")
+        home = os.environ["SNAP_REAL_HOME"]
         cafile = Path(home) / ".config" / "openstack" / "ca_bundle.pem"
         LOG.debug("Writing CA bundle to {str(cafile)}")
 
@@ -239,6 +238,8 @@ class SetHypervisorCharmConfigStep(BaseStep):
     """Update openstack-hypervisor charm config."""
 
     IPVANYNETWORK_UNSET = "0.0.0.0/0"
+    ext_network: dict
+    charm_config: dict
 
     def __init__(
         self, client: Client, jhelper: JujuHelper, ext_network: Path, model: str
@@ -260,7 +261,7 @@ class SetHypervisorCharmConfigStep(BaseStep):
         """Returns true if the step has prompts that it can ask the user."""
         return False
 
-    def run(self, status: Optional["Status"] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Run the step to completion.
 
         Invoked when the step is run and returns a ResultType to indicate
@@ -326,7 +327,7 @@ class UserOpenRCStep(BaseStep):
         self.cacert = cacert
         self.openrc = openrc
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -343,7 +344,7 @@ class UserOpenRCStep(BaseStep):
         else:
             return Result(ResultType.SKIPPED)
 
-    def run(self, status: Optional["Status"] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Fetch openrc from terraform state."""
         try:
             tf_output = self.tfhelper.output(hide_output=True)
@@ -400,7 +401,7 @@ class UserQuestions(BaseStep):
         """Returns true if the step has prompts that it can ask the user."""
         return True
 
-    def prompt(self, console: Optional[Console] = None) -> None:
+    def prompt(self, console: Console | None = None) -> None:
         """Prompt the user for basic cloud configuration.
 
         Prompts the user for required information for cloud configuration.
@@ -490,8 +491,9 @@ class UserQuestions(BaseStep):
             self.variables["user"]["username"] = user_bank.username.ask()
             self.variables["user"]["password"] = user_bank.password.ask()
             self.variables["user"]["cidr"] = user_bank.cidr.ask()
+            nameservers = user_bank.nameservers.ask()
             self.variables["user"]["dns_nameservers"] = (
-                user_bank.nameservers.ask().split()
+                nameservers.split() if nameservers else None
             )
             self.variables["user"]["security_group_rules"] = (
                 user_bank.security_group_rules.ask()
@@ -501,7 +503,7 @@ class UserQuestions(BaseStep):
             self.client, CLOUD_CONFIG_SECTION, self.variables
         )
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Run the step to completion."""
         return Result(ResultType.COMPLETED)
 
@@ -523,7 +525,7 @@ class DemoSetup(BaseStep):
         self.tfhelper = tfhelper
         self.client = client
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -537,7 +539,7 @@ class DemoSetup(BaseStep):
         else:
             return Result(ResultType.SKIPPED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
         self.variables = sunbeam.jobs.questions.load_answers(
             self.client, CLOUD_CONFIG_SECTION
@@ -561,7 +563,7 @@ class TerraformDemoInitStep(TerraformInitStep):
         self.tfhelper = tfhelper
         self.client = client
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -597,7 +599,7 @@ class SetHypervisorUnitsOptionsStep(BaseStep):
         self.preseed = deployment_preseed or {}
         self.nics: dict[str, str | None] = {}
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Apply individual hypervisor settings."""
         app = "openstack-hypervisor"
         action_cmd = "set-hypervisor-local-settings"
@@ -628,8 +630,8 @@ class SetHypervisorUnitsOptionsStep(BaseStep):
         return Result(ResultType.COMPLETED)
 
 
-def _sorter(name):
-    if name == "deployment":
+def _sorter(cmd: tuple[str, click.Command]) -> int:
+    if cmd[0] == "deployment":
         return 0
     return 1
 
@@ -661,15 +663,14 @@ def _keep_cmd_params(cmd: click.Command, params: dict) -> dict:
 )
 def configure(
     ctx: click.Context,
-    openrc: Optional[Path] = None,
-    manifest_path: Optional[Path] = None,
+    openrc: Path | None = None,
+    manifest_path: Path | None = None,
     accept_defaults: bool = False,
 ) -> None:
     """Configure cloud with some sensible defaults."""
     if ctx.invoked_subcommand is not None:
         return
-    commands = configure.commands.items()
-    commands = sorted(commands, key=_sorter)
+    commands = sorted(configure.commands.items(), key=_sorter)
     for name, command in commands:
         LOG.debug("Running configure %r", name)
         cmd_ctx = click.Context(

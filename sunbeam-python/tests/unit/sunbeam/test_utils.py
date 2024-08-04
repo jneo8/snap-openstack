@@ -14,7 +14,6 @@
 
 import textwrap
 from dataclasses import InitVar
-from typing import Dict
 from unittest.mock import Mock, mock_open, patch
 
 import pytest
@@ -72,7 +71,7 @@ class A:
     a_int: int | None = None
     a_str: str | None = None
     a_dict: dict | None = None
-    a_dict_b: Dict[str, B] | None = None
+    a_dict_b: dict[str, B] | None = None
 
     def __post_init__(self, a_init):
         self.a_priv = "a_priv"

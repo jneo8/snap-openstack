@@ -22,8 +22,9 @@ import logging
 import ssl
 import textwrap
 from pathlib import Path
+from typing import Sequence
 
-from maas.client import bones
+from maas.client import bones  # type: ignore [import-untyped]
 from rich.console import Console
 from rich.status import Status
 from snaphelpers import Snap
@@ -161,16 +162,21 @@ class AddMaasDeployment(BaseStep):
             LOG.info("Exception info", exc_info=True)
             return Result(ResultType.FAILED, str(e))
 
-        spaces = self.deployment.network_mapping.values()
-        spaces = [space for space in spaces if space is not None]
+        spaces = {
+            space
+            for space in self.deployment.network_mapping.values()
+            if space is not None
+        }
         if len(spaces) > 0:
             try:
                 maas_spaces = maas_client.list_spaces(client)
             except ValueError as e:
                 LOG.debug("Failed to list spaces", exc_info=True)
                 return Result(ResultType.FAILED, str(e))
-            maas_spaces = [maas_space["name"] for maas_space in maas_spaces]
-            difference = set(spaces).difference(maas_spaces)
+            maas_unique_spaces: set[str] = {
+                maas_space["name"] for maas_space in maas_spaces
+            }
+            difference = spaces.difference(maas_unique_spaces)
             if len(difference) > 0:
                 return Result(
                     ResultType.FAILED,
@@ -286,12 +292,15 @@ class MachineNetworkCheck(DiagnosticsCheck):
         LOG.debug(
             f"{self.machine['hostname']=!r} required networks: {required_networks!r}"
         )
-        required_spaces = set()
-        missing_spaces = set()
+        required_spaces: set[str] = set()
+        missing_spaces: set[str] = set()
         for network in required_networks:
             corresponding_space = network_to_space_mapping[network.value]
+            if not corresponding_space:
+                LOG.debug(f"{network.value=!r} has no corresponding space")
+                continue
             required_spaces.add(corresponding_space)
-            if corresponding_space not in assigned_spaces:
+            if corresponding_space and corresponding_space not in assigned_spaces:
                 missing_spaces.add(corresponding_space)
         LOG.debug(f"{self.machine['hostname']=!r} missing spaces: {missing_spaces!r}")
         if not assigned_spaces or missing_spaces:
@@ -556,7 +565,7 @@ class MachineRequirementsCheck(DiagnosticsCheck):
         )
 
 
-def _run_check_list(checks: list[DiagnosticsCheck]) -> list[DiagnosticsResult]:
+def _run_check_list(checks: Sequence[DiagnosticsCheck]) -> list[DiagnosticsResult]:
     check_results = []
     for check in checks:
         LOG.debug(f"Starting check {check.name}")
@@ -594,7 +603,7 @@ class DeploymentMachinesCheck(DiagnosticsCheck):
                     " to be a part of an openstack deployment.",
                 )
             ]
-        checks = []
+        checks: list[DiagnosticsCheck] = []
         for machine in self.machines:
             checks.append(MachineRolesCheck(machine))
             checks.append(MachineNetworkCheck(self.deployment, machine))
@@ -709,7 +718,7 @@ class ZoneBalanceCheck(DiagnosticsCheck):
 
     def run(self) -> DiagnosticsResult:
         """Check role distribution across zones."""
-        zone_role_counts = {}
+        zone_role_counts: dict[str, dict[str, int]] = {}
         for zone, machines in self.machines.items():
             zone_role_counts.setdefault(zone, {})
             for machine in machines:
@@ -720,9 +729,11 @@ class ZoneBalanceCheck(DiagnosticsCheck):
         unbalanced_roles = []
         distribution = ""
         for role in maas_deployment.RoleTags.values():
-            counts = [zone_role_counts[zone].get(role, 0) for zone in zone_role_counts]
-            max_count = max(counts)
-            min_count = min(counts)
+            role_any_zone_counts = [
+                zone_role_counts[zone].get(role, 0) for zone in zone_role_counts
+            ]
+            max_count = max(role_any_zone_counts)
+            min_count = min(role_any_zone_counts)
             if max_count != min_count:
                 unbalanced_roles.append(role)
             distribution += f"{role}:"
@@ -783,8 +794,8 @@ class IpRangesCheck(DiagnosticsCheck):
         self.deployment = deployment
 
     def _get_ranges_for_label(
-        self, subnet_ranges: dict[str, list[dict]], label: str
-    ) -> list[tuple]:
+        self, subnet_ranges: dict[str, list[dict[str, str]]], label: str
+    ) -> list[tuple[str, str]]:
         """Ip ranges for a given label."""
         ip_ranges = []
         for ranges in subnet_ranges.values():
@@ -877,7 +888,7 @@ class DeploymentTopologyCheck(DiagnosticsCheck):
                 )
             ]
         machines_by_zone = maas_client._group_machines_by_zone(self.machines)
-        checks = []
+        checks: list[DiagnosticsCheck] = []
         if JujuStepHelper().get_external_controllers():
             LOG.info(
                 "External juju controllers registered, skipping DeploymentRoleCheck "
@@ -1201,9 +1212,9 @@ class MaasSaveClusterdCredentialsStep(BaseStep):
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
         deployment = self.deployments_config.get_deployment(self.deployment_name)
-        self.model = deployment.infra_model
         if not maas_deployment.is_maas_deployment(deployment):
             return Result(ResultType.SKIPPED)
+        self.model = deployment.infra_model
         return Result(ResultType.COMPLETED)
 
     def run(self, status: Status | None) -> Result:
@@ -1275,6 +1286,9 @@ class MaasSaveClusterdCredentialsStep(BaseStep):
 class MaasAddMachinesToClusterdStep(BaseStep):
     """Add machines from MAAS to Clusterd."""
 
+    nodes: Sequence[tuple[str, str]] | None
+    machines: Sequence[dict] | None
+
     def __init__(self, client: Client, maas_client: maas_client.MaasClient):
         super().__init__("Add machines", "Adding machines to Clusterd")
         self.client = client
@@ -1324,7 +1338,7 @@ class MaasAddMachinesToClusterdStep(BaseStep):
                 machine["hostname"], machine["roles"], systemid=machine["system_id"]
             )
         for node in self.nodes:
-            self.client.cluster.update_node_info(*node)
+            self.client.cluster.update_node_info(*node)  # type: ignore
         return Result(ResultType.COMPLETED)
 
 
@@ -1532,8 +1546,8 @@ class MaasConfigureMicrocephOSDStep(BaseStep):
             LOG.debug("Failed to find leader unit", exc_info=True)
             raise ValueError(str(e))
         osds, _ = await self._list_disks(leader)
-        disks = {}
-        default_disk = {"osds": [], "unpartitioned_disks": []}
+        disks: dict[str, dict[str, list[str]]] = {}
+        default_disk: dict[str, list[str]] = {"osds": [], "unpartitioned_disks": []}
         for osd in osds:
             location = osd["location"]  # machine name
             disks.setdefault(location, copy.deepcopy(default_disk))["osds"].append(
@@ -1684,6 +1698,7 @@ class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
     """Deploy Microk8s application using Terraform."""
 
     deployment: maas_deployment.MaasDeployment
+    ranges: str | None
 
     def __init__(
         self,
@@ -1810,6 +1825,7 @@ class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
     """Deploy K8S application using Terraform."""
 
     deployment: maas_deployment.MaasDeployment
+    ranges: str | None
 
     def __init__(
         self,
@@ -2150,8 +2166,9 @@ class MaasUserQuestions(BaseStep):
             self.variables["user"]["username"] = user_bank.username.ask()
             self.variables["user"]["password"] = user_bank.password.ask()
             self.variables["user"]["cidr"] = user_bank.cidr.ask()
+            nameservers = user_bank.nameservers.ask()
             self.variables["user"]["dns_nameservers"] = (
-                user_bank.nameservers.ask().split()
+                nameservers.split() if nameservers else []
             )
             self.variables["user"]["security_group_rules"] = (
                 user_bank.security_group_rules.ask()
@@ -2167,6 +2184,8 @@ class MaasUserQuestions(BaseStep):
 
 
 class MaasClusterStatusStep(ClusterStatusStep):
+    deployment: maas_deployment.MaasDeployment
+
     def models(self) -> list[str]:
         """List of models to query status from."""
         return [

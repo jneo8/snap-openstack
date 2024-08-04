@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import logging
-from typing import Optional
 
 from rich.console import Console
 from rich.status import Status
@@ -46,7 +45,7 @@ class UpgradeFeatures(BaseStep):
         self.deployment = deployment
         self.upgrade_release = upgrade_release
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Upgrade features."""
         FeatureManager.update_features(
             self.deployment, upgrade_release=self.upgrade_release

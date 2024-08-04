@@ -15,7 +15,7 @@
 
 import ast
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import click
 from rich.console import Console
@@ -38,7 +38,7 @@ from sunbeam.jobs.manifest import Manifest
 from sunbeam.jobs.steps import (
     AddMachineUnitsStep,
     DeployMachineApplicationStep,
-    RemoveMachineUnitStep,
+    RemoveMachineUnitsStep,
 )
 
 LOG = logging.getLogger(__name__)
@@ -218,19 +218,21 @@ class AddMicrocephUnitsStep(AddMachineUnitsStep):
         return MICROCEPH_UNIT_TIMEOUT
 
 
-class RemoveMicrocephUnitStep(RemoveMachineUnitStep):
+class RemoveMicrocephUnitsStep(RemoveMachineUnitsStep):
     """Remove Microceph Unit."""
 
-    def __init__(self, client: Client, name: str, jhelper: JujuHelper, model: str):
+    def __init__(
+        self, client: Client, names: list[str] | str, jhelper: JujuHelper, model: str
+    ):
         super().__init__(
             client,
-            name,
+            names,
             jhelper,
             CONFIG_KEY,
             APPLICATION,
             model,
-            "Remove MicroCeph unit",
-            "Removing MicroCeph unit from machine",
+            "Remove MicroCeph unit(s)",
+            "Removing MicroCeph unit(s) from machine",
         )
 
     def get_unit_timeout(self) -> int:
@@ -259,11 +261,11 @@ class ConfigureMicrocephOSDStep(BaseStep):
         self.model = model
         self.preseed = deployment_preseed or {}
         self.accept_defaults = accept_defaults
-        self.variables = {}
+        self.variables: dict = {}
         self.machine_id = ""
         self.disks = ""
-        self.unpartitioned_disks = []
-        self.osd_disks = []
+        self.unpartitioned_disks: list[str] = []
+        self.osd_disks: list[str] = []
 
     def microceph_config_questions(self):
         """Return questions for configuring microceph."""
@@ -286,13 +288,13 @@ class ConfigureMicrocephOSDStep(BaseStep):
                     APPLICATION, self.machine_id, self.model
                 )
             )
-            self.osd_disks, self.unpartitioned_disks = run_sync(
+            osd_disks_dict, unpartitioned_disks_dict = run_sync(
                 list_disks(self.jhelper, self.model, unit.entity_id)
             )
             self.unpartitioned_disks = [
-                disk.get("path") for disk in self.unpartitioned_disks
+                disk.get("path") for disk in unpartitioned_disks_dict
             ]
-            self.osd_disks = [disk.get("path") for disk in self.osd_disks]
+            self.osd_disks = [disk.get("path") for disk in osd_disks_dict]
             LOG.debug(f"Unpartitioned disks: {self.unpartitioned_disks}")
             LOG.debug(f"OSD disks: {self.osd_disks}")
 
@@ -300,7 +302,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
             LOG.debug(str(e))
             raise click.ClickException("Unable to list disks")
 
-    def prompt(self, console: Optional[Console] = None) -> None:
+    def prompt(self, console: Console | None = None) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -356,7 +358,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
         """
         return True
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -369,8 +371,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
             return Result(ResultType.SKIPPED)
 
         # Remove any disks that are already added
-        disks_to_add = self.disks.split(",")
-        disks_to_add = set(disks_to_add).difference(set(self.osd_disks))
+        disks_to_add = set(self.disks.split(",")).difference(self.osd_disks)
         self.disks = ",".join(disks_to_add)
         if not self.disks:
             LOG.debug("Skipping ConfigureMicrocephOSDStep as devices are already added")
@@ -378,7 +379,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Configure local disks on microceph."""
         failed = False
         try:
@@ -438,7 +439,7 @@ class SetCephMgrPoolSizeStep(BaseStep):
         self.client = client
         self.jhelper = jhelper
         self.model = model
-        self.storage_nodes = []
+        self.storage_nodes: list[dict] = []
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
@@ -452,7 +453,7 @@ class SetCephMgrPoolSizeStep(BaseStep):
 
         return Result(ResultType.SKIPPED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Set ceph mgr pool size."""
         try:
             pools = [

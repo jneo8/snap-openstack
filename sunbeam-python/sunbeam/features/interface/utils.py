@@ -133,13 +133,13 @@ def get_subject_from_csr(csr: str) -> str | None:
         uid = req.subject.get_attributes_for_oid(NameOID.X500_UNIQUE_IDENTIFIER)
         LOG.debug(f"UID for requested csr: {uid}")
         # Pick the first available ID
-        return uid[0].value
+        return str(uid[0].value)
     except (binascii.Error, TypeError, ValueError) as e:
         LOG.debug(e)
         return None
 
 
-def encode_base64_as_string(data: str) -> str:
+def encode_base64_as_string(data: str) -> str | None:
     try:
         return base64.b64encode(bytes(data, "utf-8")).decode()
     except (binascii.Error, TypeError) as e:
@@ -147,7 +147,7 @@ def encode_base64_as_string(data: str) -> str:
         return None
 
 
-def decode_base64_as_string(data: str) -> str:
+def decode_base64_as_string(data: str) -> str | None:
     try:
         return base64.b64decode(data).decode()
     except (binascii.Error, TypeError) as e:

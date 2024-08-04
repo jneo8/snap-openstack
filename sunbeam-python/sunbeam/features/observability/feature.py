@@ -21,7 +21,6 @@ Feature to deploy and manage observability, powered by COS Lite.
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional
 
 import click
 from packaging.version import Version
@@ -99,7 +98,7 @@ class DeployObservabilityStackStep(BaseStep, JujuStepHelper):
         self.model = OBSERVABILITY_MODEL
         self.cloud = K8SHelper.get_cloud(self.feature.deployment.name)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
         proxy_settings = self.feature.deployment.get_proxy_settings()
         model_config = convert_proxy_to_model_configs(proxy_settings)
@@ -125,7 +124,7 @@ class DeployObservabilityStackStep(BaseStep, JujuStepHelper):
 
         apps = run_sync(self.jhelper.get_application_names(self.model))
         LOG.debug(f"Application monitored for readiness: {apps}")
-        queue = asyncio.queues.Queue(maxsize=len(apps))
+        queue: asyncio.queues.Queue[str] = asyncio.queues.Queue(maxsize=len(apps))
         task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
@@ -167,7 +166,7 @@ class UpdateObservabilityModelConfigStep(BaseStep, JujuStepHelper):
         self.model = OBSERVABILITY_MODEL
         self.cloud = K8SHelper.get_cloud(self.feature.deployment.name)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
         proxy_settings = self.feature.deployment.get_proxy_settings()
         model_config = convert_proxy_to_model_configs(proxy_settings)
@@ -208,7 +207,7 @@ class RemoveSaasApplicationsStep(BaseStep):
         self.jhelper = jhelper
         self.model = model
         self.offering_model = offering_model
-        self._remote_app_to_delete = []
+        self._remote_app_to_delete: list[str] = []
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
@@ -235,7 +234,7 @@ class RemoveSaasApplicationsStep(BaseStep):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
         if not self._remote_app_to_delete:
             return Result(ResultType.COMPLETED)
@@ -269,7 +268,7 @@ class DeployGrafanaAgentStep(BaseStep, JujuStepHelper):
         self.client = self.feature.deployment.get_client()
         self.model = self.feature.deployment.openstack_machines_model
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
         cos_backend = self.tfhelper_cos.backend
         cos_backend_config = self.tfhelper_cos.backend_config()
@@ -327,7 +326,7 @@ class RemoveObservabilityStackStep(BaseStep, JujuStepHelper):
         self.model = OBSERVABILITY_MODEL
         self.cloud = K8SHelper.get_cloud(self.feature.deployment.name)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
         try:
             self.tfhelper.destroy()
@@ -365,7 +364,7 @@ class RemoveGrafanaAgentStep(BaseStep, JujuStepHelper):
         self.manifest = self.feature.manifest
         self.model = self.feature.deployment.openstack_machines_model
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
         try:
             self.tfhelper.destroy()
@@ -416,10 +415,10 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
     @property
     def manifest(self) -> Manifest:
         """Return the manifest."""
-        if self._manifest:
+        if self._manifest is not None:
             return self._manifest
 
-        self._manifest = self.deployment.get_manifest()
+        self._manifest: Manifest = self.deployment.get_manifest()
         return self._manifest
 
     def manifest_defaults(self) -> SoftwareConfig:

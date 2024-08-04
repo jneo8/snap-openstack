@@ -16,9 +16,10 @@
 
 import inspect
 import logging
+import typing
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Literal, Type, Union
+from typing import Literal, Type
 
 import click
 from packaging.requirements import Requirement
@@ -84,6 +85,12 @@ class BaseFeature(ABC):
 
     # Version of feature
     version = Version("0.0.0")
+
+    # Name of feature
+    name: str
+
+    # Deployment object
+    deployment: Deployment
 
     def __init__(self, name: str, deployment: Deployment) -> None:
         """Constructor for Base feature.
@@ -477,6 +484,17 @@ class FeatureRequirement(Requirement):
         return klass
 
 
+@typing.runtime_checkable
+class NamedEnabledDisableFeatureProtocol(typing.Protocol):
+    def __init__(self, deployment: Deployment) -> None:
+        pass
+
+    @property
+    def enabled(self) -> bool:
+        """Is the feature enabled."""
+        ...
+
+
 class EnableDisableFeature(BaseFeature):
     """Interface for features of type on/off.
 
@@ -494,7 +512,7 @@ class EnableDisableFeature(BaseFeature):
         :param name: Name of the feature
         """
         super().__init__(name, deployment)
-        self.user_manifest = None
+        self.user_manifest: Path | None = None
 
     @property
     def enabled(self) -> bool:
@@ -577,12 +595,16 @@ class EnableDisableFeature(BaseFeature):
 
     def check_enablement_requirements(
         self,
-        state: Union[Literal["enable"], Literal["disable"]] = "enable",
+        state: Literal["enable"] | Literal["disable"] = "enable",
     ):
         """Check whether the feature can be enabled."""
         features = FeatureManager().get_all_feature_classes()
         for klass in features:
-            if not issubclass(klass, EnableDisableFeature):
+            if not isinstance(klass, NamedEnabledDisableFeatureProtocol):
+                LOG.debug(
+                    f"Skipping {klass} as it does not respect"
+                    " NamedEnabledDisableFeatureProtocol"
+                )
                 continue
             feature = klass(self.deployment)
             if not feature.enabled:
@@ -607,6 +629,12 @@ class EnableDisableFeature(BaseFeature):
     def enable_requirements(self):
         """Iterate through requirements, enable features if possible."""
         for requirement in self.requires:
+            if not isinstance(requirement.klass, NamedEnabledDisableFeatureProtocol):
+                LOG.debug(
+                    f"Skipping {requirement.klass} as it does not respect"
+                    " NamedEnabledDisableFeatureProtocol"
+                )
+                continue
             feature = requirement.klass(self.deployment)
 
             if feature.enabled:
@@ -650,7 +678,8 @@ class EnableDisableFeature(BaseFeature):
                 current_click_context.parent.command.name == "enable"
                 and "manifest" in current_click_context.parent.params  # noqa: W503
             ):
-                self.user_manifest = current_click_context.parent.params.get("manifest")
+                if manifest := current_click_context.parent.params.get("manifest"):
+                    self.user_manifest = Path(manifest)
             current_click_context = current_click_context.parent
 
         self.pre_enable()

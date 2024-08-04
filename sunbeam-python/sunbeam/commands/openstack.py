@@ -15,7 +15,6 @@
 
 import asyncio
 import logging
-from typing import Optional
 
 from rich.console import Console
 from rich.status import Status
@@ -135,7 +134,7 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
 
     def get_storage_tfvars(self, storage_nodes: list[dict]) -> dict:
         """Create terraform variables related to storage."""
-        tfvars = {}
+        tfvars: dict[str, str | bool | int] = {}
         if storage_nodes:
             model_with_owner = self.get_model_name_with_owner(self.machine_model)
             tfvars["enable-ceph"] = True
@@ -152,7 +151,7 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
         """Create terraform variables related to region."""
         return {"region": read_config(self.client, REGION_CONFIG_KEY)["region"]}
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -195,7 +194,7 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
         # TODO(jamespage):
         # This needs to evolve to add support for things like:
@@ -246,7 +245,7 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
         if not extra_tfvars.get("enable-ceph") and "cinder-ceph" in apps:
             apps.remove("cinder-ceph")
         LOG.debug(f"Application monitored for readiness: {apps}")
-        queue = asyncio.queues.Queue(maxsize=len(apps))
+        queue: asyncio.queues.Queue[str] = asyncio.queues.Queue(maxsize=len(apps))
         task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
@@ -308,7 +307,7 @@ class ReapplyOpenStackTerraformPlanStep(BaseStep, JujuStepHelper):
         self.manifest = manifest
         self.model = OPENSTACK_MODEL
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Reapply Terraform plan if there are changes in tfvars."""
         try:
             self.update_status(status, "deploying services")
@@ -327,7 +326,7 @@ class ReapplyOpenStackTerraformPlanStep(BaseStep, JujuStepHelper):
         if not storage_nodes and "cinder-ceph" in apps:
             apps.remove("cinder-ceph")
         LOG.debug(f"Application monitored for readiness: {apps}")
-        queue = asyncio.queues.Queue(maxsize=len(apps))
+        queue: asyncio.queues.Queue[str] = asyncio.queues.Queue(maxsize=len(apps))
         task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
@@ -411,7 +410,7 @@ class PromptRegionStep(BaseStep):
         self.client = client
         self.preseed = deployment_preseed or {}
         self.accept_defaults = accept_defaults
-        self.variables = {}
+        self.variables: dict = {}
 
     def prompt(self, console: Console | None = None) -> None:
         """Determines if the step can take input from the user.

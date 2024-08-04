@@ -23,7 +23,7 @@ from sunbeam.jobs.manifest import Manifest
 from sunbeam.jobs.steps import (
     AddMachineUnitsStep,
     DeployMachineApplicationStep,
-    RemoveMachineUnitStep,
+    RemoveMachineUnitsStep,
 )
 
 LOG = logging.getLogger(__name__)
@@ -108,19 +108,21 @@ class AddSunbeamMachineUnitsStep(AddMachineUnitsStep):
         return SUNBEAM_MACHINE_UNIT_TIMEOUT
 
 
-class RemoveSunbeamMachineStep(RemoveMachineUnitStep):
+class RemoveSunbeamMachineUnitsStep(RemoveMachineUnitsStep):
     """Remove Sunbeam machine Unit."""
 
-    def __init__(self, client: Client, name: str, jhelper: JujuHelper, model: str):
+    def __init__(
+        self, client: Client, names: list[str] | str, jhelper: JujuHelper, model: str
+    ):
         super().__init__(
             client,
-            name,
+            names,
             jhelper,
             CONFIG_KEY,
             APPLICATION,
             model,
             "Remove sunbeam-machine unit",
-            f"Removing sunbeam-machine unit from machine {name}",
+            f"Removing sunbeam-machine unit from machine(s) {names}",
         )
 
     def get_unit_timeout(self) -> int:

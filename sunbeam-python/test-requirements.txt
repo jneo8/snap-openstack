@@ -19,10 +19,13 @@ pytest-mock
 pytest-asyncio
 
 # Type stubs
+types-croniter
 types-requests
 types-pyyaml
+types-pytz
 
 # For validation feature
 croniter
 
 ruff
+mypy

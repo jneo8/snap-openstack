@@ -29,6 +29,7 @@ from sunbeam.features.interface.v1.base import (
     MissingVersionInfoError,
     NotAutomaticFeatureError,
 )
+from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.feature import FEATURES_YAML, FeatureManager
 
 
@@ -254,9 +255,8 @@ class TestBaseFeature:
 class DummyFeature(EnableDisableFeature):
     version = Version("0.0.1")
 
-    def __init__(self, name: str, deployment):
-        self.name = name
-        self.deployment = deployment
+    def __init__(self, deployment):
+        super().__init__("test_feature", deployment)
 
     def enable_feature(self) -> None:
         pass
@@ -271,15 +271,17 @@ class DummyFeature(EnableDisableFeature):
         pass
 
 
-def feature_klass(version_: str) -> type[EnableDisableFeature]:
+def feature_klass(version_: str, enabled: bool = False) -> type[EnableDisableFeature]:
     class CompatibleFeature(EnableDisableFeature):
-        name = "compatible"
         version = Version(version_)
-
         requires = {FeatureRequirement("test_req>=1.0.0")}
 
-        def __init__(self, client):
-            super().__init__(self.name, client)
+        def __init__(self, deployment: Deployment) -> None:
+            super().__init__("test_feature", deployment)
+
+        @property
+        def enabled(self) -> bool:
+            return enabled
 
         def enable_feature(self, *args, **kwargs) -> None:
             pass
@@ -300,7 +302,7 @@ class TestEnableDisableFeature:
     def test_check_enabled_feature_is_compatible_with_compatible_requirement(
         self, deployment, mocker
     ):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
         mocker.patch.object(feature, "fetch_feature_version", return_value="1.0.0")
         requirement = FeatureRequirement("test_feature>=1.0.0")
         feature.check_enabled_requirement_is_compatible(requirement)
@@ -308,7 +310,7 @@ class TestEnableDisableFeature:
     def test_check_enabled_feature_is_compatible_with_missing_version_info(
         self, deployment, mocker
     ):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
 
         mocker.patch.object(
             feature, "fetch_feature_version", side_effect=MissingVersionInfoError
@@ -320,7 +322,7 @@ class TestEnableDisableFeature:
     def test_check_enabled_feature_is_compatible_with_incompatible_requirement(
         self, deployment, mocker
     ):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
 
         mocker.patch.object(feature, "fetch_feature_version", return_value="0.9.0")
         requirement = FeatureRequirement("test_feature>=1.0.0")
@@ -330,7 +332,7 @@ class TestEnableDisableFeature:
     def test_check_enabled_feature_is_compatible_with_optional_requirement(
         self, deployment, mocker
     ):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
 
         mocker.patch.object(
             feature, "fetch_feature_version", side_effect=MissingVersionInfoError
@@ -342,7 +344,7 @@ class TestEnableDisableFeature:
     def test_check_enabled_feature_is_compatible_with_no_specifier_and_optional_requirement(  # noqa: E501
         self, deployment, mocker
     ):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
 
         mocker.patch.object(
             feature, "fetch_feature_version", side_effect=MissingVersionInfoError
@@ -353,7 +355,7 @@ class TestEnableDisableFeature:
     def test_check_enabled_feature_is_compatible_with_no_specifier_and_required_requirement(  # noqa: E501
         self, deployment, mocker
     ):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
 
         mocker.patch.object(
             feature, "fetch_feature_version", side_effect=MissingVersionInfoError
@@ -364,7 +366,7 @@ class TestEnableDisableFeature:
     def test_check_feature_class_is_compatible_with_compatible_requirement(
         self, deployment
     ):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
 
         requirement = FeatureRequirement("test_feature>=1.0.0")
 
@@ -374,7 +376,7 @@ class TestEnableDisableFeature:
     def test_check_feature_class_is_compatible_with_incompatible_requirement(
         self, deployment
     ):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
 
         requirement = FeatureRequirement("test_feature>=2.0.0")
 
@@ -385,7 +387,7 @@ class TestEnableDisableFeature:
     def test_check_feature_class_is_compatible_with_core_feature_and_incompatible_version(
         self, deployment
     ):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
 
         requirement = FeatureRequirement("test_feature>=1.0.0")
 
@@ -394,7 +396,7 @@ class TestEnableDisableFeature:
             feature.check_feature_class_is_compatible(klass(deployment), requirement)
 
     def test_check_feature_class_is_compatible_with_no_specifier(self, deployment):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
 
         requirement = FeatureRequirement("test_feature")
 
@@ -404,7 +406,7 @@ class TestEnableDisableFeature:
     def test_check_feature_is_automatically_enableable_with_automatically_enableable_feature(  # noqa: E501
         self, deployment
     ):
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
         feature.check_feature_is_automatically_enableable(feature)  # type: ignore
 
     def test_check_feature_is_automatically_enableable_with_non_automatically_enableable_feature(  # noqa: E501
@@ -414,9 +416,9 @@ class TestEnableDisableFeature:
             def enable_feature(self, necessary_arg) -> None:
                 return super().enable_feature()
 
-        required_feature = DummyFeatureInner(name="test_feature", deployment=deployment)
+        required_feature = DummyFeatureInner(deployment=deployment)
 
-        feature = DummyFeature("test_feature", deployment)
+        feature = DummyFeature(deployment)
         with pytest.raises(NotAutomaticFeatureError):
             feature.check_feature_is_automatically_enableable(required_feature)  # type: ignore # noqa: E501
 
@@ -432,7 +434,8 @@ class TestEnableDisableFeature:
     def test_check_enablement_requirements_with_enabled_compatible_requirement(
         self, deployment, mocker
     ):
-        feature = DummyFeature(deployment=deployment, name="test_req")
+        feature = DummyFeature(deployment)
+        feature.name = "test_req"
         feature.version = Version("1.0.1")
         klass = feature_klass("0.0.1")
         mocker.patch.object(
@@ -448,8 +451,9 @@ class TestEnableDisableFeature:
     def test_check_enablement_requirements_with_disabled_compatible_requirement(
         self, deployment, mocker
     ):
-        feature = DummyFeature(deployment=deployment, name="test_req")
-        klass = feature_klass("0.0.1")
+        feature = DummyFeature(deployment)
+        feature.name = "test_req"
+        klass = feature_klass("0.0.1", enabled=False)
         mocker.patch.object(
             klass,
             "get_feature_info",
@@ -463,8 +467,9 @@ class TestEnableDisableFeature:
     def test_check_enablement_requirements_with_enabled_incompatible_requirement(
         self, deployment, mocker
     ):
-        feature = DummyFeature(deployment=deployment, name="test_req")
-        klass = feature_klass("0.0.1")
+        feature = DummyFeature(deployment)
+        feature.name = "test_req"
+        klass = feature_klass("0.0.1", True)
         mocker.patch.object(
             klass,
             "get_feature_info",
@@ -479,7 +484,8 @@ class TestEnableDisableFeature:
     def test_check_enablement_requirements_with_disabled_incompatible_requirement(
         self, deployment, mocker
     ):
-        feature = DummyFeature(deployment=deployment, name="test_req")
+        feature = DummyFeature(deployment)
+        feature.name = "test_req"
         klass = feature_klass("0.0.1")
         mocker.patch.object(
             klass,
@@ -494,8 +500,9 @@ class TestEnableDisableFeature:
     def test_check_enablement_requirements_with_enabled_dependant(
         self, deployment, mocker
     ):
-        feature = DummyFeature(deployment=deployment, name="test_req")
-        klass = feature_klass("0.0.1")
+        feature = DummyFeature(deployment)
+        feature.name = "test_req"
+        klass = feature_klass("0.0.1", enabled=True)
         mocker.patch.object(
             klass,
             "get_feature_info",
@@ -510,7 +517,8 @@ class TestEnableDisableFeature:
     def test_check_enablement_requirements_with_disabled_dependant(
         self, deployment, mocker
     ):
-        feature = DummyFeature(deployment=deployment, name="test_req")
+        feature = DummyFeature(deployment)
+        feature.name = "test_req"
         klass = feature_klass("0.0.1")
         mocker.patch.object(
             klass,

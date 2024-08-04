@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 import requests
 import requests.adapters
-import requests_unixsocket
+import requests_unixsocket  # type: ignore [import-untyped]
 from snaphelpers import Snap
 from urllib3 import poolmanager
 

@@ -19,7 +19,7 @@ import logging
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 import click
 from packaging.version import Version
@@ -36,7 +36,7 @@ from sunbeam.commands.terraform import (
     TerraformInitStep,
 )
 from sunbeam.features.interface.v1.base import EnableDisableFeature
-from sunbeam.jobs.checks import VerifyBootstrappedCheck
+from sunbeam.jobs.checks import VerifyBootstrappedCheck, run_preflight_checks
 from sunbeam.jobs.common import (
     BaseStep,
     Result,
@@ -44,7 +44,6 @@ from sunbeam.jobs.common import (
     delete_config,
     read_config,
     run_plan,
-    run_preflight_checks,
     update_status_background,
 )
 from sunbeam.jobs.deployment import Deployment
@@ -97,6 +96,7 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
     of the feature in specific directory etc/deploy-<feature name>.
     """
 
+    _manifest: Manifest | None
     interface_version = Version("0.0.1")
 
     def __init__(
@@ -163,7 +163,7 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
         tfhelper = self.deployment.get_tfhelper(self.tfplan)
         jhelper = JujuHelper(self.deployment.get_connected_controller())
 
-        plan = []
+        plan: list[BaseStep] = []
         if self.user_manifest:
             plan.append(
                 AddManifestStep(self.deployment.get_client(), self.user_manifest)
@@ -362,7 +362,7 @@ class UpgradeOpenStackApplicationStep(BaseStep, JujuStepHelper):
         self.model = OPENSTACK_MODEL
         self.upgrade_release = upgrade_release
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Run feature upgrade."""
         LOG.debug(f"Upgrading feature {self.feature.name}")
         expected_wls = ["active", "blocked", "unknown"]
@@ -382,7 +382,7 @@ class UpgradeOpenStackApplicationStep(BaseStep, JujuStepHelper):
         except TerraformException as e:
             LOG.exception(f"Error upgrading feature {self.feature.name}")
             return Result(ResultType.FAILED, str(e))
-        queue = asyncio.queues.Queue(maxsize=len(apps))
+        queue: asyncio.queues.Queue[str] = asyncio.queues.Queue(maxsize=len(apps))
         task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
@@ -428,7 +428,7 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
         self.feature = feature
         self.model = OPENSTACK_MODEL
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy openstack application."""
         config_key = self.feature.get_tfvar_config_key()
         extra_tfvars = self.feature.set_tfvars_on_enable()
@@ -445,7 +445,7 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
 
         apps = self.feature.set_application_names()
         LOG.debug(f"Application monitored for readiness: {apps}")
-        queue = asyncio.queues.Queue(maxsize=len(apps))
+        queue: asyncio.queues.Queue[str] = asyncio.queues.Queue(maxsize=len(apps))
         task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
@@ -490,7 +490,7 @@ class DisableOpenStackApplicationStep(BaseStep, JujuStepHelper):
         self.feature = feature
         self.model = OPENSTACK_MODEL
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to remove openstack application."""
         config_key = self.feature.get_tfvar_config_key()
 
@@ -540,7 +540,7 @@ class WaitForApplicationsStep(BaseStep):
         self.model = model
         self.timeout = timeout
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Wait for applications to be idle."""
         LOG.debug(f"Application monitored for readiness: {self.apps}")
         units = []

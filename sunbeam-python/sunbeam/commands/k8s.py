@@ -16,7 +16,6 @@
 import ipaddress
 import logging
 import subprocess
-from typing import Optional
 
 import yaml
 from rich.console import Console
@@ -59,7 +58,7 @@ from sunbeam.jobs.questions import (
 from sunbeam.jobs.steps import (
     AddMachineUnitsStep,
     DeployMachineApplicationStep,
-    RemoveMachineUnitStep,
+    RemoveMachineUnitsStep,
 )
 
 LOG = logging.getLogger(__name__)
@@ -120,7 +119,7 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
 
         self.preseed = deployment_preseed or {}
         self.accept_defaults = accept_defaults
-        self.variables = {}
+        self.variables: dict = {}
 
     def prompt(self, console: Console | None = None) -> None:
         """Determines if the step can take input from the user.
@@ -197,7 +196,7 @@ class AddK8SUnitsStep(AddMachineUnitsStep):
         return K8S_UNIT_TIMEOUT
 
 
-class RemoveK8SUnitStep(RemoveMachineUnitStep):
+class RemoveK8SUnitsStep(RemoveMachineUnitsStep):
     """Remove K8S Unit."""
 
     def __init__(
@@ -225,6 +224,8 @@ class RemoveK8SUnitStep(RemoveMachineUnitStep):
 
 class EnableK8SFeatures(BaseStep):
     """Enable K8S Features."""
+
+    lb_range: str | None
 
     _ADDONS_CONFIG = K8S_ADDONS_CONFIG_KEY
 
@@ -424,7 +425,7 @@ class AddK8SCredentialStep(BaseStep, JujuStepHelper):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Add k8s credential to Juju controller."""
         try:
             kubeconfig = read_config(self.client, self._KUBECONFIG)

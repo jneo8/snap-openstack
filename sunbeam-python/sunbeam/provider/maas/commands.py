@@ -83,6 +83,7 @@ from sunbeam.commands.sunbeam_machine import (
 )
 from sunbeam.commands.terraform import TerraformInitStep
 from sunbeam.jobs.checks import (
+    Check,
     DiagnosticResultType,
     DiagnosticsCheck,
     DiagnosticsResult,
@@ -90,6 +91,7 @@ from sunbeam.jobs.checks import (
     LocalShareCheck,
     VerifyBootstrappedCheck,
     VerifyClusterdNotBootstrappedCheck,
+    run_preflight_checks,
 )
 from sunbeam.jobs.common import (
     CLICK_FAIL,
@@ -98,9 +100,9 @@ from sunbeam.jobs.common import (
     CONTEXT_SETTINGS,
     FORMAT_TABLE,
     FORMAT_YAML,
+    BaseStep,
     get_step_message,
     run_plan,
-    run_preflight_checks,
     str_presenter,
 )
 from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment, Networks
@@ -270,7 +272,7 @@ def bootstrap(
 
     deployments = DeploymentsConfig.load(deployment_path(Snap()))
 
-    preflight_checks = []
+    preflight_checks: list[Check] = []
     preflight_checks.append(JujuSnapCheck())
     preflight_checks.append(LocalShareCheck())
     preflight_checks.append(VerifyClusterdNotBootstrappedCheck())
@@ -296,7 +298,7 @@ def bootstrap(
     )
 
     # Handle proxy settings
-    plan = []
+    plan: list[BaseStep] = []
     plan.append(
         MaasSaveControllerStep(
             juju_controller,
@@ -314,7 +316,8 @@ def bootstrap(
     plan_results = run_plan(plan, console)
 
     # Reload deployment to get credentials
-    deployment = deployments.get_deployment(deployment.name)
+    deployment = deployments.refresh_deployment(deployment)
+
     proxy_from_user = get_step_message(plan_results, PromptForProxyStep)
     if (
         isinstance(proxy_from_user, dict)
@@ -352,7 +355,7 @@ def bootstrap(
                 deployment.name,
                 cloud_definition["clouds"][deployment.name]["type"],
                 deployment.controller,
-                deployment.juju_account.password,
+                deployment.juju_account.password,  # type: ignore
                 manifest.software.juju.bootstrap_args,
                 proxy_settings=proxy_settings,
             )
@@ -377,7 +380,7 @@ def bootstrap(
     run_plan(plan, console)
 
     # Reload deployment to get credentials
-    deployment = deployments.get_deployment(deployment.name)
+    deployment = deployments.refresh_deployment(deployment)
 
     if deployment.juju_account is None:
         console.print("Juju account should have been saved in previous step.")
@@ -387,7 +390,7 @@ def bootstrap(
         sys.exit(1)
 
     jhelper = JujuHelper(deployment.get_connected_controller())
-    plan2 = []
+    plan2: list[BaseStep] = []
     plan2.append(
         AddJujuModelStep(
             jhelper,
@@ -421,14 +424,14 @@ def bootstrap(
 
     run_plan(plan2, console)
     # reload deployment to get clusterd address
-    deployment = deployments.get_deployment(deployment.name)
+    deployment = deployments.refresh_deployment(deployment)
     client_url = deployment.clusterd_address
     if not client_url:
         console.print("Clusterd address should have been saved in previous step.")
         sys.exit(1)
 
     client = deployment.get_client()
-    plan3 = []
+    plan3: list[BaseStep] = []
     plan3.append(AddManifestStep(client, manifest_path))
     plan3.append(MaasAddMachinesToClusterdStep(client, maas_client))
     if not juju_controller:
@@ -480,7 +483,7 @@ def deploy(
     snap = Snap()
     k8s_provider = snap.config.get("k8s.provider")
 
-    preflight_checks = []
+    preflight_checks: list[Check] = []
     preflight_checks.append(JujuSnapCheck())
     preflight_checks.append(LocalShareCheck())
     preflight_checks.append(VerifyClusterdNotBootstrappedCheck())
@@ -537,7 +540,7 @@ def deploy(
     tfhelper_openstack_deploy = deployment.get_tfhelper("openstack-plan")
     tfhelper_hypervisor_deploy = deployment.get_tfhelper("hypervisor-plan")
 
-    plan = []
+    plan: list[BaseStep] = []
     plan.append(AddManifestStep(client, manifest_path))
     plan.append(
         AddJujuModelStep(
@@ -577,7 +580,7 @@ def deploy(
         )
         sys.exit(1)
 
-    plan2 = []
+    plan2: list[BaseStep] = []
 
     plan2.append(PromptRegionStep(client, preseed, accept_defaults))
     plan2.append(TerraformInitStep(tfhelper_sunbeam_machine))
@@ -995,7 +998,7 @@ def _zones_roles_table(zone_machines: dict[str, list[dict]]) -> Table:
     machine_table.add_column("total", justify="center")
     for zone, machines in zone_machines.items():
         zone_table.add_row(zone)
-        role_count = Counter()
+        role_count: Counter[str] = Counter()
         for machine in machines:
             role_count.update(machine["roles"])
         role_nb = [str(role_count.get(role, 0)) for role in RoleTags.values()]

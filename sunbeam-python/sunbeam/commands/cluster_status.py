@@ -16,6 +16,7 @@
 import abc
 import functools
 import logging
+from typing import Sequence
 
 import rich.console
 import rich.table
@@ -77,7 +78,7 @@ def format_status(
     status: dict,
     format: str,
     mandatory_columns: frozenset[str] = frozenset(("compute", "storage", "control")),
-) -> list[rich.console.RenderableType]:
+) -> Sequence[rich.console.RenderableType]:
     """Return a list renderables for the status.
 
     Mandatory columns are always displayed on the openstack machines model, even if no
@@ -169,7 +170,7 @@ class ClusterStatusStep(abc.ABC, BaseStep):
                     name: <unit_name>
                     status: <status>
         """
-        machine_status = {}
+        machine_status: dict = {}
         status = run_sync(self.jhelper.get_model_status(model))
         for app, app_status in status["applications"].items():
             for unit, unit_status in app_status["units"].items():
@@ -208,7 +209,7 @@ class ClusterStatusStep(abc.ABC, BaseStep):
                 status:
                     <role>: <status>
         """
-        formatted_status = {}
+        formatted_status: dict = {}
         for model, model_status in status.items():
             formatted_status[model] = {}
             for machine, machine_status in model_status.items():
@@ -253,7 +254,7 @@ class ClusterStatusStep(abc.ABC, BaseStep):
         self._update_microcluster_status(status, self._get_microcluster_status())
         return self._to_status(status, self.applications_to_columns())
 
-    def run(self, status: Status) -> Result:
+    def run(self, status: Status | None) -> Result:
         """Run the step to completion."""
         self.update_status(status, "Computing cluster status")
         try:

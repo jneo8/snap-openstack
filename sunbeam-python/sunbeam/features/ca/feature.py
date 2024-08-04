@@ -16,7 +16,6 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional
 
 import click
 import yaml
@@ -115,13 +114,13 @@ class ConfigureCAStep(BaseStep):
         self.preseed = deployment_preseed or {}
         self.app = CA_APP_NAME
         self.model = OPENSTACK_MODEL
-        self.process_certs = {}
+        self.process_certs: dict = {}
 
     def has_prompts(self) -> bool:
         """Returns true if the step has prompts that it can ask the user."""
         return True
 
-    def prompt(self, console: Optional[Console] = None) -> None:
+    def prompt(self, console: Console | None = None) -> None:
         """Prompt the user for certificates.
 
         Prompts the user for required information for cert configuration.
@@ -130,16 +129,11 @@ class ConfigureCAStep(BaseStep):
         :type console: rich.console.Console (Optional)
         """
         action_cmd = "get-outstanding-certificate-requests"
-        try:
-            action_result = get_outstanding_certificate_requests(
-                self.app, self.model, self.jhelper
-            )
-        except LeaderNotFoundException as e:
-            LOG.debug(f"Unable to get {self.app} leader")
-            return Result(ResultType.FAILED, str(e))
-        except ActionFailedException as e:
-            LOG.debug(f"Running action {action_cmd} failed")
-            return Result(ResultType.FAILED, str(e))
+        # let exception propagate, since they are SunbeamException
+        # they will be caught cleanly
+        action_result = get_outstanding_certificate_requests(
+            self.app, self.model, self.jhelper
+        )
 
         LOG.debug(f"Result from action {action_cmd}: {action_result}")
         if action_result.get("return-code", 0) > 1:
@@ -147,7 +141,7 @@ class ConfigureCAStep(BaseStep):
                 "Unable to get outstanding certificate requests from CA"
             )
 
-        certs_to_process = json.loads(action_result.get("result"))
+        certs_to_process = json.loads(action_result.get("result", "[]"))
         if not certs_to_process:
             LOG.debug("No outstanding certificates to process")
             return
@@ -171,11 +165,11 @@ class ConfigureCAStep(BaseStep):
             certificates_bank = questions.QuestionBank(
                 questions=cert_questions,
                 console=console,
-                preseed=self.preseed.get("certificates").get(subject),
-                previous_answers=variables.get("certificates").get(subject),
+                preseed=self.preseed.get("certificates", {}).get(subject),
+                previous_answers=variables.get("certificates", {}).get(subject),
             )
             cert = certificates_bank.certificate.ask()
-            if not is_certificate_valid(cert):
+            if not cert or not is_certificate_valid(cert):
                 raise click.ClickException("Not a valid certificate")
 
             self.process_certs[subject] = {
@@ -190,7 +184,7 @@ class ConfigureCAStep(BaseStep):
 
         questions.write_answers(self.client, self._CONFIG, variables)
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -198,7 +192,7 @@ class ConfigureCAStep(BaseStep):
         """
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Run configure steps."""
         action_cmd = "provide-certificate"
         try:
@@ -250,7 +244,7 @@ class CaTlsFeature(TlsFeatureGroup):
             deployment,
             tf_plan_location=TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO,
         )
-        self.endpoints = []
+        self.endpoints: list = []
 
     def manifest_defaults(self) -> SoftwareConfig:
         """Feature software configuration."""
@@ -311,7 +305,7 @@ class CaTlsFeature(TlsFeatureGroup):
         callback=validate_ca_certificate,
         help="Base64 encoded CA certificate",
     )
-    def enable_feature(self, ca: str, ca_chain: str, endpoints: List[str]):
+    def enable_feature(self, ca: str, ca_chain: str, endpoints: list[str]):
         """Enable CA feature."""
         self.ca = ca
         self.ca_chain = ca_chain
@@ -330,7 +324,7 @@ class CaTlsFeature(TlsFeatureGroup):
 
     def set_tfvars_on_enable(self) -> dict:
         """Set terraform variables to enable the application."""
-        tfvars = {"traefik-to-tls-provider": CA_APP_NAME}
+        tfvars: dict[str, str | bool] = {"traefik-to-tls-provider": CA_APP_NAME}
         if "public" in self.endpoints:
             tfvars.update({"enable-tls-for-public-endpoint": True})
         if "internal" in self.endpoints:
@@ -342,7 +336,7 @@ class CaTlsFeature(TlsFeatureGroup):
 
     def set_tfvars_on_disable(self) -> dict:
         """Set terraform variables to disable the application."""
-        tfvars = {"traefik-to-tls-provider": None}
+        tfvars: dict[str, None | str | bool] = {"traefik-to-tls-provider": None}
         if "public" in self.endpoints:
             tfvars.update({"enable-tls-for-public-endpoint": False})
         if "internal" in self.endpoints:
@@ -380,7 +374,7 @@ class CaTlsFeature(TlsFeatureGroup):
         try:
             action_result = get_outstanding_certificate_requests(app, model, jhelper)
         except LeaderNotFoundException as e:
-            LOG.debug(f"Unable to get {self.app} leader to print CSRs")
+            LOG.debug(f"Unable to get {app} leader to print CSRs")
             raise click.ClickException(str(e))
         except ActionFailedException as e:
             LOG.debug(f"Running action {action_cmd} failed")
@@ -392,7 +386,7 @@ class CaTlsFeature(TlsFeatureGroup):
                 "Unable to get outstanding certificate requests from CA"
             )
 
-        certs_to_process = json.loads(action_result.get("result")) or {}
+        certs_to_process = json.loads(action_result.get("result", "[]"))
         csrs = {
             unit: csr
             for record in certs_to_process
@@ -437,6 +431,9 @@ class CaTlsFeature(TlsFeatureGroup):
             config = {}
         self.ca = config.get("ca")
         self.ca_chain = config.get("chain")
+
+        if self.ca is None or self.ca_chain is None:
+            raise click.ClickException("CA and CA Chain not configured")
 
         jhelper = JujuHelper(self.deployment.get_connected_controller())
         plan = [

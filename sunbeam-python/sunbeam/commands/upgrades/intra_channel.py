@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import logging
-from typing import Optional
 
 from rich.console import Console
 from rich.status import Status
@@ -48,20 +47,19 @@ class LatestInChannel(BaseStep, JujuStepHelper):
         self.jhelper = jhelper
         self.manifest = manifest
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Step can be skipped if nothing needs refreshing."""
         return Result(ResultType.COMPLETED)
 
     def is_track_changed_for_any_charm(self, deployed_apps: dict):
         """Check if chanel track is same in manifest and deployed app."""
         for app_name, (charm, channel, _) in deployed_apps.items():
-            if not self.manifest.software.charms.get(charm):
+            charm_manifest = self.manifest.software.charms.get(charm)
+            if not charm_manifest:
                 LOG.debug(f"Charm not present in manifest: {charm}")
                 continue
 
-            channel_from_manifest = (
-                self.manifest.software.charms.get(charm).channel or ""
-            )
+            channel_from_manifest = charm_manifest.channel or ""
             track_from_manifest = channel_from_manifest.split("/")[0]
             track_from_deployed_app = channel.split("/")[0]
             # Compare tracks
@@ -92,7 +90,7 @@ class LatestInChannel(BaseStep, JujuStepHelper):
                 # refresh() checks for any new revision and updates if available
                 run_sync(app.refresh())
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Refresh all charms identified as needing a refresh.
 
         If the manifest has charm channel and revision, terraform apply should update

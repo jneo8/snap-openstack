@@ -15,7 +15,6 @@
 
 import asyncio
 import logging
-from typing import List, Optional
 
 from rich.console import Console
 from rich.status import Status
@@ -76,7 +75,7 @@ class BaseUpgrade(BaseStep, JujuStepHelper):
         self.manifest = manifest
         self.model = model
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Run control plane and machine charm upgrade."""
         result = self.pre_upgrade_tasks(status)
         if result.result_type == ResultType.FAILED:
@@ -89,23 +88,27 @@ class BaseUpgrade(BaseStep, JujuStepHelper):
         result = self.post_upgrade_tasks(status)
         return result
 
-    def pre_upgrade_tasks(self, status: Optional[Status] = None) -> Result:
+    def upgrade_tasks(self, status: Status | None = None) -> Result:
+        """Perform the upgrade tasks."""
+        return Result(ResultType.COMPLETED)
+
+    def pre_upgrade_tasks(self, status: Status | None = None) -> Result:
         """Tasks to run before the upgrade."""
         return Result(ResultType.COMPLETED)
 
-    def post_upgrade_tasks(self, status: Optional[Status] = None) -> Result:
+    def post_upgrade_tasks(self, status: Status | None = None) -> Result:
         """Tasks to run after the upgrade."""
         return Result(ResultType.COMPLETED)
 
     def upgrade_applications(
         self,
-        apps: List[str],
-        charms: List[str],
+        apps: list[str],
+        charms: list[str],
         model: str,
         tfhelper: TerraformHelper,
         config: str,
         timeout: int,
-        status: Optional[Status] = None,
+        status: Status | None = None,
     ) -> Result:
         """Upgrade applications.
 
@@ -128,7 +131,7 @@ class BaseUpgrade(BaseStep, JujuStepHelper):
         except TerraformException as e:
             LOG.exception("Error upgrading cloud")
             return Result(ResultType.FAILED, str(e))
-        queue = asyncio.queues.Queue(maxsize=len(apps))
+        queue: asyncio.queues.Queue[str] = asyncio.queues.Queue(maxsize=len(apps))
         task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
@@ -179,7 +182,7 @@ class UpgradeControlPlane(BaseUpgrade):
         self.tfhelper = tfhelper
         self.config = OPENSTACK_CONFIG_KEY
 
-    def upgrade_tasks(self, status: Optional[Status] = None) -> Result:
+    def upgrade_tasks(self, status: Status | None = None) -> Result:
         """Perform the upgrade tasks."""
         # Step 1: Upgrade mysql charms
         LOG.debug("Upgrading Mysql charms")
@@ -265,7 +268,7 @@ class UpgradeMachineCharm(BaseUpgrade):
         self.config = config
         self.timeout = timeout
 
-    def upgrade_tasks(self, status: Optional[Status] = None) -> Result:
+    def upgrade_tasks(self, status: Status | None = None) -> Result:
         """Perform the upgrade tasks."""
         apps = self.get_apps_filter_by_charms(self.model, self.charms)
         result = self.upgrade_applications(
@@ -517,7 +520,7 @@ class ValidationCheck(BaseStep):
         self.jhelper = jhelper
         self.manifest = manifest
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Run validation check."""
         rabbit_channel = run_sync(
             self.jhelper.get_charm_channel("rabbitmq", "openstack")

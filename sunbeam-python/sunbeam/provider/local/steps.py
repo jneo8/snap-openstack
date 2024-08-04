@@ -14,8 +14,9 @@
 # limitations under the License.
 
 import logging
+import typing
 from functools import cache
-from typing import Any, Optional, TextIO
+from typing import Any, TextIO
 
 from rich.console import Console
 from rich.prompt import InvalidResponse, PromptBase
@@ -58,7 +59,7 @@ class NicPrompt(PromptBase[str]):
             raise InvalidResponse(f"\n'{value}' not found")
         return True
 
-    def __call__(self, *, default: Any = ..., stream: Optional[TextIO] = None) -> Any:
+    def __call__(self, *, default: Any = ..., stream: TextIO | None = None) -> Any:
         """Run the prompt loop.
 
         Args:
@@ -98,7 +99,7 @@ class NicPrompt(PromptBase[str]):
                 return return_value
 
 
-class NicQuestion(sunbeam.jobs.questions.Question):
+class NicQuestion(sunbeam.jobs.questions.Question[str]):
     """Ask the user a simple yes / no question."""
 
     @property
@@ -140,7 +141,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         """Returns true if the step has prompts that it can ask the user."""
         return True
 
-    def prompt_for_nic(self) -> None:
+    def prompt_for_nic(self) -> str | None:
         """Prompt user for nic to use and do some validation."""
         local_hypervisor_bank = sunbeam.jobs.questions.QuestionBank(
             questions=local_hypervisor_questions(),
@@ -149,7 +150,9 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         )
         nic = None
         while True:
-            nic = local_hypervisor_bank.nic.ask()
+            nic = typing.cast(NicQuestion, local_hypervisor_bank.nic).ask()
+            if not nic:
+                continue
             if utils.is_configured(nic):
                 agree_nic_up = sunbeam.jobs.questions.ConfirmQuestion(
                     f"WARNING: Interface {nic} is configured. Any "
@@ -168,7 +171,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
             break
         return nic
 
-    def prompt(self, console: Optional[Console] = None) -> None:
+    def prompt(self, console: Console | None = None) -> None:
         """Determines if the step can take input from the user."""
         # If adding a node before configure step has run then answers will
         # not be populated yet.

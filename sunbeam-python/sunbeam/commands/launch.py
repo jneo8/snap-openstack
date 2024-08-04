@@ -15,11 +15,10 @@
 
 import logging
 import os
-from typing import Optional
 
 import click
 import openstack
-import petname
+import petname  # type: ignore [import-untyped]
 from rich.console import Console
 from snaphelpers import Snap
 
@@ -54,7 +53,7 @@ def launch(
     ctx: click.Context,
     image_name: str,
     key: str,
-    name: Optional[str] = None,
+    name: str | None = None,
 ) -> None:
     """Launch an OpenStack instance on demo setup."""
     snap = Snap()

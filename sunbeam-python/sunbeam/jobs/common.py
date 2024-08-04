@@ -19,7 +19,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, List, Optional, Type
+from typing import Any, Sequence, Type, TypeVar
 
 import click
 import yaml
@@ -52,6 +52,8 @@ CLICK_WARN = "[yellow]WARN[/yellow]"
 DEFAULT_JUJU_NO_PROXY_SETTINGS = "127.0.0.1,localhost,::1"
 K8S_CLUSTER_SERVICE_CIDR = "10.152.183.0/24"
 K8S_CLUSTER_POD_CIDR = "10.1.0.0/16"
+
+BaseStepSubclass = TypeVar("BaseStepSubclass", bound="BaseStep")
 
 
 class Role(enum.Enum):
@@ -103,7 +105,7 @@ class Role(enum.Enum):
         return self == Role.STORAGE
 
 
-def roles_to_str_list(roles: List[Role]) -> List[str]:
+def roles_to_str_list(roles: list[Role]) -> list[str]:
     return [role.name.lower() for role in roles]
 
 
@@ -177,7 +179,7 @@ class BaseStep:
         self.name = name
         self.description = description
 
-    def prompt(self, console: Optional[Console] = None) -> None:
+    def prompt(self, console: Console | None = None) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -194,7 +196,7 @@ class BaseStep:
         """
         return False
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -202,14 +204,14 @@ class BaseStep:
         """
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status]) -> Result:
+    def run(self, status: Status | None) -> Result:
         """Run the step to completion.
 
         Invoked when the step is run and returns a ResultType to indicate
 
         :return:
         """
-        pass
+        return Result(ResultType.COMPLETED)
 
     @property
     def status(self):
@@ -219,29 +221,13 @@ class BaseStep:
         """
         return self.description + " ... "
 
-    def update_status(self, status: Optional[Status], msg: str):
+    def update_status(self, status: Status | None, msg: str):
         """Update status if status is provided."""
         if status is not None:
             status.update(self.status + msg)
 
 
-def run_preflight_checks(checks: list, console: Console):
-    """Run preflight checks sequentially.
-
-    Runs each checks, logs whether the check passed or failed.
-    Exits at first failure.
-
-    Raise ClickException in case of Result Failures.
-    """
-    for check in checks:
-        LOG.debug(f"Starting pre-flight check {check.name}")
-        message = f"{check.description} ... "
-        with console.status(message):
-            if not check.run():
-                raise click.ClickException(check.message)
-
-
-def run_plan(plan: List[BaseStep], console: Console) -> dict:
+def run_plan(plan: Sequence[BaseStep], console: Console) -> dict:
     """Run plans sequentially.
 
     Runs each step of the plan, logs each step of
@@ -284,6 +270,11 @@ def run_plan(plan: List[BaseStep], console: Console) -> dict:
     return results
 
 
+def get_step_result(plan_results: dict, step: Type[BaseStepSubclass]) -> Result:
+    """Utility to get a step result."""
+    return plan_results[step.__name__]
+
+
 def get_step_message(plan_results: dict, step: Type[BaseStep]) -> Any:
     """Utility to get a step result's message."""
     result = plan_results.get(step.__name__)
@@ -294,7 +285,7 @@ def get_step_message(plan_results: dict, step: Type[BaseStep]) -> Any:
 
 def validate_roles(
     ctx: click.core.Context, param: click.core.Option, value: tuple
-) -> List[Role]:
+) -> list[Role]:
     try:
         return [Role[role.upper()] for role in value]
     except KeyError as e:
@@ -312,7 +303,7 @@ def get_host_total_ram() -> int:
 
 def get_host_total_cores() -> int:
     """Return total cpu count."""
-    return os.cpu_count()
+    return os.cpu_count() or 1
 
 
 def click_option_topology(func: decorators.FC) -> decorators.FC:

@@ -19,14 +19,13 @@ import base64
 import json
 import logging
 import os
+import typing
 from datetime import datetime
 from pathlib import Path
 from typing import (
     Awaitable,
     Dict,
     Iterable,
-    List,
-    Optional,
     Sequence,
     TypedDict,
     TypeVar,
@@ -50,6 +49,7 @@ from juju.model import Model
 from juju.unit import Unit
 
 from sunbeam.clusterd.client import Client
+from sunbeam.jobs.common import SunbeamException
 from sunbeam.versions import JUJU_BASE
 
 LOG = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ def run_sync(coro: Awaitable[T]) -> T:
     return cast(T, result)
 
 
-class JujuException(Exception):
+class JujuException(SunbeamException):
     """Main juju exception, to be subclassed."""
 
     pass
@@ -165,7 +165,7 @@ class ChannelUpdate(TypedDict):
     """
 
     channel: str
-    expected_status: Dict[str, List[str]]
+    expected_status: dict[str, list[str]]
 
 
 class JujuAccount(pydantic.BaseModel):
@@ -203,7 +203,7 @@ class JujuAccount(pydantic.BaseModel):
 
 class JujuController(pydantic.BaseModel):
     name: str
-    api_endpoints: List[str]
+    api_endpoints: list[str]
     ca_cert: str
     is_external: bool
 
@@ -368,7 +368,7 @@ class JujuHelper:
         """Get juju status for the model."""
         return await self.get_model_status(model)
 
-    async def get_application_names(self, model: str) -> List[str]:
+    async def get_application_names(self, model: str) -> list[str]:
         """Get Application names in the model.
 
         :model: Name of the model
@@ -415,7 +415,7 @@ class JujuHelper:
         config: dict | None = None,
     ):
         """Deploy an application."""
-        options = {}
+        options: dict = {}
         if to:
             options["to"] = to
         if channel:
@@ -468,12 +468,16 @@ class JujuHelper:
         :machine_id: Id of machine unit is on
         :model: Name of the model where the unit is located
         """
-        model_impl = await self.get_model(model)
-        application = model_impl.applications.get(application)
-        unit = None
-        for u in application.units:
+        app = await self.get_application(application, model)
+        unit: Unit | None = None
+        for u in app.units:
             if machine_id == u.machine.entity_id:
                 unit = u
+        if unit is None:
+            raise UnitNotFoundException(
+                f"Unit for application {application!r} on machine {machine_id!r} "
+                f"is missing from model {model!r}"
+            )
         return unit
 
     def _validate_unit(self, unit: str):
@@ -682,9 +686,15 @@ class JujuHelper:
         clusters = {v["name"]: v["cluster"] for v in kubeconfig["clusters"]}
         users = {v["name"]: v["user"] for v in kubeconfig["users"]}
 
-        ctx = contexts.get(kubeconfig.get("current-context"))
-        cluster = clusters.get(ctx.get("cluster"))
-        user = users.get(ctx.get("user"))
+        # TODO(gboutry): parse context with lightkube for better handling
+        ctx = contexts.get(kubeconfig.get("current-context", {}), {})
+        cluster = clusters.get(ctx.get("cluster", {}), {})
+        user = users.get(ctx.get("user"), {})
+
+        if user is None:
+            raise UnsupportedKubeconfigException(
+                "No user found in current kubeconfig context, cannot add credential"
+            )
 
         ep = cluster["server"]
         ca_cert = base64.b64decode(cluster["certificate-authority-data"]).decode(
@@ -716,9 +726,13 @@ class JujuHelper:
         """Add K8S Credential to controller."""
         contexts = {v["name"]: v["context"] for v in kubeconfig["contexts"]}
         users = {v["name"]: v["user"] for v in kubeconfig["users"]}
-        ctx = contexts.get(kubeconfig.get("current-context"))
-        user = users.get(ctx.get("user"))
+        ctx = contexts.get(kubeconfig.get("current-context"), {})
+        user = users.get(ctx.get("user"), {})
 
+        if user is None:
+            raise UnsupportedKubeconfigException(
+                "No user found in current kubeconfig context, cannot add credential"
+            )
         cred = self._generate_juju_credential(user)
         await self.controller.add_credential(
             credential_name, credential=cred, cloud=cloud_name
@@ -728,8 +742,8 @@ class JujuHelper:
         self,
         name: str,
         model: str,
-        accepted_status: Optional[List[str]] = None,
-        timeout: Optional[int] = None,
+        accepted_status: list[str] | None = None,
+        timeout: int | None = None,
     ):
         """Block execution until application is ready.
 
@@ -746,10 +760,8 @@ class JujuHelper:
 
         model_impl = await self.get_model(model)
 
-        try:
-            application = await self.get_application(name, model)
-        except ApplicationNotFoundException as e:
-            LOG.debug(str(e))
+        application = typing.cast(Application | None, model_impl.applications.get(name))
+        if application is None:
             return
 
         LOG.debug(f"Application {name!r} is in status: {application.status!r}")
@@ -757,11 +769,11 @@ class JujuHelper:
         try:
             LOG.debug(
                 "Waiting for app status to be: {} {}".format(
-                    model_impl.applications[name].status, accepted_status
+                    application.status, accepted_status
                 )
             )
             await model_impl.block_until(
-                lambda: model_impl.applications[name].status in accepted_status,
+                lambda: application.status in accepted_status,
                 timeout=timeout,
             )
         except asyncio.TimeoutError as e:
@@ -771,9 +783,9 @@ class JujuHelper:
 
     async def wait_application_gone(
         self,
-        names: List[str],
+        names: list[str],
         model: str,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ):
         """Block execution until application is gone.
 
@@ -784,7 +796,7 @@ class JujuHelper:
         model_impl = await self.get_model(model)
 
         name_set = set(names)
-        empty_set = set()
+        empty_set: set[str] = set()
         try:
             await model_impl.block_until(
                 lambda: name_set.intersection(model_impl.applications) == empty_set,
@@ -799,7 +811,7 @@ class JujuHelper:
     async def wait_model_gone(
         self,
         model: str,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ):
         """Block execution until model is gone.
 
@@ -822,8 +834,8 @@ class JujuHelper:
         self,
         units: Sequence[Unit | str],
         model: str,
-        accepted_status: Optional[Dict[str, List[str]]] = None,
-        timeout: Optional[int] = None,
+        accepted_status: dict[str, list[str]] | None = None,
+        timeout: int | None = None,
     ):
         """Block execution until unit is ready.
 
@@ -864,9 +876,9 @@ class JujuHelper:
         def condition() -> bool:
             """Computes readiness for unit."""
             for unit in unit_list:
-                unit: Unit = model_impl.units[unit.name]
-                agent_ready = unit.agent_status in agent_accepted_status
-                workload_ready = unit.workload_status in workload_accepted_status
+                unit_impl = typing.cast(Unit, model_impl.units[unit.name])
+                agent_ready = unit_impl.agent_status in agent_accepted_status
+                workload_ready = unit_impl.workload_status in workload_accepted_status
                 if not agent_ready or not workload_ready:
                     return False
             return True
@@ -886,8 +898,8 @@ class JujuHelper:
         self,
         unit: Unit | str,
         model: str,
-        accepted_status: Optional[Dict[str, List[str]]] = None,
-        timeout: Optional[int] = None,
+        accepted_status: dict[str, list[str]] | None = None,
+        timeout: int | None = None,
     ):
         """Block execution until unit is ready.
 
@@ -905,8 +917,8 @@ class JujuHelper:
         self,
         app: str,
         model: str,
-        accepted_status: Optional[Dict[str, List[str]]] = None,
-        timeout: Optional[int] = None,
+        accepted_status: dict[str, list[str]] | None = None,
+        timeout: int | None = None,
     ):
         """Block execution until all units in an application are ready.
 
@@ -924,9 +936,7 @@ class JujuHelper:
                 timeout=timeout,
             )
 
-    async def wait_all_machines_deployed(
-        self, model: str, timeout: Optional[int] = None
-    ):
+    async def wait_all_machines_deployed(self, model: str, timeout: int | None = None):
         """Block execution until all machines in model are deployed.
 
         :model: Name of the model to wait for readiness
@@ -1077,8 +1087,8 @@ class JujuHelper:
     async def update_applications_channel(
         self,
         model: str,
-        updates: Dict[str, ChannelUpdate],
-        timeout: Optional[int] = None,
+        updates: dict[str, ChannelUpdate],
+        timeout: int | None = None,
     ):
         """Upgrade charm to new channel.
 
@@ -1104,6 +1114,9 @@ class JujuHelper:
                 _app = model_impl.applications.get(
                     app_name,
                 )
+                if not _app:
+                    LOG.debug(f"Application {app_name} not found in model")
+                    continue
                 for unit in _app.units:
                     statuses[unit.entity_id] = bool(unit.agent_status_since > timestamp)
             return all(statuses.values())
@@ -1119,6 +1132,9 @@ class JujuHelper:
                 _app = model_impl.applications.get(
                     app_name,
                 )
+                if not _app:
+                    LOG.debug(f"Application {app_name} not found in model")
+                    continue
                 for unit in _app.units:
                     await self.wait_unit_ready(
                         unit.entity_id, model, accepted_status=config["expected_status"]
@@ -1134,8 +1150,7 @@ class JujuHelper:
         :param application_list: Name of application
         :param model: Name of model
         """
-        _status = await self.get_model_status_full(model)
-        status = json.loads(_status.to_json())
+        status = await self.get_model_status_full(model)
         return status["applications"].get(application_name, {}).get("charm-channel")
 
     async def charm_refresh(self, application_name: str, model: str):
@@ -1164,7 +1179,7 @@ class JujuHelper:
     @staticmethod
     def manual_cloud(cloud_name: str, ip_address: str) -> dict[str, dict]:
         """Create manual cloud definition."""
-        cloud_yaml = {"clouds": {}}
+        cloud_yaml: dict[str, dict] = {"clouds": {}}
         cloud_yaml["clouds"][cloud_name] = {
             "type": "manual",
             "endpoint": ip_address,
@@ -1175,7 +1190,7 @@ class JujuHelper:
     @staticmethod
     def maas_cloud(cloud: str, endpoint: str) -> dict[str, dict]:
         """Create maas cloud definition."""
-        clouds = {"clouds": {}}
+        clouds: dict[str, dict] = {"clouds": {}}
         clouds["clouds"][cloud] = {
             "type": "maas",
             "auth-types": ["oauth1"],
@@ -1186,7 +1201,7 @@ class JujuHelper:
     @staticmethod
     def maas_credential(cloud: str, credential: str, maas_apikey: str):
         """Create maas credential definition."""
-        credentials = {"credentials": {}}
+        credentials: dict[str, dict] = {"credentials": {}}
         credentials["credentials"][cloud] = {
             credential: {
                 "auth-type": "oauth1",

@@ -20,7 +20,6 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import click
 import click.core
@@ -32,14 +31,13 @@ from sunbeam.clusterd.client import Client
 from sunbeam.commands.configure import CLOUD_CONFIG_SECTION, retrieve_admin_credentials
 from sunbeam.commands.openstack import OPENSTACK_MODEL
 from sunbeam.commands.terraform import TerraformHelper
-from sunbeam.jobs.checks import VerifyBootstrappedCheck
+from sunbeam.jobs.checks import VerifyBootstrappedCheck, run_preflight_checks
 from sunbeam.jobs.common import (
     BaseStep,
     Result,
     ResultType,
     Status,
     run_plan,
-    run_preflight_checks,
 )
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import JujuHelper, ModelNotFoundException, run_sync
@@ -59,7 +57,7 @@ class GenerateCloudConfigStep(BaseStep):
         cloud: str,
         is_admin: bool,
         update: bool,
-        cloudfile: Path,
+        cloudfile: Path | None = None,
     ):
         super().__init__(
             "Generate clouds.yaml", "Generating clouds.yaml for cloud access"
@@ -70,13 +68,12 @@ class GenerateCloudConfigStep(BaseStep):
         self.cloud = cloud
         self.is_admin = is_admin
         self.update = update
+        if cloudfile is None:
+            home = os.environ["SNAP_REAL_HOME"]
+            cloudfile = Path(home) / ".config" / "openstack" / "clouds.yaml"
         self.cloudfile = cloudfile
 
-        if not self.cloudfile:
-            home = os.environ.get("SNAP_REAL_HOME")
-            self.cloudfile = Path(home) / ".config" / "openstack" / "clouds.yaml"
-
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -97,7 +94,7 @@ class GenerateCloudConfigStep(BaseStep):
         else:
             return Result(ResultType.SKIPPED)
 
-    def run(self, status: Optional["Status"] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Generate cloud-config yaml for cloud access."""
         try:
             if self.is_admin:
@@ -194,7 +191,7 @@ class GenerateCloudConfigStep(BaseStep):
         if self.cloud in cloud_config_from_file.get("clouds", {}):
             backup_cloud_yaml = True
             # Check if clouds.yaml already contains cloud information
-            if cloud_config_from_file.get("clouds").get(
+            if cloud_config_from_file.get("clouds", {}).get(
                 self.cloud
             ) == generated_cloud_config.get(self.cloud):
                 LOG.debug(
@@ -248,7 +245,7 @@ def cloud_config(
     cloud: str,
     admin: bool,
     update: bool,
-    cloud_file: Optional[Path] = None,
+    cloud_file: Path | None = None,
 ) -> None:
     """Generate or Update clouds.yaml."""
     parameter_source = ctx.get_parameter_source("cloud")

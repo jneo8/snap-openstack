@@ -19,8 +19,8 @@ import click
 from rich.console import Console
 
 from sunbeam.commands.juju import JujuLoginStep
-from sunbeam.jobs.checks import VerifyBootstrappedCheck
-from sunbeam.jobs.common import run_plan, run_preflight_checks
+from sunbeam.jobs.checks import VerifyBootstrappedCheck, run_preflight_checks
+from sunbeam.jobs.common import run_plan
 from sunbeam.jobs.deployment import Deployment
 
 LOG = logging.getLogger(__name__)

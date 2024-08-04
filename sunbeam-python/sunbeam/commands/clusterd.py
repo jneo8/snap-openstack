@@ -16,7 +16,6 @@
 import ipaddress
 import logging
 import re
-from typing import List, Optional, Union
 
 from rich.console import Console
 
@@ -79,7 +78,7 @@ class ClusterInitStep(BaseStep):
         self.client = client
         self.management_cidr = management_cidr
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -100,7 +99,7 @@ class ClusterInitStep(BaseStep):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Bootstrap sunbeam cluster."""
         try:
             ip = utils.get_local_ip_by_cidr(self.management_cidr)
@@ -139,7 +138,7 @@ class AskManagementCidrStep(BaseStep):
         self.client = client
         self.preseed = deployment_preseed or {}
         self.accept_defaults = accept_defaults
-        self.variables = {}
+        self.variables: dict = {}
 
     def prompt(self, console: Console | None = None) -> None:
         """Determines if the step can take input from the user.
@@ -179,7 +178,7 @@ class AskManagementCidrStep(BaseStep):
         """
         return True
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Determine the management CIDR."""
         return Result(
             ResultType.COMPLETED, self.variables["bootstrap"]["management_cidr"]
@@ -238,7 +237,7 @@ class ClusterAddNodeStep(BaseStep):
         self.node_name = name
         self.client = client
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -263,7 +262,7 @@ class ClusterAddNodeStep(BaseStep):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Add node to sunbeam cluster."""
         try:
             token = self.client.cluster.add_node(name=self.node_name)
@@ -294,7 +293,7 @@ class ClusterJoinNodeStep(BaseStep):
         self.ip = host_address
         self.fqdn = fqdn
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -314,7 +313,7 @@ class ClusterJoinNodeStep(BaseStep):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Join node to sunbeam cluster."""
         try:
             self.client.cluster.join_node(
@@ -337,7 +336,7 @@ class ClusterListNodeStep(BaseStep):
         super().__init__("List nodes of Cluster", "Listing nodes in Sunbeam cluster")
         self.client = client
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """List nodes in the sunbeam cluster."""
         try:
             members = self.client.cluster.get_cluster_members()
@@ -365,7 +364,7 @@ class ClusterUpdateNodeStep(BaseStep):
         self,
         client: Client,
         name: str,
-        role: Optional[List[str]] = None,
+        role: list[str] | None = None,
         machine_id: int = -1,
     ):
         super().__init__("Update node info", "Updating node info in cluster database")
@@ -374,7 +373,7 @@ class ClusterUpdateNodeStep(BaseStep):
         self.role = role
         self.machine_id = machine_id
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Update Node info."""
         try:
             self.client.cluster.update_node_info(self.name, self.role, self.machine_id)
@@ -394,7 +393,7 @@ class ClusterRemoveNodeStep(BaseStep):
         self.node_name = name
         self.client = client
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Remove node from sunbeam cluster."""
         try:
             self.client.cluster.remove_node(self.node_name)
@@ -424,7 +423,7 @@ class ClusterAddJujuUserStep(BaseStep):
         self.token = token
         self.client = client
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -441,7 +440,7 @@ class ClusterAddJujuUserStep(BaseStep):
 
         return Result(ResultType.SKIPPED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Add node to sunbeam cluster."""
         try:
             self.client.cluster.add_juju_user(self.username, self.token)
@@ -464,7 +463,7 @@ class ClusterUpdateJujuControllerStep(BaseStep, JujuStepHelper):
         self.controller = controller
         self.is_external = is_external
 
-    def _extract_ip(self, ip) -> Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+    def _extract_ip(self, ip) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
         """Extract ip from ipv4 or ipv6 ip:port."""
         # Check for ipv6 addr
         ipv6_addr = re.match(r"\[(.*?)\]", ip)
@@ -474,7 +473,7 @@ class ClusterUpdateJujuControllerStep(BaseStep, JujuStepHelper):
             ip_str = ip.split(":")[0]
         return ipaddress.ip_address(ip_str)
 
-    def filter_ips(self, ips: List[str], network_str: Optional[str]) -> List[str]:
+    def filter_ips(self, ips: list[str], network_str: str | None) -> list[str]:
         """Filter ips missing from specified networks.
 
         :param ips: list of ips to filter
@@ -492,7 +491,7 @@ class ClusterUpdateJujuControllerStep(BaseStep, JujuStepHelper):
             )
         )
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -526,7 +525,7 @@ class ClusterUpdateJujuControllerStep(BaseStep, JujuStepHelper):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Save controller in sunbeam cluster."""
         controller = self.get_controller(self.controller)["details"]
 

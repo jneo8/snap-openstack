@@ -25,13 +25,12 @@ from rich.console import Console
 from rich.table import Table
 from snaphelpers import Snap
 
-from sunbeam.jobs.checks import LocalShareCheck
+from sunbeam.jobs.checks import LocalShareCheck, run_preflight_checks
 from sunbeam.jobs.common import (
     CONTEXT_SETTINGS,
     FORMAT_TABLE,
     FORMAT_YAML,
     run_plan,
-    run_preflight_checks,
 )
 from sunbeam.jobs.deployment import Deployment, register_deployment_type
 from sunbeam.jobs.deployments import (
@@ -64,7 +63,7 @@ def load_deployment(path: Path) -> Deployment:
     return deployments.get_active()
 
 
-def register_providers():
+def register_providers() -> None:
     """Auto-register providers."""
     providers: list[ProviderBase] = [LocalProvider(), MaasProvider()]
     for provider_obj in providers:

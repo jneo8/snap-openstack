@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pbr.version
+import pbr.version  # type: ignore [import-untyped]
 
 __all__ = ["__version__"]
 version_info = pbr.version.VersionInfo("sunbeam")

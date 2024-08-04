@@ -16,7 +16,7 @@
 import copy
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pydantic
 import yaml
@@ -40,7 +40,7 @@ from sunbeam.jobs.common import (
 from sunbeam.versions import MANIFEST_CHARM_VERSIONS, TERRAFORM_DIR_NAMES
 
 LOG = logging.getLogger(__name__)
-EMPTY_MANIFEST = {"charms": {}, "terraform": {}}
+EMPTY_MANIFEST: dict[str, dict] = {"charms": {}, "terraform": {}}
 
 
 def embedded_manifest_path(snap: Snap, risk: str) -> Path:
@@ -69,13 +69,13 @@ class CharmManifest(pydantic.BaseModel):
     revision: int | None = Field(
         default=None, description="Revision number of the charm"
     )
-    # rocks: Optional[Dict[str, str]] = Field(
+    # rocks: dict[str, str] | None = Field(
     #     default=None, description="Rock images for the charm"
     # )
     config: dict[str, Any] | None = Field(
         default=None, description="Config options of the charm"
     )
-    # source: Optional[Path] = Field(
+    # source: Path | None = Field(
     #     default=None, description="Local charm bundle path"
     # )
 
@@ -161,10 +161,10 @@ class SoftwareConfig(pydantic.BaseModel):
         juju = JujuManifest(
             **utils.merge_dict(self.juju.model_dump(), other.juju.model_dump())
         )
-        charms = utils.merge_dict(
+        charms: dict[str, CharmManifest] = utils.merge_dict(
             copy.deepcopy(self.charms), copy.deepcopy(other.charms)
         )
-        terraform = utils.merge_dict(
+        terraform: dict[str, TerraformManifest] = utils.merge_dict(
             copy.deepcopy(self.terraform), copy.deepcopy(other.terraform)
         )
         extra = utils.merge_dict(copy.deepcopy(self.extra), copy.deepcopy(other.extra))
@@ -221,6 +221,8 @@ class AddManifestStep(BaseStep):
     Any other reason will be skipped.
     """
 
+    manifest_content: dict[str, dict] | None
+
     def __init__(
         self,
         client: Client,
@@ -234,7 +236,7 @@ class AddManifestStep(BaseStep):
         self.manifest_content = None
         self.snap = Snap()
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Skip if the user provided manifest and the latest from db are same."""
         risk = infer_risk(self.snap)
         try:
@@ -276,7 +278,7 @@ class AddManifestStep(BaseStep):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Write manifest to cluster db."""
         try:
             id = self.client.cluster.add_manifest(

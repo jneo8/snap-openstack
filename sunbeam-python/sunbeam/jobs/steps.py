@@ -15,7 +15,6 @@
 
 import abc
 import logging
-from typing import Optional
 
 from lightkube.config.kubeconfig import KubeConfig
 from lightkube.core import exceptions
@@ -27,7 +26,6 @@ from rich.status import Status
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import (
     ConfigItemNotFoundException,
-    NodeNotExistInClusterException,
 )
 from sunbeam.commands.terraform import TerraformException, TerraformHelper
 from sunbeam.jobs.common import BaseStep, Result, ResultType, read_config, update_config
@@ -81,7 +79,7 @@ class DeployMachineApplicationStep(BaseStep):
         """Application timeout in seconds."""
         return 600
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -97,9 +95,9 @@ class DeployMachineApplicationStep(BaseStep):
 
         return Result(ResultType.SKIPPED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy sunbeam machine."""
-        machine_ids = []
+        machine_ids: list[int] = []
         try:
             app = run_sync(self.jhelper.get_application(self.application, self.model))
             machine_ids.extend(unit.machine.id for unit in app.units)
@@ -164,13 +162,13 @@ class AddMachineUnitsStep(BaseStep):
         self.config = config
         self.application = application
         self.model = model
-        self.to_deploy = set()
+        self.to_deploy: set[str] = set()
 
     def get_unit_timeout(self) -> int:
         """Return unit timeout in seconds."""
         return 600  # 10 minutes
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -240,7 +238,7 @@ class AddMachineUnitsStep(BaseStep):
         """Accepted status to pass wait_units_ready function."""
         return {"agent": ["idle"], "workload": ["active"]}
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Add unit to machine application on Juju model."""
         try:
             units = run_sync(
@@ -264,13 +262,15 @@ class AddMachineUnitsStep(BaseStep):
         return Result(ResultType.COMPLETED)
 
 
-class RemoveMachineUnitStep(BaseStep):
+class RemoveMachineUnitsStep(BaseStep):
     """Base class to remove unit of machine application."""
+
+    units_to_remove: set[str]
 
     def __init__(
         self,
         client: Client,
-        name: str,
+        names: list[str] | str,
         jhelper: JujuHelper,
         config: str,
         application: str,
@@ -280,54 +280,68 @@ class RemoveMachineUnitStep(BaseStep):
     ):
         super().__init__(banner, description)
         self.client = client
-        self.node_name = name
+        if isinstance(names, str):
+            names = [names]
+        self.names = names
         self.jhelper = jhelper
         self.config = config
         self.application = application
         self.model = model
         self.machine_id = ""
         self.unit = None
+        self.units_to_remove = set()
 
     def get_unit_timeout(self) -> int:
         """Return unit timeout in seconds."""
         return 600  # 10 minutes
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
                 ResultType.COMPLETED or ResultType.FAILED otherwise
         """
-        try:
-            node = self.client.cluster.get_node_info(self.node_name)
-            self.machine_id = str(node.get("machineid"))
-        except NodeNotExistInClusterException:
-            LOG.debug(f"Machine {self.node_name} does not exist, skipping.")
+        if len(self.names) == 0:
             return Result(ResultType.SKIPPED)
+        nodes: list[dict] = self.client.cluster.list_nodes()
+
+        filtered_nodes = list(filter(lambda node: node["name"] in self.names, nodes))
+        if len(filtered_nodes) != len(self.names):
+            filtered_node_names = [node["name"] for node in filtered_nodes]
+            missing_nodes = set(self.names) - set(filtered_node_names)
+            LOG.debug(
+                f"Nodes '{','.join(missing_nodes)}' do not exist in cluster database"
+            )
 
         try:
             app = run_sync(self.jhelper.get_application(self.application, self.model))
-        except ApplicationNotFoundException as e:
-            LOG.debug(str(e))
+        except ApplicationNotFoundException:
+            LOG.debug("Failed to get application", exc_info=True)
             return Result(
                 ResultType.SKIPPED,
-                "Application {self.application} has not been deployed yet",
+                f"Application {self.application} has not been deployed yet",
             )
+
+        to_remove_node_ids = {str(node["machineid"]) for node in filtered_nodes}
 
         for unit in app.units:
-            if unit.machine.id == self.machine_id:
+            if unit.machine.id in to_remove_node_ids:
                 LOG.debug(f"Unit {unit.name} is deployed on machine: {self.machine_id}")
-                self.unit = unit.name
-                return Result(ResultType.COMPLETED)
+                self.units_to_remove.add(unit.name)
 
-        return Result(ResultType.SKIPPED)
+        if len(self.units_to_remove) == 0:
+            return Result(ResultType.SKIPPED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None = None) -> Result:
         """Remove unit from machine application on Juju model."""
         try:
-            run_sync(
-                self.jhelper.remove_unit(self.application, str(self.unit), self.model)
-            )
+            self.update_status(status, "Removing units")
+            for unit in self.units_to_remove:
+                LOG.debug(f"Removing unit {unit} from application {self.application}")
+                run_sync(self.jhelper.remove_unit(self.application, unit, self.model))
+            self.update_status(status, "Waiting for units to be removed")
             run_sync(
                 self.jhelper.wait_application_ready(
                     self.application,
@@ -380,7 +394,7 @@ class PatchLoadBalancerServicesStep(BaseStep, abc.ABC):
                 return self._get_service(service_name, find_lb=False)
             raise e
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -417,7 +431,7 @@ class PatchLoadBalancerServicesStep(BaseStep, abc.ABC):
 
         return Result(ResultType.SKIPPED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Patch LoadBalancer services annotations with LB IP."""
         for service_name in self.services():
             try:
