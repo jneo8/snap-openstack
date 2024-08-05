@@ -17,7 +17,6 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 
 import click
 import yaml
@@ -83,7 +82,7 @@ class DisableLDAPDomainStep(BaseStep, JujuStepHelper):
         self.client = self.feature.deployment.get_client()
         self.tfhelper = self.feature.deployment.get_tfhelper(self.feature.tfplan)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy openstack application."""
         config_key = self.feature.get_tfvar_config_key()
 
@@ -131,7 +130,7 @@ class UpdateLDAPDomainStep(BaseStep, JujuStepHelper):
         self,
         jhelper: JujuHelper,
         feature: OpenStackControlPlaneFeature,
-        charm_config: str,
+        charm_config: dict,
     ) -> None:
         """Constructor for the generic plan.
 
@@ -150,7 +149,7 @@ class UpdateLDAPDomainStep(BaseStep, JujuStepHelper):
         self.client = self.feature.deployment.get_client()
         self.tfhelper = self.feature.deployment.get_tfhelper(self.feature.tfplan)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy openstack application."""
         config_key = self.feature.get_tfvar_config_key()
 
@@ -158,7 +157,7 @@ class UpdateLDAPDomainStep(BaseStep, JujuStepHelper):
             tfvars = read_config(self.client, config_key)
         except ConfigItemNotFoundException:
             tfvars = {}
-        config = tfvars["ldap-apps"].get(self.charm_config["domain-name"])
+        config: dict = tfvars["ldap-apps"].get(self.charm_config["domain-name"])
         if config:
             for k in config.keys():
                 if self.charm_config.get(k):
@@ -176,7 +175,7 @@ class UpdateLDAPDomainStep(BaseStep, JujuStepHelper):
         charm_name = "keystone-ldap-{}".format(self.charm_config["domain-name"])
         apps = ["keystone", charm_name]
         LOG.debug(f"Application monitored for readiness: {apps}")
-        queue = asyncio.queues.Queue(maxsize=len(apps))
+        queue: asyncio.queues.Queue[str] = asyncio.queues.Queue(maxsize=len(apps))
         task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
@@ -203,7 +202,7 @@ class AddLDAPDomainStep(BaseStep, JujuStepHelper):
         self,
         jhelper: JujuHelper,
         feature: OpenStackControlPlaneFeature,
-        charm_config: str,
+        charm_config: dict,
     ) -> None:
         """Constructor for the generic plan.
 
@@ -222,7 +221,7 @@ class AddLDAPDomainStep(BaseStep, JujuStepHelper):
         self.client = self.feature.deployment.get_client()
         self.tfhelper = self.feature.deployment.get_tfhelper(self.feature.tfplan)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy openstack application."""
         config_key = self.feature.get_tfvar_config_key()
 
@@ -245,7 +244,7 @@ class AddLDAPDomainStep(BaseStep, JujuStepHelper):
         charm_name = "keystone-ldap-{}".format(self.charm_config["domain-name"])
         apps = ["keystone", charm_name]
         LOG.debug(f"Application monitored for readiness: {apps}")
-        queue = asyncio.queues.Queue(maxsize=len(apps))
+        queue: asyncio.queues.Queue[str] = asyncio.queues.Queue(maxsize=len(apps))
         task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(

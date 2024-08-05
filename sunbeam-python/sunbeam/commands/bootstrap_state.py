@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
-from typing import Optional
 
 from rich.status import Status
 
@@ -30,7 +29,7 @@ class SetBootstrapped(BaseStep):
         super().__init__("Mark bootstrapped", "Mark deployment bootstrapped")
         self.client = client
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Set deployment as bootstrapped in clusterd."""
         LOG.debug("Setting deployment as bootstrapped")
         self.client.cluster.set_sunbeam_bootstrapped()

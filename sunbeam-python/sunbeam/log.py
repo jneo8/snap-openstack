@@ -16,14 +16,14 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Union
+from typing import Union
 
 from rich.logging import RichHandler
 
 MAX_LOG_FILES = 10
 
 
-def setup_root_logging(logfile: Optional[Path] = None):
+def setup_root_logging(logfile: Path | None = None):
     """Sets up the root logging level for the application.
 
     By default, console logging will be turned off and level logging
@@ -62,25 +62,25 @@ def setup_root_logging(logfile: Optional[Path] = None):
     # put the log messages to the line and still honor current console
     # entries relevant to the user.
     if console:
-        handler = RichHandler()
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(logging.Formatter("%(message)s", datefmt="[%X]"))
-        logger.addHandler(handler)
+        rich_handler = RichHandler()
+        rich_handler.setLevel(logging.DEBUG)
+        rich_handler.setFormatter(logging.Formatter("%(message)s", datefmt="[%X]"))
+        logger.addHandler(rich_handler)
     else:
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.WARNING)
-        logger.addHandler(handler)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(logging.WARNING)
+        logger.addHandler(stream_handler)
 
     if logfile:
-        handler = logging.FileHandler(logfile)
-        handler.setLevel(logging.DEBUG)
-        handler.setFormatter(
+        file_handler = logging.FileHandler(logfile)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(
             logging.Formatter(
                 "%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
                 datefmt="%H:%M:%S",
             )
         )
-        logger.addHandler(handler)
+        logger.addHandler(file_handler)
         logger.debug(f"Logging to {str(logfile)!r}")
 
 

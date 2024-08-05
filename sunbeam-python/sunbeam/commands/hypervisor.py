@@ -15,7 +15,6 @@
 
 import logging
 import traceback
-from typing import Optional
 
 import openstack
 from rich.status import Status
@@ -189,7 +188,7 @@ class RemoveHypervisorUnitStep(BaseStep, JujuStepHelper):
         self.unit = None
         self.machine_id = ""
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -233,7 +232,7 @@ class RemoveHypervisorUnitStep(BaseStep, JujuStepHelper):
             tfvars.update({"machine_ids": machine_ids})
             update_config(self.client, CONFIG_KEY, tfvars)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Remove unit from openstack-hypervisor application on Juju model."""
         try:
             self.guests = guests_on_hypervisor(self.name, self.jhelper)
@@ -305,7 +304,7 @@ class ReapplyHypervisorTerraformPlanStep(BaseStep):
         self.model = model
         self.extra_tfvars = extra_tfvars
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -316,7 +315,7 @@ class ReapplyHypervisorTerraformPlanStep(BaseStep):
 
         return Result(ResultType.SKIPPED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy hypervisor."""
         statuses = ["active", "unknown"]
         if len(self.client.cluster.list_nodes_by_role("storage")) < 1:

@@ -21,6 +21,7 @@ import yaml
 from rich.console import Console
 from rich.table import Column, Table
 
+from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
@@ -29,7 +30,7 @@ from sunbeam.commands.juju import UpdateJujuModelConfigStep
 from sunbeam.commands.openstack import UpdateOpenStackModelConfigStep
 from sunbeam.commands.sunbeam_machine import DeploySunbeamMachineApplicationStep
 from sunbeam.commands.terraform import TerraformInitStep
-from sunbeam.jobs.checks import VerifyBootstrappedCheck
+from sunbeam.jobs.checks import VerifyBootstrappedCheck, run_preflight_checks
 from sunbeam.jobs.common import (
     FORMAT_TABLE,
     FORMAT_YAML,
@@ -39,7 +40,6 @@ from sunbeam.jobs.common import (
     Status,
     convert_proxy_to_model_configs,
     run_plan,
-    run_preflight_checks,
     update_config,
 )
 from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment
@@ -87,7 +87,7 @@ def _update_proxy(proxy: dict, deployment: Deployment):
     proxy_settings = deployment.get_proxy_settings()
     model_config = convert_proxy_to_model_configs(proxy_settings)
 
-    plan = []
+    plan: list[BaseStep] = []
     plan.append(
         DeploySunbeamMachineApplicationStep(
             deployment,
@@ -166,7 +166,7 @@ def set(ctx: click.Context, http_proxy: str, https_proxy: str, no_proxy: str) ->
         click.echo("To clear the proxy, use command `sunbeam proxy clear`")
         return
 
-    variables = {"proxy": {}}
+    variables: dict[str, dict[str, str | bool]] = {"proxy": {}}
     variables["proxy"]["proxy_required"] = True
     variables["proxy"]["http_proxy"] = http_proxy
     variables["proxy"]["https_proxy"] = https_proxy
@@ -185,7 +185,7 @@ def clear(ctx: click.Context) -> None:
     """Clear proxy configuration."""
     deployment: Deployment = ctx.obj
 
-    variables = {"proxy": {}}
+    variables: dict[str, dict[str, str | bool]] = {"proxy": {}}
     variables["proxy"]["proxy_required"] = False
     variables["proxy"]["http_proxy"] = ""
     variables["proxy"]["https_proxy"] = ""
@@ -226,6 +226,8 @@ def proxy_questions():
 
 
 class PromptForProxyStep(BaseStep):
+    client: Client | None
+
     def __init__(
         self,
         deployment: Deployment,
@@ -241,7 +243,7 @@ class PromptForProxyStep(BaseStep):
         except ValueError:
             # For MAAS deployment, client is not set at this point
             self.client = None
-        self.variables = {}
+        self.variables: dict = {}
 
     def prompt(self, console: Console | None = None) -> None:
         """Determines if the step can take input from the user.

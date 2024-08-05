@@ -16,7 +16,7 @@
 import json
 import logging
 import secrets
-from typing import Any, List, Union
+from typing import Any, Union
 
 from requests import codes
 from requests.models import HTTPError
@@ -109,7 +109,7 @@ class ExtendedAPIService(service.BaseService):
     """Client for Sunbeam extended Cluster API."""
 
     def add_node_info(
-        self, name: str, role: List[str], machineid: int = -1, systemid: str = ""
+        self, name: str, role: list[str], machineid: int = -1, systemid: str = ""
     ) -> None:
         """Add Node information to cluster database."""
         data = {
@@ -180,19 +180,19 @@ class ExtendedAPIService(service.BaseService):
         """Remove configuration from database."""
         self._delete(f"/1.0/config/{key}")
 
-    def list_nodes_by_role(self, role: Union[str, List[str]]) -> list:
+    def list_nodes_by_role(self, role: Union[str, list[str]]) -> list:
         """List nodes by role."""
         if isinstance(role, list):
             role = "&role=".join(role)
         nodes = self._get(f"/1.0/nodes?role={role}")
         return nodes.get("metadata")
 
-    def list_terraform_plans(self) -> List[str]:
+    def list_terraform_plans(self) -> list[str]:
         """List all plans."""
         plans = self._get("/1.0/terraformstate")
         return plans.get("metadata")
 
-    def list_terraform_locks(self) -> List[str]:
+    def list_terraform_locks(self) -> list[str]:
         """List all locks."""
         locks = self._get("/1.0/terraformlock")
         return locks.get("metadata")
@@ -209,8 +209,8 @@ class ExtendedAPIService(service.BaseService):
     def add_manifest(self, data: str) -> str:
         """Add manifest to cluster database."""
         manifest_id = secrets.token_hex(16)
-        data = {"manifestid": manifest_id, "data": data}
-        self._post("/1.0/manifests", data=json.dumps(data))
+        content = {"manifestid": manifest_id, "data": data}
+        self._post("/1.0/manifests", data=json.dumps(content))
         return manifest_id
 
     def list_manifests(self) -> list:
@@ -254,7 +254,7 @@ class ClusterService(MicroClusterService, ExtendedAPIService):
     SUNBEAM_BOOTSTRAP_KEY = "sunbeam_bootstrapped"
 
     def bootstrap(
-        self, name: str, address: str, role: List[str], machineid: int = -1
+        self, name: str, address: str, role: list[str], machineid: int = -1
     ) -> None:
         """Bootstrap cluster and register node information."""
         self.bootstrap_cluster(name, address)
@@ -264,7 +264,7 @@ class ClusterService(MicroClusterService, ExtendedAPIService):
         """Request token for additional node."""
         return self.generate_token(name)
 
-    def join_node(self, name: str, address: str, token: str, role: List[str]) -> None:
+    def join_node(self, name: str, address: str, token: str, role: list[str]) -> None:
         """Join node to cluster and register node information."""
         self.join(name, address, token)
         self.add_node_info(name, role)

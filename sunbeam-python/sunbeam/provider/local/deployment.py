@@ -15,7 +15,7 @@
 
 import logging
 
-import petname
+import petname  # type: ignore [import-untyped]
 import pydantic
 import snaphelpers
 from rich.console import Console
@@ -276,7 +276,7 @@ class LocalDeployment(Deployment):
             variables = load_answers(client, CONFIG_DISKS_KEY)
         except ClusterServiceUnavailableException:
             variables = {}
-        microceph_content = []
+        microceph_content: list[str] = []
         for name, disks in variables.get("microceph_config", {fqdn: None}).items():
             microceph_config_bank = QuestionBank(
                 questions=microceph_questions(),

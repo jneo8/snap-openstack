@@ -14,11 +14,11 @@
 # limitations under the License.
 import logging
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.console import Console
 
+from sunbeam.commands.upgrades.base import UpgradeCoordinator
 from sunbeam.commands.upgrades.inter_channel import ChannelUpgradeCoordinator
 from sunbeam.commands.upgrades.intra_channel import LatestInChannelCoordinator
 from sunbeam.jobs.common import run_plan
@@ -57,7 +57,7 @@ console = Console()
 def refresh(
     ctx: click.Context,
     upgrade_release: bool,
-    manifest_path: Optional[Path] = None,
+    manifest_path: Path | None = None,
     clear_manifest: bool = False,
 ) -> None:
     """Refresh deployment.
@@ -86,10 +86,15 @@ def refresh(
 
     LOG.debug(f"Manifest used for deployment - software: {manifest.software}")
     jhelper = JujuHelper(deployment.get_connected_controller())
+    upgrade_coordinator: UpgradeCoordinator
     if upgrade_release:
-        a = ChannelUpgradeCoordinator(deployment, client, jhelper, manifest)
-        a.run_plan()
+        upgrade_coordinator = ChannelUpgradeCoordinator(
+            deployment, client, jhelper, manifest
+        )
+        upgrade_coordinator.run_plan()
     else:
-        a = LatestInChannelCoordinator(deployment, client, jhelper, manifest)
-        a.run_plan()
+        upgrade_coordinator = LatestInChannelCoordinator(
+            deployment, client, jhelper, manifest
+        )
+        upgrade_coordinator.run_plan()
     click.echo("Refresh complete.")

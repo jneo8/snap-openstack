@@ -24,13 +24,12 @@ import secrets
 import socket
 import string
 import sys
+import typing
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import click
-import netifaces
-import pwgen
-from pyroute2 import IPDB, NDB
+import netifaces  # type: ignore [import-not-found]
+from pyroute2 import IPDB, NDB  # type: ignore [import-untyped]
 
 from sunbeam.jobs.common import SunbeamException
 
@@ -103,7 +102,7 @@ def get_fqdn(cidr: str | None = None) -> str:
     return socket.gethostname()
 
 
-def _get_default_gw_iface_fallback() -> Optional[str]:
+def _get_default_gw_iface_fallback() -> str | None:
     """Returns the default gateway interface.
 
     Parses the /proc/net/route table to determine the interface with a default
@@ -122,7 +121,7 @@ def _get_default_gw_iface_fallback() -> Optional[str]:
         contents = [line.strip() for line in f.readlines() if line.strip()]
         logging.debug(contents)
 
-        entries = []
+        entries: list[dict[str, str]] = []
         # First line is a header line of the table contents. Note, we skip blank entries
         # by default there's an extra column due to an extra \t character for the table
         # contents to line up. This is parsing the /proc/net/route and creating a set of
@@ -143,11 +142,11 @@ def _get_default_gw_iface_fallback() -> Optional[str]:
         # will have destination and mask set to 0x00, will be up and is noted as a
         # gateway.
         for entry in entries:
-            if int(entry.get("destination", 0xFF), 16) != 0:
+            if int(entry.get("destination", "0xFF"), 16) != 0:
                 continue
-            if int(entry.get("mask", 0xFF), 16) != 0:
+            if int(entry.get("mask", "0xFF"), 16) != 0:
                 continue
-            flags = entry.get("flags", 0x00)
+            flags = entry.get("flags", "0x00")
             if is_up(flags) and is_gateway(flags):
                 iface = entry.get("iface", None)
                 break
@@ -230,11 +229,11 @@ def get_nic_macs(nic: str) -> list:
     return sorted([a["addr"] for a in addrs[netifaces.AF_LINK]])
 
 
-def filter_link_local(addresses: List[Dict]) -> List[Dict]:
+def filter_link_local(addresses: list[dict] | None) -> list[dict]:
     """Filter any IPv6 link local addresses from configured IPv6 addresses."""
     if addresses is None:
-        return None
-    return [addr for addr in addresses if "fe80" not in addr.get("addr")]
+        return []
+    return [addr for addr in addresses if "fe80" not in addr.get("addr", ())]
 
 
 def is_configured(nic: str) -> bool:
@@ -284,7 +283,7 @@ def get_free_nic() -> str:
     return nic
 
 
-def get_nameservers(ipv4_only=True, max_count=5) -> List[str]:
+def get_nameservers(ipv4_only=True, max_count=5) -> list[str]:
     """Return a list of nameservers used by the host."""
     resolve_config = Path("/run/systemd/resolve/resolv.conf")
     nameservers = []
@@ -301,11 +300,6 @@ def get_nameservers(ipv4_only=True, max_count=5) -> List[str]:
     except FileNotFoundError:
         nameservers = []
     return nameservers[:max_count]
-
-
-def generate_password() -> str:
-    """Generate a password."""
-    return pwgen.pwgen(12)
 
 
 class CatchGroup(click.Group):
@@ -330,17 +324,22 @@ class CatchGroup(click.Group):
             sys.exit(1)
 
 
-def merge_dict(d: dict, u: dict) -> dict:
+K = typing.TypeVar("K")
+V = typing.TypeVar("V")
+
+_MERGE_DICT = dict[K, V]
+
+
+def merge_dict(d: _MERGE_DICT, u: _MERGE_DICT) -> _MERGE_DICT:
     """Merges nested dicts and updates the first dict."""
     for k, v in u.items():
         if not d.get(k):
             d[k] = v
-        elif isinstance(v, collections.abc.Mapping):
+        elif issubclass(type(v), collections.abc.Mapping):
             d[k] = merge_dict(d.get(k, {}), v)
         else:
             if v:
                 d[k] = v
-
     return d
 
 
@@ -362,6 +361,11 @@ def random_string(length: int) -> str:
     """Utility function to generate secure random string."""
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for i in range(length))
+
+
+def generate_password() -> str:
+    """Generate a password."""
+    return random_string(12)
 
 
 def first_connected_server(servers: list) -> str | None:

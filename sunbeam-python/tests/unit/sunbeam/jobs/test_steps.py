@@ -18,14 +18,13 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from sunbeam.clusterd.service import NodeNotExistInClusterException
 from sunbeam.commands.terraform import TerraformException
 from sunbeam.jobs.common import ResultType
 from sunbeam.jobs.juju import ApplicationNotFoundException, TimeoutException
 from sunbeam.jobs.steps import (
     AddMachineUnitsStep,
     DeployMachineApplicationStep,
-    RemoveMachineUnitStep,
+    RemoveMachineUnitsStep,
 )
 
 
@@ -317,38 +316,37 @@ class TestAddMachineUnitsStep:
 class TestRemoveMachineUnitStep:
     def test_is_skip(self, cclient, jhelper):
         id = "1"
-        cclient.cluster.get_node_info.return_value = {"machineid": id}
+        cclient.cluster.list_nodes.return_value = [{"name": "node-0", "machineid": id}]
         jhelper.get_application.return_value = Mock(units=[Mock(machine=Mock(id=id))])
 
-        step = RemoveMachineUnitStep(
-            cclient, "app1", jhelper, "tfconfig", "app1", "model1"
+        step = RemoveMachineUnitsStep(
+            cclient, "node-0", jhelper, "tfconfig", "app1", "model1"
         )
         result = step.is_skip()
 
-        cclient.cluster.get_node_info.assert_called_once()
+        cclient.cluster.list_nodes.assert_called_once()
         jhelper.get_application.assert_called_once()
         assert result.result_type == ResultType.COMPLETED
 
     def test_is_skip_node_missing(self, cclient, jhelper):
-        cclient.cluster.get_node_info.side_effect = NodeNotExistInClusterException(
-            "Node missing..."
-        )
+        cclient.cluster.list_nodes.return_value = [{"name": "node-0", "machineid": 1}]
 
-        step = RemoveMachineUnitStep(
-            cclient, "app1", jhelper, "tfconfig", "app1", "model1"
+        step = RemoveMachineUnitsStep(
+            cclient, "node-1", jhelper, "tfconfig", "app1", "model1"
         )
         result = step.is_skip()
 
-        cclient.cluster.get_node_info.assert_called_once()
+        cclient.cluster.list_nodes.assert_called_once()
         assert result.result_type == ResultType.SKIPPED
 
     def test_is_skip_application_missing(self, cclient, jhelper):
+        cclient.cluster.list_nodes.return_value = [{"name": "node-0", "machineid": 1}]
         jhelper.get_application.side_effect = ApplicationNotFoundException(
             "Application missing..."
         )
 
-        step = RemoveMachineUnitStep(
-            cclient, "app1", jhelper, "tfconfig", "app1", "model1"
+        step = RemoveMachineUnitsStep(
+            cclient, "node-0", jhelper, "tfconfig", "app1", "model1"
         )
         result = step.is_skip()
 
@@ -356,21 +354,21 @@ class TestRemoveMachineUnitStep:
         assert result.result_type == ResultType.SKIPPED
 
     def test_is_skip_unit_missing(self, cclient, jhelper):
-        cclient.cluster.get_node_info.return_value = {}
+        cclient.cluster.list_nodes.return_value = [{"name": "node-0", "machineid": 1}]
         jhelper.get_application.return_value = Mock(units=[])
 
-        step = RemoveMachineUnitStep(
-            cclient, "app1", jhelper, "tfconfig", "app1", "model1"
+        step = RemoveMachineUnitsStep(
+            cclient, "node-0", jhelper, "tfconfig", "app1", "model1"
         )
         result = step.is_skip()
 
-        cclient.cluster.get_node_info.assert_called_once()
+        cclient.cluster.list_nodes.assert_called_once()
         jhelper.get_application.assert_called_once()
         assert result.result_type == ResultType.SKIPPED
 
     def test_run(self, cclient, jhelper, read_config):
-        step = RemoveMachineUnitStep(
-            cclient, "app1", jhelper, "tfconfig", "app1", "model1"
+        step = RemoveMachineUnitsStep(
+            cclient, "node-0", jhelper, "tfconfig", "app1", "model1"
         )
         result = step.run()
 
@@ -381,9 +379,10 @@ class TestRemoveMachineUnitStep:
             "Application missing..."
         )
 
-        step = RemoveMachineUnitStep(
-            cclient, "app1", jhelper, "tfconfig", "app1", "model1"
+        step = RemoveMachineUnitsStep(
+            cclient, "node-0", jhelper, "tfconfig", "app1", "model1"
         )
+        step.units_to_remove = {"app1/0"}
         result = step.run()
 
         jhelper.remove_unit.assert_called_once()
@@ -393,8 +392,8 @@ class TestRemoveMachineUnitStep:
     def test_run_timeout(self, cclient, jhelper, read_config):
         jhelper.wait_application_ready.side_effect = TimeoutException("timed out")
 
-        step = RemoveMachineUnitStep(
-            cclient, "app1", jhelper, "tfconfig", "app1", "model1"
+        step = RemoveMachineUnitsStep(
+            cclient, "node-0", jhelper, "tfconfig", "app1", "model1"
         )
         result = step.run()
 

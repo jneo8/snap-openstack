@@ -382,7 +382,8 @@ class TestConfigureCAStep:
     ):
         jhelper.run_action.side_effect = ActionFailedException("action failed...")
         step = ca.ConfigureCAStep(cclient, jhelper, "fake-cert", "fake-chain")
-        step.prompt()
+        with pytest.raises(ActionFailedException):
+            step.prompt()
 
         jhelper.run_action.assert_called_once()
         load_answers.assert_not_called()
@@ -399,7 +400,8 @@ class TestConfigureCAStep:
             "not able to get leader..."
         )
         step = ca.ConfigureCAStep(cclient, jhelper, "fake-cert", "fake-chain")
-        step.prompt()
+        with pytest.raises(LeaderNotFoundException):
+            step.prompt()
 
         jhelper.run_action.assert_not_called()
         load_answers.assert_not_called()

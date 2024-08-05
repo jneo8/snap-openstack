@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import logging
-from typing import Optional
 
 import click
 from packaging.version import Version
@@ -59,8 +58,8 @@ class TlsFeatureGroup(OpenStackControlPlaneFeature):
     ) -> None:
         super().__init__(name, deployment, tf_plan_location)
         self.group = "tls"
-        self.ca = None
-        self.ca_chain = None
+        self.ca: str | None = None
+        self.ca_chain: str | None = None
 
     @click.group()
     def enable_tls(self) -> None:
@@ -94,7 +93,7 @@ class TlsFeatureGroup(OpenStackControlPlaneFeature):
         super().post_enable()
         jhelper = JujuHelper(self.deployment.get_connected_controller())
         plan = [
-            AddCACertsToKeystoneStep(jhelper, self.feature_key, self.ca, self.ca_chain)
+            AddCACertsToKeystoneStep(jhelper, self.feature_key, self.ca, self.ca_chain)  # type: ignore
         ]
         run_plan(plan, console)
 
@@ -102,7 +101,7 @@ class TlsFeatureGroup(OpenStackControlPlaneFeature):
             "provider": self.name,
             "ca": self.ca,
             "chain": self.ca_chain,
-            "endpoints": self.endpoints,
+            "endpoints": self.endpoints,  # type: ignore
         }
         update_config(self.deployment.get_client(), CERTIFICATE_FEATURE_KEY, config)
 
@@ -126,7 +125,7 @@ class TlsFeatureGroup(OpenStackControlPlaneFeature):
         ]
         run_plan(plan, console)
 
-        config = {}
+        config: dict = {}
         update_config(self.deployment.get_client(), CERTIFICATE_FEATURE_KEY, config)
 
 
@@ -150,7 +149,7 @@ class AddCACertsToKeystoneStep(BaseStep):
         self.app = "keystone"
         self.model = OPENSTACK_MODEL
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -184,7 +183,7 @@ class AddCACertsToKeystoneStep(BaseStep):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Run keystone add-ca-certs action."""
         action_cmd = "add-ca-certs"
         try:
@@ -233,7 +232,7 @@ class RemoveCACertsFromKeystoneStep(BaseStep):
         self.app = "keystone"
         self.model = OPENSTACK_MODEL
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -267,7 +266,7 @@ class RemoveCACertsFromKeystoneStep(BaseStep):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Run keystone add-ca-certs action."""
         action_cmd = "remove-ca-certs"
         try:

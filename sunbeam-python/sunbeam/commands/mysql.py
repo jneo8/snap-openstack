@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
-from typing import Optional
 
 from rich.status import Status
 
@@ -52,7 +51,7 @@ class ConfigureMySQLStep(BaseStep):
         super().__init__("Configure MySQL", "Configure MySQL")
         self.jhelper = jhelper
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -70,7 +69,7 @@ class ConfigureMySQLStep(BaseStep):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Runs the step.
 
         :return: ResultType.COMPLETED or ResultType.FAILED

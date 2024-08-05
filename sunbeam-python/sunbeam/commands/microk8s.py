@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import logging
-from typing import Optional
 
 import yaml
 from rich.console import Console
@@ -46,7 +45,7 @@ from sunbeam.jobs.manifest import Manifest
 from sunbeam.jobs.steps import (
     AddMachineUnitsStep,
     DeployMachineApplicationStep,
-    RemoveMachineUnitStep,
+    RemoveMachineUnitsStep,
 )
 
 LOG = logging.getLogger(__name__)
@@ -101,13 +100,13 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
 
         self.preseed = deployment_preseed or {}
         self.accept_defaults = accept_defaults
-        self.variables = {}
+        self.variables: dict = {}
 
     def get_application_timeout(self) -> int:
         """Return application timeout in seconds."""
         return MICROK8S_APP_TIMEOUT
 
-    def prompt(self, console: Optional[Console] = None) -> None:
+    def prompt(self, console: Console | None = None) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -183,13 +182,15 @@ class AddMicrok8sUnitsStep(AddMachineUnitsStep):
         return MICROK8S_UNIT_TIMEOUT
 
 
-class RemoveMicrok8sUnitStep(RemoveMachineUnitStep):
+class RemoveMicrok8sUnitsStep(RemoveMachineUnitsStep):
     """Remove Microk8s Unit."""
 
-    def __init__(self, client: Client, name: str, jhelper: JujuHelper, model: str):
+    def __init__(
+        self, client: Client, names: list[str] | str, jhelper: JujuHelper, model: str
+    ):
         super().__init__(
             client,
-            name,
+            names,
             jhelper,
             MICROK8S_CONFIG_KEY,
             APPLICATION,
@@ -215,7 +216,7 @@ class AddMicrok8sCloudStep(BaseStep, JujuStepHelper):
         self.cloud_name = f"{deployment.name}{K8S_CLOUD_SUFFIX}"
         self.credential_name = f"{self.cloud_name}{CREDENTIAL_SUFFIX}"
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -229,7 +230,7 @@ class AddMicrok8sCloudStep(BaseStep, JujuStepHelper):
 
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Add microk8s clouds to Juju controller."""
         try:
             kubeconfig = read_config(self.client, self._CONFIG)
@@ -261,7 +262,7 @@ class StoreMicrok8sConfigStep(BaseStep, JujuStepHelper):
         self.jhelper = jhelper
         self.model = model
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -274,7 +275,7 @@ class StoreMicrok8sConfigStep(BaseStep, JujuStepHelper):
 
         return Result(ResultType.SKIPPED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Store MicroK8S config in clusterd."""
         try:
             unit = run_sync(self.jhelper.get_leader_unit(APPLICATION, self.model))

@@ -17,7 +17,6 @@
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import click
 from packaging.version import Version
@@ -70,7 +69,7 @@ class EnableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
         """Returns true if the step has prompts that it can ask the user."""
         return False
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -78,7 +77,7 @@ class EnableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
         """
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy ubuntu-pro."""
         extra_tfvars = {"token": self.token}
         try:
@@ -142,7 +141,7 @@ class DisableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
         """Returns true if the step has prompts that it can ask the user."""
         return False
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -150,7 +149,7 @@ class DisableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
         """
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to disable ubuntu-pro."""
         extra_tfvars = {"token": ""}
         try:
@@ -167,6 +166,8 @@ class DisableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
 
 
 class ProFeature(EnableDisableFeature):
+    _manifest: Manifest | None
+    token: str | None
     version = Version("0.0.1")
 
     def __init__(self, deployment: Deployment) -> None:

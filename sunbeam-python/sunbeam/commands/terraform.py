@@ -20,7 +20,6 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from string import Template
-from typing import Optional
 
 from rich.status import Status
 from snaphelpers import Snap
@@ -76,9 +75,9 @@ class TerraformHelper:
         path: Path,
         plan: str,
         tfvar_map: dict,
-        env: Optional[dict] = None,
-        parallelism: Optional[int] = None,
-        backend: Optional[str] = None,
+        env: dict | None = None,
+        parallelism: int | None = None,
+        backend: str | None = None,
         clusterd_address: str | None = None,
     ):
         self.snap = Snap()
@@ -114,20 +113,20 @@ class TerraformHelper:
         backend = self.backend_config()
         if self.backend == "http":
             backend_obj = Template(http_backend_template)
-            backend = backend_obj.safe_substitute(
+            backend_templated = backend_obj.safe_substitute(
                 {key: json.dumps(value) for key, value in backend.items()}
             )
             backend_path = self.path / "backend.tf"
             old_backend = None
             if backend_path.exists():
                 old_backend = backend_path.read_text()
-            if old_backend != backend:
+            if old_backend != backend_templated:
                 with backend_path.open(mode="w") as file:
-                    file.write(backend)
+                    file.write(backend_templated)
                 return True
         return False
 
-    def write_tfvars(self, vars: dict, location: Optional[Path] = None) -> None:
+    def write_tfvars(self, vars: dict, location: Path | None = None) -> None:
         """Write terraform variables file."""
         filepath = location or (self.path / "terraform.tfvars.json")
         with filepath.open("w") as tfvars:
@@ -266,10 +265,10 @@ class TerraformHelper:
                 env=os_env,
             )
             stdout = process.stdout
-            output = ""
+            logged_output = ""
             if not hide_output:
-                output = f" stdout={stdout}, stderr={process.stderr}"
-            LOG.debug("Command finished." + output)
+                logged_output = f" stdout={stdout}, stderr={process.stderr}"
+            LOG.debug("Command finished." + logged_output)
             tf_output = json.loads(stdout)
             output = {}
             for key, value in tf_output.items():
@@ -313,7 +312,7 @@ class TerraformHelper:
         client: Client,
         manifest: Manifest,
         charms: list[str],
-        tfvar_config: Optional[str] = None,
+        tfvar_config: str | None = None,
         tf_apply_extra_args: list | None = None,
     ) -> None:
         """Updates tfvars for specific charms and apply the plan."""
@@ -343,7 +342,7 @@ class TerraformHelper:
         self,
         client: Client,
         manifest: Manifest,
-        tfvar_config: Optional[str] = None,
+        tfvar_config: str | None = None,
         override_tfvars: dict | None = None,
         tf_apply_extra_args: list | None = None,
     ) -> None:
@@ -412,7 +411,7 @@ class TerraformHelper:
                     tfvars_from_manifest.get(override_config, {})
                 )
 
-    def _get_tfvars(self, manifest: Manifest, charms: Optional[list] = None) -> dict:
+    def _get_tfvars(self, manifest: Manifest, charms: list | None = None) -> dict:
         """Get tfvars from the manifest.
 
         MANIFEST_ATTRIBUTES_TFVAR_MAP holds the mapping of Manifest attributes
@@ -443,7 +442,7 @@ class TerraformHelper:
 
         return tfvars
 
-    def _get_tfvar_names(self, charms: Optional[list] = None) -> list:
+    def _get_tfvar_names(self, charms: list | None = None) -> list:
         if charms:
             return [
                 tfvar_name
@@ -470,7 +469,7 @@ class TerraformInitStep(BaseStep):
         )
         self.tfhelper = tfhelper
 
-    def is_skip(self, status: Optional[Status] = None) -> Result:
+    def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not.
 
         :return: ResultType.SKIPPED if the Step should be skipped,
@@ -478,7 +477,7 @@ class TerraformInitStep(BaseStep):
         """
         return Result(ResultType.COMPLETED)
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Initialise Terraform configuration from provider mirror,."""
         try:
             self.tfhelper.init()

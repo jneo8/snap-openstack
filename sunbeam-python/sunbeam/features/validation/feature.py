@@ -17,7 +17,7 @@ import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import click
 import pydantic
@@ -111,7 +111,7 @@ class Config(pydantic.BaseModel):
     None values mean the user did not provide them.
     """
 
-    schedule: Optional[str] = None
+    schedule: str | None = None
 
     @pydantic.validator("schedule")
     def validate_schedule(cls, schedule: str) -> str:  # noqa N805
@@ -159,7 +159,7 @@ class Config(pydantic.BaseModel):
         return schedule
 
 
-def parse_config_args(args: List[str]) -> Dict[str, str]:
+def parse_config_args(args: list[str]) -> dict[str, str]:
     """Parse key=value args into a valid dictionary of key: values.
 
     Raise a click bad argument error if errors (only checks syntax here).
@@ -178,7 +178,7 @@ def parse_config_args(args: List[str]) -> Dict[str, str]:
     return config
 
 
-def validated_config_args(args: Dict[str, str]) -> Config:
+def validated_config_args(args: dict[str, str]) -> Config:
     """Validate config and return validated config if no errors.
 
     Raise a click bad argument error if errors.
@@ -212,7 +212,7 @@ class ConfigureValidationStep(BaseStep):
         self.manifest = manifest
         self.tfvar_config = tfvar_config
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Execute step using terraform."""
         try:
             # See ValidationFeature.manifest_attributes_tfvar_map
@@ -331,9 +331,9 @@ class ValidationFeature(OpenStackControlPlaneFeature):
     def _run_action_on_tempest_unit(
         self,
         action_name: str,
-        action_params: Optional[dict] = None,
+        action_params: dict | None = None,
         progress_message: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run the charm's action."""
         unit = self._get_tempest_leader_unit()
         jhelper = JujuHelper(self.deployment.get_connected_controller())
@@ -439,7 +439,7 @@ class ValidationFeature(OpenStackControlPlaneFeature):
 
     @click.command()
     @click.argument("options", nargs=-1)
-    def configure_validation(self, options: Optional[List[str]] = None) -> None:
+    def configure_validation(self, options: list[str] | None = None) -> None:
         """Configure validation feature.
 
         Run without arguments to view available configuration options.
@@ -484,7 +484,7 @@ class ValidationFeature(OpenStackControlPlaneFeature):
     @click.argument(
         "profile",
         default=DEFAULT_PROFILE.name,
-        type=click.Choice(PROFILES.keys()),
+        type=click.Choice(list(PROFILES.keys())),
         metavar="[PROFILE]",
     )
     @click.option(
@@ -501,7 +501,7 @@ class ValidationFeature(OpenStackControlPlaneFeature):
     def run_validate_action(
         self,
         profile: str,
-        output: Optional[str],
+        output: str | None,
     ) -> None:
         """Run validation tests (default: "refstack" profile).
 
@@ -517,7 +517,7 @@ class ValidationFeature(OpenStackControlPlaneFeature):
             progress_message=progress_message,
         )
 
-        console.print(action_result.get("summary").strip())
+        console.print(action_result.get("summary", "").strip())
 
         if output:
             # Due to shelling out to the juju cli (rather than using libjuju),

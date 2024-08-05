@@ -16,7 +16,9 @@
 import logging
 import shutil
 import tempfile
+import typing
 from pathlib import Path
+from typing import TypeVar
 
 import pydantic
 import yaml
@@ -27,6 +29,8 @@ from sunbeam.jobs.deployment import Deployment
 
 LOG = logging.getLogger(__name__)
 DEPLOYMENTS_CONFIG = SHARE_PATH / "deployments.yaml"
+
+T = TypeVar("T", bound=Deployment)
 
 
 class DeploymentsConfig(pydantic.BaseModel):
@@ -85,7 +89,7 @@ class DeploymentsConfig(pydantic.BaseModel):
             raise ValueError("Path not set.")
         return self._path
 
-    @path.setter
+    @path.setter  # type: ignore [attr-defined]
     def set_path(self, path: Path):
         """Configure path for deployment configuration."""
         self._path = path
@@ -96,6 +100,13 @@ class DeploymentsConfig(pydantic.BaseModel):
             if deployment.name == name:
                 return deployment
         raise ValueError(f"Deployment {name} not found in deployments.")
+
+    def refresh_deployment(self, deployment: T) -> T:
+        """Refresh deployment."""
+        result = self.get_deployment(deployment.name)
+        if type(result) is not type(deployment) or result.type != deployment.type:
+            raise ValueError(f"Deployment {deployment.name} has different type.")
+        return typing.cast(T, result)
 
     def get_active(self) -> Deployment:
         """Get active deployment."""

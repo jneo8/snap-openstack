@@ -19,7 +19,7 @@ import collections
 import logging
 from typing import overload
 
-from maas.client import bones, connect
+from maas.client import bones, connect  # type: ignore [import-untyped]
 from rich.console import Console
 
 from sunbeam.jobs.deployment import Deployment, Networks
@@ -219,7 +219,7 @@ def _find_root_devices(client, machine: dict) -> dict | None:  # noqa: C901
         LOG.debug("Root device is a physical device")
         return _to_root_disk([root_blockdevice], None, root_partition)
 
-    underlying_devices = []
+    underlying_devices: list[dict] = []
 
     if root_blockdevice["type"] != "virtual":
         LOG.debug("Unknown block device type: %r", root_blockdevice)
@@ -258,7 +258,8 @@ def _find_root_devices(client, machine: dict) -> dict | None:  # noqa: C901
 
 def _convert_raw_machine(machine_raw: dict, root_disk: dict | None) -> dict:
     storage_tags = StorageTags.values()
-    storage_devices = {tag: [] for tag in storage_tags}
+    storage_devices: dict[str, list[dict]] = {tag: [] for tag in storage_tags}
+    root_disk = None
     for blockdevice in machine_raw["blockdevice_set"]:
         for tag in blockdevice["tags"]:
             if tag in storage_tags:

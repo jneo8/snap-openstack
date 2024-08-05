@@ -20,7 +20,10 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Sequence
 
+import click
+from rich.console import Console
 from snaphelpers import Snap, SnapCtl
 
 from sunbeam.clusterd.client import Client
@@ -34,12 +37,32 @@ from sunbeam.jobs.common import (
 LOG = logging.getLogger(__name__)
 
 
+def run_preflight_checks(checks: Sequence["Check"], console: Console):
+    """Run preflight checks sequentially.
+
+    Runs each checks, logs whether the check passed or failed.
+    Exits at first failure.
+
+    Raise ClickException in case of Result Failures.
+    """
+    for check in checks:
+        LOG.debug(f"Starting pre-flight check {check.name}")
+        message = f"{check.description} ... "
+        with console.status(message):
+            if not check.run():
+                raise click.ClickException(check.message)
+
+
 class Check:
     """Base class for Pre-flight checks.
 
     Check performs a verification step to determine
     to proceed further or not.
     """
+
+    name: str
+    description: str
+    message: str
 
     def __init__(self, name: str, description: str = ""):
         """Initialise the Check.
@@ -48,7 +71,7 @@ class Check:
         """
         self.name = name
         self.description = description
-        self.message = None
+        self.message = "Check successful"
 
     def run(self) -> bool:
         """Run the check logic here.
@@ -154,7 +177,7 @@ class DiagnosticsCheck:
 
         Return list of DiagnosticsResult.
         """
-        ...
+        raise NotImplementedError
 
 
 class JujuSnapCheck(Check):

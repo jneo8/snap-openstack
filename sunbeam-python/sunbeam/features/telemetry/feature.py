@@ -27,7 +27,7 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.jobs.common import run_plan
+from sunbeam.jobs.common import BaseStep, run_plan
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import JujuHelper
 from sunbeam.jobs.manifest import AddManifestStep, CharmManifest, SoftwareConfig
@@ -92,7 +92,7 @@ class TelemetryFeature(OpenStackControlPlaneFeature):
         tfhelper = self.deployment.get_tfhelper(self.tfplan)
         tfhelper_hypervisor = self.deployment.get_tfhelper("hypervisor-plan")
         jhelper = JujuHelper(self.deployment.get_connected_controller())
-        plan = []
+        plan: list[BaseStep] = []
         if self.user_manifest:
             plan.append(
                 AddManifestStep(self.deployment.get_client(), self.user_manifest)

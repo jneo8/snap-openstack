@@ -16,8 +16,9 @@
 import json
 import logging
 import sys
+import typing
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Callable
 
 import yaml
 from rich.console import Console
@@ -34,7 +35,7 @@ PASSWORD_MASK = "*" * 8
 class PasswordPrompt(Prompt):
     """Prompt that asks for a password."""
 
-    def render_default(self, default: str) -> Text:
+    def render_default(self, default: str) -> Text:  # type: ignore [override]
         """Turn the supplied default in to a Text instance.
 
         Args:
@@ -70,18 +71,33 @@ class StreamWrapper:
 
 STREAM = StreamWrapper(sys.stdin, sys.stdout)
 
+T = typing.TypeVar("T")
 
-class Question:
+
+class Question(typing.Generic[T]):
     """A Question to be resolved."""
+
+    question: str
+    answer: T | None
+    preseed: T | None
+    previous_answer: T | None
+    default_value: T | None
+    choices: list[T] | None
+
+    password: bool
+    accept_defaults: bool
+    default_function: Callable[[], T] | None
+    validation_function: Callable[[T], None] | None
+    console: Console | None
 
     def __init__(
         self,
         question: str,
-        default_function: Optional[Callable] = None,
-        default_value: Any = None,
-        choices: Optional[list] = None,
+        default_function: Callable[[], T] | None = None,
+        default_value: T | None = None,
+        choices: list | None = None,
         password: bool = False,
-        validation_function: Optional[Callable] = None,
+        validation_function: Callable[[T], None] | None = None,
     ):
         """Setup question.
 
@@ -108,11 +124,11 @@ class Question:
         self.validation_function = validation_function
 
     @property
-    def question_function(self):
+    def question_function(self) -> Callable[..., T]:
         """Allow subclasses to define the question function."""
         raise NotImplementedError
 
-    def calculate_default(self, new_default: Any = None) -> Any:
+    def calculate_default(self, new_default: T | None = None) -> T | None:
         """Find the value to should be presented to the user as the default.
 
         This is order of preference:
@@ -136,7 +152,7 @@ class Question:
             default = self.default_value
         return default
 
-    def ask(self, new_default=None) -> Any:
+    def ask(self, new_default: T | None = None) -> T | None:
         """Ask a question if needed.
 
         If a preseed has been supplied for this question then do not ask the
@@ -162,9 +178,9 @@ class Question:
                     password=self.password,
                     stream=STREAM,
                 )
-        if self.validation_function is not None:
+        if self.validation_function is not None and self.answer is not None:
             try:
-                self.validation_function(self.answer)
+                self.validation_function(self.answer)  # type: ignore
             except ValueError as e:
                 message = f"Invalid value for {self.question!r}: {e}"
                 if self.preseed is not None:
@@ -176,7 +192,7 @@ class Question:
         return self.answer
 
 
-class PromptQuestion(Question):
+class PromptQuestion(Question[T]):
     """Ask the user a question."""
 
     @property
@@ -185,7 +201,7 @@ class PromptQuestion(Question):
         return Prompt.ask
 
 
-class PasswordPromptQuestion(Question):
+class PasswordPromptQuestion(Question[T]):
     """Ask the user for a password."""
 
     @property
@@ -194,7 +210,7 @@ class PasswordPromptQuestion(Question):
         return PasswordPrompt.ask
 
 
-class ConfirmQuestion(Question):
+class ConfirmQuestion(Question[T]):
     """Ask the user a simple yes / no question."""
 
     @property
@@ -240,10 +256,10 @@ class QuestionBank:
 
     def __init__(
         self,
-        questions: dict,
-        console: Console,
-        preseed: Optional[dict] = None,
-        previous_answers: Optional[dict] = None,
+        questions: typing.Mapping[str, Question],
+        console: Console | None = None,
+        preseed: dict | None = None,
+        previous_answers: dict | None = None,
         accept_defaults: bool = False,
     ):
         """Apply preseed and previous answers to questions in bank.

@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import enum
-from typing import Type, TypeGuard
+from typing import TYPE_CHECKING, Type, TypeGuard
 
 import pydantic
 
@@ -30,6 +30,9 @@ from sunbeam.commands.proxy import proxy_questions
 from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment, Networks
 from sunbeam.jobs.feature import FeatureManager
 from sunbeam.jobs.questions import Question, QuestionBank, load_answers, show_questions
+
+if TYPE_CHECKING:
+    from sunbeam.provider.maas.client import MaasClient
 
 MAAS_TYPE = "maas"
 
@@ -273,7 +276,7 @@ class MaasDeployment(Deployment):
             return {}
 
         subnets = maas_client.get_subnets()
-        subnets_cidr = (subnet.get("cidr") for subnet in subnets if subnet.get("cidr"))
+        subnets_cidr = (subnet["cidr"] for subnet in subnets if subnet.get("cidr"))
         no_proxy = ",".join(subnets_cidr)
         return {"HTTP_PROXY": proxy, "HTTPS_PROXY": proxy, "NO_PROXY": no_proxy}
 
@@ -291,7 +294,7 @@ def is_maas_deployment(deployment: Deployment) -> TypeGuard[MaasDeployment]:
 
 
 def maas_user_questions(
-    maas_client: "sunbeam.provider.maas.client.MaasClient",
+    maas_client: "MaasClient",
 ) -> dict[str, Question]:
     questions = user_questions()
     questions["nameservers"].default_function = lambda: " ".join(

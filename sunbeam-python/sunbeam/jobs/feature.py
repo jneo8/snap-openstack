@@ -16,7 +16,6 @@
 import importlib
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import click
 import yaml
@@ -48,7 +47,7 @@ class FeatureManager:
         cls,
         feature_file: Path,
         raise_exception: bool = False,
-    ) -> Dict[str, type]:
+    ) -> dict[str, type]:
         """Return dict of {feature name: feature class} from feature yaml.
 
         :param feature_file: Feature yaml file
@@ -94,7 +93,7 @@ class FeatureManager:
     @classmethod
     def get_feature_classes(
         cls, feature_file: Path, raise_exception: bool = False
-    ) -> List[type]:
+    ) -> list[type]:
         """Return a list of feature classes from features yaml.
 
         :param feature_file: Features yaml file
@@ -108,7 +107,7 @@ class FeatureManager:
         return list(cls.get_features_map(feature_file, raise_exception).values())
 
     @classmethod
-    def get_all_feature_classes(cls) -> List[type]:
+    def get_all_feature_classes(cls) -> list[type]:
         """Return a list of feature classes."""
         core_feature_file = cls.get_core_features_path() / FEATURES_YAML
         features = cls.get_feature_classes(core_feature_file)
@@ -170,7 +169,7 @@ class FeatureManager:
     @classmethod
     def get_all_feature_manifest_tfvar_map(cls, deployment: Deployment) -> dict:
         """Return a dict of all feature manifest attributes terraformvars map."""
-        tfvar_map = {}
+        tfvar_map: dict = {}
         features = cls.get_all_feature_classes()
         for klass in features:
             feature = klass(deployment)
@@ -251,7 +250,7 @@ class FeatureManager:
                 raise e
 
     @classmethod
-    def resolve_feature(cls, feature: str) -> Optional[type]:
+    def resolve_feature(cls, feature: str) -> type | None:
         """Resolve a feature name to a class.
 
         Lookup features to find a feature with the given name.

@@ -14,20 +14,17 @@
 # limitations under the License.
 
 import logging
-from typing import TYPE_CHECKING, List
 
 import openstack
 
 from sunbeam.commands.configure import retrieve_admin_credentials
 from sunbeam.commands.openstack import OPENSTACK_MODEL
-
-if TYPE_CHECKING:
-    from juju import JujuHelper
+from sunbeam.jobs.juju import JujuHelper
 
 LOG = logging.getLogger(__name__)
 
 
-def get_admin_connection(jhelper: "JujuHelper") -> openstack.connection.Connection:
+def get_admin_connection(jhelper: JujuHelper) -> openstack.connection.Connection:
     """Return a connection to keystone using admin credentials.
 
     :param jhelper: Juju helpers for retrieving admin credentials
@@ -46,8 +43,8 @@ def get_admin_connection(jhelper: "JujuHelper") -> openstack.connection.Connecti
 
 
 def guests_on_hypervisor(
-    hypervisor_name: str, jhelper: "JujuHelper"
-) -> List[openstack.compute.v2.server.Server]:
+    hypervisor_name: str, jhelper: JujuHelper
+) -> list[openstack.compute.v2.server.Server]:
     """Return a list of guests that run on the given hypervisor.
 
     :param hypervisor_name: Name of hypervisor
@@ -85,7 +82,7 @@ def remove_network_service(
         conn.network.delete_agent(service)
 
 
-def remove_hypervisor(hypervisor_name: str, jhelper: "JujuHelper") -> None:
+def remove_hypervisor(hypervisor_name: str, jhelper: JujuHelper) -> None:
     """Remove services associated with hypervisor from OpenStack.
 
     :param hypervisor_name: Name of hypervisor

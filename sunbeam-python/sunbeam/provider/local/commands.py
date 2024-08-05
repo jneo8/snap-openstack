@@ -80,21 +80,21 @@ from sunbeam.commands.k8s import (
     AddK8SUnitsStep,
     DeployK8SApplicationStep,
     EnableK8SFeatures,
-    RemoveK8SUnitStep,
+    RemoveK8SUnitsStep,
     StoreK8SKubeConfigStep,
 )
 from sunbeam.commands.microceph import (
     AddMicrocephUnitsStep,
     ConfigureMicrocephOSDStep,
     DeployMicrocephApplicationStep,
-    RemoveMicrocephUnitStep,
+    RemoveMicrocephUnitsStep,
 )
 from sunbeam.commands.microk8s import (
     AddMicrok8sCloudStep,
     AddMicrok8sCredentialStep,
     AddMicrok8sUnitsStep,
     DeployMicrok8sApplicationStep,
-    RemoveMicrok8sUnitStep,
+    RemoveMicrok8sUnitsStep,
     StoreMicrok8sConfigStep,
 )
 from sunbeam.commands.mysql import ConfigureMySQLStep
@@ -108,10 +108,11 @@ from sunbeam.commands.proxy import PromptForProxyStep
 from sunbeam.commands.sunbeam_machine import (
     AddSunbeamMachineUnitsStep,
     DeploySunbeamMachineApplicationStep,
-    RemoveSunbeamMachineStep,
+    RemoveSunbeamMachineUnitsStep,
 )
 from sunbeam.commands.terraform import TerraformInitStep
 from sunbeam.jobs.checks import (
+    Check,
     DaemonGroupCheck,
     JujuControllerRegistrationCheck,
     JujuSnapCheck,
@@ -122,6 +123,7 @@ from sunbeam.jobs.checks import (
     VerifyBootstrappedCheck,
     VerifyFQDNCheck,
     VerifyHypervisorHostnameCheck,
+    run_preflight_checks,
 )
 from sunbeam.jobs.common import (
     CONTEXT_SETTINGS,
@@ -129,14 +131,15 @@ from sunbeam.jobs.common import (
     FORMAT_TABLE,
     FORMAT_VALUE,
     FORMAT_YAML,
+    BaseStep,
     ResultType,
     Role,
     click_option_topology,
     get_step_message,
+    get_step_result,
     read_config,
     roles_to_str_list,
     run_plan,
-    run_preflight_checks,
     update_config,
     validate_roles,
 )
@@ -188,7 +191,7 @@ class LocalProvider(ProviderBase):
         cluster.add_command(bootstrap)
         cluster.add_command(add)
         cluster.add_command(join)
-        cluster.add_command(list)
+        cluster.add_command(list_nodes)
         cluster.add_command(remove)
         cluster.add_command(resize_cmds.resize)
         cluster.add_command(refresh_cmds.refresh)
@@ -287,7 +290,7 @@ def bootstrap(
     juju_bootstrap_args = manifest.software.juju.bootstrap_args
     data_location = snap.paths.user_data
 
-    preflight_checks = []
+    preflight_checks: list[Check] = []
     preflight_checks.append(SystemRequirementsCheck())
     preflight_checks.append(JujuSnapCheck())
     preflight_checks.append(SshKeysConnectedCheck())
@@ -342,7 +345,7 @@ def bootstrap(
     LOG.debug(f"Juju Controller IP: {controller_ip}")
     cloud_definition = JujuHelper.manual_cloud(deployment.name, controller_ip)
 
-    plan = []
+    plan: list[BaseStep] = []
     plan.append(
         SaveControllerStep(
             juju_controller,
@@ -368,6 +371,10 @@ def bootstrap(
     proxy_settings = deployment.get_proxy_settings()
     LOG.debug(f"Proxy settings: {proxy_settings}")
 
+    plan1: list[BaseStep]
+    plan2: list[BaseStep]
+    plan3: list[BaseStep]
+    plan4: list[BaseStep]
     if juju_controller:
         plan1 = []
         plan1.append(
@@ -393,6 +400,7 @@ def bootstrap(
                 jhelper,
                 deployment.openstack_machines_model,
                 deployment.name,
+                None,
                 proxy_settings,
             )
         )
@@ -638,7 +646,7 @@ def bootstrap(
 
     run_plan(plan4, console)
 
-    plan5 = []
+    plan5: list[BaseStep] = []
 
     if is_control_node:
         plan5.append(ConfigureMySQLStep(jhelper))
@@ -698,7 +706,7 @@ def add(ctx: click.Context, name: str, format: str) -> None:
     client = deployment.get_client()
     jhelper = JujuHelper(deployment.get_connected_controller())
 
-    plan1 = [
+    plan1: list[BaseStep] = [
         JujuLoginStep(deployment.juju_account),
         ClusterAddNodeStep(client, name),
         CreateJujuUserStep(name),
@@ -713,7 +721,7 @@ def add(ctx: click.Context, name: str, format: str) -> None:
     plan2 = [ClusterAddJujuUserStep(client, name, user_token)]
     run_plan(plan2, console)
 
-    def _print_output(token):
+    def _print_output(token: str):
         """Helper for printing formatted output."""
         if format == FORMAT_DEFAULT:
             console.print(f"Token for the Node {name}: {token}", soft_wrap=True)
@@ -722,12 +730,12 @@ def add(ctx: click.Context, name: str, format: str) -> None:
         elif format == FORMAT_VALUE:
             click.echo(token)
 
-    add_node_step_result = plan1_results.get("ClusterAddNodeStep")
+    add_node_step_result = get_step_result(plan1_results, ClusterAddNodeStep)
     if add_node_step_result.result_type == ResultType.COMPLETED:
-        _print_output(add_node_step_result.message)
+        _print_output(str(add_node_step_result.message))
     elif add_node_step_result.result_type == ResultType.SKIPPED:
         if add_node_step_result.message:
-            _print_output(add_node_step_result.message)
+            _print_output(str(add_node_step_result.message))
         else:
             console.print("Node already a member of the Sunbeam cluster")
 
@@ -768,7 +776,7 @@ def join(
 
     k8s_provider = Snap().config.get("k8s.provider")
 
-    preflight_checks = []
+    preflight_checks: list[Check] = []
     preflight_checks.append(SystemRequirementsCheck())
     preflight_checks.append(JujuSnapCheck())
     preflight_checks.append(SshKeysConnectedCheck())
@@ -844,7 +852,7 @@ def join(
     if machine_id_result is not None:
         machine_id = int(machine_id_result)
 
-    plan4 = []
+    plan4: list[BaseStep] = []
     plan4.append(ClusterUpdateNodeStep(client, name, machine_id=machine_id))
     plan4.append(
         AddSunbeamMachineUnitsStep(
@@ -907,7 +915,7 @@ def join(
     click.echo(f"Node joined cluster with roles: {pretty_roles}")
 
 
-@click.command()
+@click.command("list")
 @click.option(
     "-f",
     "--format",
@@ -916,7 +924,7 @@ def join(
     help="Output format.",
 )
 @click.pass_context
-def list(
+def list_nodes(
     ctx: click.Context,
     format: str,
 ) -> None:
@@ -955,33 +963,35 @@ def remove(ctx: click.Context, name: str, force: bool) -> None:
 
     plan = [
         JujuLoginStep(deployment.juju_account),
-        RemoveSunbeamMachineStep(
+        RemoveSunbeamMachineUnitsStep(
             client, name, jhelper, deployment.openstack_machines_model
         ),
     ]
 
     if k8s_provider == "k8s":
         plan.append(
-            RemoveK8SUnitStep(
+            RemoveK8SUnitsStep(
                 client, name, jhelper, deployment.openstack_machines_model
             )
         )
     else:
         plan.append(
-            RemoveMicrok8sUnitStep(
+            RemoveMicrok8sUnitsStep(
                 client, name, jhelper, deployment.openstack_machines_model
             )
         )
 
     plan.extend(
         [
-            RemoveMicrocephUnitStep(
+            RemoveMicrocephUnitsStep(
                 client, name, jhelper, deployment.openstack_machines_model
             ),
             RemoveHypervisorUnitStep(
                 client, name, jhelper, deployment.openstack_machines_model, force
             ),
-            RemoveJujuMachineStep(client, name, deployment.openstack_machines_model),
+            RemoveJujuMachineStep(
+                client, name, jhelper, deployment.openstack_machines_model
+            ),
             # Cannot remove user as the same user name cannot be resued,
             # so commenting the RemoveJujuUserStep
             # RemoveJujuUserStep(name),
@@ -1024,7 +1034,7 @@ def configure_cmd(
 ) -> None:
     deployment: LocalDeployment = ctx.obj
     client = deployment.get_client()
-    preflight_checks = []
+    preflight_checks: list[Check] = []
     preflight_checks.append(DaemonGroupCheck())
     preflight_checks.append(VerifyBootstrappedCheck(client))
     run_preflight_checks(preflight_checks, console)

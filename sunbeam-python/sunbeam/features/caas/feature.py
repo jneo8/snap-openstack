@@ -15,7 +15,6 @@
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import click
 from packaging.version import Version
@@ -55,14 +54,14 @@ console = Console()
 
 @dataclass
 class CaasConfig:
-    image_name: Optional[str] = Field(default=None, description="CAAS Image name")
-    image_url: Optional[str] = Field(
+    image_name: str | None = Field(default=None, description="CAAS Image name")
+    image_url: str | None = Field(
         default=None, description="CAAS Image URL to upload to glance"
     )
-    container_format: Optional[str] = Field(
+    container_format: str | None = Field(
         default=None, description="Image container format"
     )
-    disk_format: Optional[str] = Field(default=None, description="Image disk format")
+    disk_format: str | None = Field(default=None, description="Image disk format")
     properties: dict = Field(
         default={}, description="Properties to set for image in glance"
     )
@@ -87,7 +86,7 @@ class CaasConfigureStep(BaseStep):
         self.manifest = manifest
         self.tfvar_map = tfvar_map
 
-    def run(self, status: Optional[Status] = None) -> Result:
+    def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
         try:
             override_tfvars = {}

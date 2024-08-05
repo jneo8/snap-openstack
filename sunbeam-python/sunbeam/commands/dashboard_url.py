@@ -20,8 +20,7 @@ from rich.console import Console
 
 from sunbeam.commands.openstack import OPENSTACK_MODEL
 from sunbeam.jobs import juju
-from sunbeam.jobs.checks import VerifyBootstrappedCheck
-from sunbeam.jobs.common import run_preflight_checks
+from sunbeam.jobs.checks import VerifyBootstrappedCheck, run_preflight_checks
 from sunbeam.jobs.deployment import Deployment
 
 LOG = logging.getLogger(__name__)

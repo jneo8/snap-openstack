@@ -18,7 +18,7 @@ import enum
 import logging
 import pathlib
 import shutil
-from typing import Type
+from typing import TYPE_CHECKING, Type
 
 import pydantic
 import yaml
@@ -41,6 +41,9 @@ from sunbeam.jobs.common import (
 from sunbeam.jobs.juju import JujuAccount, JujuController
 from sunbeam.jobs.manifest import Manifest, embedded_manifest_path
 from sunbeam.versions import MANIFEST_ATTRIBUTES_TFVAR_MAP, TERRAFORM_DIR_NAMES
+
+if TYPE_CHECKING:
+    from sunbeam.jobs.feature import FeatureManager
 
 LOG = logging.getLogger(__name__)
 PROXY_CONFIG_KEY = "ProxySettings"
@@ -121,18 +124,18 @@ class Deployment(pydantic.BaseModel):
         The step must take as constructor arguments: DeploymentsConfig, Deployment.
         The Deployment must be of the type that the step is registered for.
         """
-        return NotImplemented  # type: ignore
+        raise NotImplementedError
 
     def get_client(self) -> Client:
         """Return a client instance.
 
         Raises ValueError when fails to instantiate a client.
         """
-        return NotImplemented  # type: ignore
+        raise NotImplementedError
 
     def get_clusterd_http_address(self) -> str:
         """Return the address of the clusterd server."""
-        return NotImplemented  # type: ignore
+        raise NotImplementedError
 
     def get_connected_controller(self) -> Controller:
         """Return connected controller."""
