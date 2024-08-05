@@ -631,13 +631,12 @@ class JujuHelper:
         :secret_id: Secret ID
         """
         model_impl = await self.get_model(model)
-        facade = juju_client.SecretsFacade.from_connection(model_impl.connection())
-        secrets = await facade.ListSecrets(
-            filter_={"uri": secret_id}, show_secrets=True
+        secrets = await model_impl.list_secrets(
+            filter={"uri": secret_id}, show_secrets=True
         )
-        if len(secrets.results) != 1:
+        if len(secrets) != 1:
             raise JujuSecretNotFound(f"Secret {secret_id!r}")
-        return secrets["results"][0].serialize()
+        return secrets[0].serialize()
 
     async def scp_from(self, name: str, model: str, source: str, destination: str):
         """Scp files from unit to local.
