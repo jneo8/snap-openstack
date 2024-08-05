@@ -319,8 +319,78 @@ class TestMachineRootDiskCheck:
         assert result.details["machine"] == "test_machine"
         assert result.message and "could not determine" in result.message
 
+    def test_run_with_no_physical_blockdevices(self):
+        machine = {
+            "hostname": "test_machine",
+            "root_disk": {"physical_blockdevices": []},
+        }
+        check = MachineRootDiskCheck(machine)
+        result = check.run()
+        assert result.passed is DiagnosticResultType.FAILURE
+        assert result.details["machine"] == "test_machine"
+        assert result.message and "could not determine" in result.message
+
+    def test_run_with_virtual_devices_but_no_physical_devices(self):
+        machine = {
+            "hostname": "test_machine",
+            "root_disk": {
+                "physical_blockdevices": [],
+                "virtual_blockdevice": {"name": "bcache01", "size": 500 * 1024**3},
+                "root_partition": {"size": 500 * 1024**3},
+            },
+        }
+        check = MachineRootDiskCheck(machine)
+        result = check.run()
+        assert result.passed is DiagnosticResultType.WARNING
+        assert result.details["machine"] == "test_machine"
+        assert result.message and "could not determine" in result.message
+
+    def test_run_with_virtual_devices_and_physical_devices_but_not_all_ssds(self):
+        machine = {
+            "hostname": "test_machine",
+            "root_disk": {
+                "physical_blockdevices": [
+                    {"name": "nvme01", "size": 1024**4, "tags": ["ssd"]},
+                    {"name": "rotary-01", "size": 1024**4, "tags": ["rotary"]},
+                ],
+                "virtual_blockdevice": {"name": "vg0-lv0", "size": 2 * 1024**4},
+                "root_partition": {"size": 500 * 1024**3},
+            },
+        }
+        check = MachineRootDiskCheck(machine)
+        result = check.run()
+        assert result.passed is DiagnosticResultType.WARNING
+        assert result.details["machine"] == "test_machine"
+        assert result.message and "is not a SSD" in result.message
+
+    def test_run_with_virtual_devices_and_physical_devices(self):
+        machine = {
+            "hostname": "test_machine",
+            "root_disk": {
+                "physical_blockdevices": [
+                    {"name": "nvme01", "size": 1024**4, "tags": ["ssd"]},
+                    {"name": "nvme02", "size": 1024**4, "tags": ["ssd"]},
+                ],
+                "virtual_blockdevice": {"name": "vg0-lv0", "size": 2 * 1024**4},
+                "root_partition": {"size": 500 * 1024**3},
+            },
+        }
+        check = MachineRootDiskCheck(machine)
+        result = check.run()
+        assert result.passed is DiagnosticResultType.SUCCESS
+        assert result.details["machine"] == "test_machine"
+        assert result.message and "is a SSD and is large enough" in result.message
+
     def test_run_with_no_ssd_tag(self):
-        machine = {"hostname": "test_machine", "root_disk": {"tags": []}}
+        machine = {
+            "hostname": "test_machine",
+            "root_disk": {
+                "physical_blockdevices": [
+                    {"name": "rotary-01", "size": 1024**4, "tags": ["rotary"]}
+                ],
+                "root_partition": {"size": 500 * 1024**3},
+            },
+        }
         check = MachineRootDiskCheck(machine)
         result = check.run()
         assert result.passed is DiagnosticResultType.WARNING
@@ -330,7 +400,12 @@ class TestMachineRootDiskCheck:
     def test_run_with_not_enough_space(self):
         machine = {
             "hostname": "test_machine",
-            "root_disk": {"tags": ["ssd"], "root_partition": {"size": 1}},
+            "root_disk": {
+                "physical_blockdevices": [
+                    {"name": "nvme01", "size": 1024**4, "tags": ["ssd"]}
+                ],
+                "root_partition": {"size": 1},
+            },
         }
         check = MachineRootDiskCheck(machine)
         result = check.run()
@@ -341,7 +416,12 @@ class TestMachineRootDiskCheck:
     def test_run_with_valid_root_disk(self):
         machine = {
             "hostname": "test_machine",
-            "root_disk": {"tags": ["ssd"], "root_partition": {"size": 500 * 1024**3}},
+            "root_disk": {
+                "physical_blockdevices": [
+                    {"name": "nvme01", "size": 1024**4, "tags": ["ssd"]}
+                ],
+                "root_partition": {"size": 500 * 1024**3},
+            },
         }
         check = MachineRootDiskCheck(machine)
         result = check.run()
