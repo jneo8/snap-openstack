@@ -259,7 +259,6 @@ def _find_root_devices(client, machine: dict) -> dict | None:  # noqa: C901
 def _convert_raw_machine(machine_raw: dict, root_disk: dict | None) -> dict:
     storage_tags = StorageTags.values()
     storage_devices: dict[str, list[dict]] = {tag: [] for tag in storage_tags}
-    root_disk = None
     for blockdevice in machine_raw["blockdevice_set"]:
         for tag in blockdevice["tags"]:
             if tag in storage_tags:
