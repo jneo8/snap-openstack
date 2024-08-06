@@ -905,7 +905,7 @@ class DeploymentTopologyCheck(DiagnosticsCheck):
         checks.append(
             DeploymentRolesCheck(
                 self.machines,
-                "juju controllers",
+                "infra nodes",
                 maas_deployment.RoleTags.INFRA.value,
             )
         )
