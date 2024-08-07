@@ -284,12 +284,19 @@ def get_step_message(plan_results: dict, step: Type[BaseStep]) -> Any:
 
 
 def validate_roles(
-    ctx: click.core.Context, param: click.core.Option, value: tuple
+    ctx: click.core.Context, param: click.core.Option, value: Sequence[str]
 ) -> list[Role]:
+    """Validate roles."""
+    roles: set[str] = set()
+    for val in value:
+        roles.update(val.split(","))
     try:
-        return [Role[role.upper()] for role in value]
+        return [Role[role.upper()] for role in roles]
     except KeyError as e:
-        raise click.BadParameter(str(e))
+        raise click.BadParameter(
+            f"{str(e)}. Valid choices are "
+            + ", ".join(role.lower() for role in Role.__members__)
+        ) from e
 
 
 def get_host_total_ram() -> int:

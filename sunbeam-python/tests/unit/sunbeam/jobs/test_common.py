@@ -14,12 +14,13 @@
 # limitations under the License.
 
 import functools
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+import click
 import pytest
 
 from sunbeam.clusterd.service import ClusterServiceUnavailableException
-from sunbeam.jobs.common import Role
+from sunbeam.jobs.common import Role, validate_roles
 from sunbeam.jobs.deployment import Deployment
 
 
@@ -149,3 +150,36 @@ class TestProxy:
         expected_no_proxy_list = ",".split(expected_proxy.get("NO_PROXY"))
         no_proxy_list = ",".split(proxy.get("NO_PROXY"))
         assert expected_no_proxy_list == no_proxy_list
+
+
+def test_validate_roles():
+    all_roles = {Role.CONTROL, Role.COMPUTE, Role.STORAGE}
+    # Test valid roles
+    valid_roles = ("control", "compute", "storage")
+    result = validate_roles(Mock(), Mock(), valid_roles)
+    assert not set(result) ^ all_roles
+
+    # Test invalid role
+    invalid_role = "invalid"
+    with pytest.raises(click.BadParameter):
+        validate_roles(Mock(), Mock(), invalid_role)
+
+    # Test case-insensitive roles
+    case_insensitive_roles = ("Control", "COMPUTE", "StOrAgE")
+    result = validate_roles(Mock(), Mock(), case_insensitive_roles)
+    assert not set(result) ^ all_roles
+
+    # test comma separated roles
+    comma_separated_roles = ("control,compute,storage",)
+    result = validate_roles(Mock(), Mock(), comma_separated_roles)
+    assert not set(result) ^ all_roles
+
+    # test multiple roles with comma separated
+    multiple_roles = ("control,compute", "storage")
+    result = validate_roles(Mock(), Mock(), multiple_roles)
+    assert not set(result) ^ all_roles
+
+    # test mutiple comma separated roles
+    multiple_comma_separated_roles = ("control,compute", "storage,compute")
+    result = validate_roles(Mock(), Mock(), multiple_comma_separated_roles)
+    assert not set(result) ^ all_roles
