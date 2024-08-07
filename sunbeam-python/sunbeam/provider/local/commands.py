@@ -741,8 +741,16 @@ def add(ctx: click.Context, name: str, format: str) -> None:
 
 
 @click.command()
+@click.argument(
+    # TODO(gboutry): remove required=False when option is fully removed
+    "token",
+    required=False,
+    type=str,
+)
+@click.option(
+    "--token", "token_param", type=str, help="Join token. Deprecated, use argument."
+)
 @click.option("-a", "--accept-defaults", help="Accept all defaults.", is_flag=True)
-@click.option("--token", type=str, help="Join token")
 @click.option(
     "--role",
     "roles",
@@ -755,14 +763,29 @@ def add(ctx: click.Context, name: str, format: str) -> None:
 @click.pass_context
 def join(
     ctx: click.Context,
-    token: str,
+    token: str | None,
+    token_param: str | None,
     roles: list[Role],
     accept_defaults: bool = False,
 ) -> None:
     """Join node to the cluster.
 
     Join the node to the cluster.
+    Use `-` as token to read from stdin.
     """
+    if token and token_param:
+        raise click.ClickException("Token cannot be passed as argument and option")
+    elif not token:
+        if token_param is None:
+            raise click.ClickException("Token is required")
+        LOG.debug(
+            "Using token from option. This behavior is deprecated."
+            " Please use argument."
+        )
+        token = token_param
+
+    if token == "-":
+        token = click.get_text_stream("stdin").readline().strip()
     is_control_node = any(role.is_control_node() for role in roles)
     is_compute_node = any(role.is_compute_node() for role in roles)
     is_storage_node = any(role.is_storage_node() for role in roles)
