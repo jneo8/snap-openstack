@@ -215,10 +215,10 @@ class LocalProvider(ProviderBase):
     "roles",
     multiple=True,
     default=["control", "compute"],
-    type=click.Choice(["control", "compute", "storage"], case_sensitive=False),
     callback=validate_roles,
     help="Specify additional roles, compute or storage, for the "
-    "bootstrap node. Defaults to the compute role.",
+    "bootstrap node. Defaults to the compute role."
+    " Can be repeated and comma separated.",
 )
 @click_option_topology
 @click.option(
@@ -748,9 +748,12 @@ def add(ctx: click.Context, name: str, format: str) -> None:
     "roles",
     multiple=True,
     default=["control", "compute"],
-    type=click.Choice(["control", "compute", "storage"], case_sensitive=False),
     callback=validate_roles,
-    help="Specify which roles the node will be assigned in the cluster.",
+    help=(
+        f"Specify which roles ({', '.join(role.lower() for role in Role.__members__)})"
+        " the node will be assigned in the cluster."
+        " Can be repeated and comma separated."
+    ),
 )
 @click.pass_context
 def join(
