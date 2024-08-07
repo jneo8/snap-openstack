@@ -695,8 +695,20 @@ def bootstrap(
     default=FORMAT_DEFAULT,
     help="Output format.",
 )
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(
+        file_okay=True,
+        dir_okay=False,
+        writable=True,
+        resolve_path=True,
+        path_type=Path,
+    ),
+    help="Output file for join token.",
+)
 @click.pass_context
-def add(ctx: click.Context, name: str, format: str) -> None:
+def add(ctx: click.Context, name: str, format: str, output: Path | None) -> None:
     """Generate a token for a new node to join the cluster."""
     preflight_checks = [DaemonGroupCheck(), VerifyFQDNCheck(name)]
     run_preflight_checks(preflight_checks, console)
@@ -730,12 +742,31 @@ def add(ctx: click.Context, name: str, format: str) -> None:
         elif format == FORMAT_VALUE:
             click.echo(token)
 
+    def _write_to_file(token: str):
+        """Helper for writing token to file."""
+        if not output:
+            raise click.ClickException("Output file not provided, bug in code...")
+        try:
+            with output.open("w") as f:
+                f.write(token)
+        except OSError as e:
+            raise click.ClickException(str(e)) from e
+        console.print(f"Token written to file: {str(output)}")
+
     add_node_step_result = get_step_result(plan1_results, ClusterAddNodeStep)
     if add_node_step_result.result_type == ResultType.COMPLETED:
-        _print_output(str(add_node_step_result.message))
+        token = str(add_node_step_result.message)
+        if output:
+            _write_to_file(token)
+        else:
+            _print_output(token)
     elif add_node_step_result.result_type == ResultType.SKIPPED:
         if add_node_step_result.message:
-            _print_output(str(add_node_step_result.message))
+            token = str(add_node_step_result.message)
+            if output:
+                _write_to_file(token)
+            else:
+                _print_output(token)
         else:
             console.print("Node already a member of the Sunbeam cluster")
 
