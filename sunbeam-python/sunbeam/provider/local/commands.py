@@ -681,12 +681,38 @@ def bootstrap(
     click.echo(f"Node has been bootstrapped with roles: {pretty_roles}")
 
 
+def _print_output(token: str, format: str, name: str):
+    """Helper for printing formatted output."""
+    if format == FORMAT_DEFAULT:
+        console.print(f"Token for the Node {name}: {token}", soft_wrap=True)
+    elif format == FORMAT_YAML:
+        click.echo(yaml.dump({"token": token}))
+    elif format == FORMAT_VALUE:
+        click.echo(token)
+
+
+def _write_to_file(token: str, output: Path):
+    """Helper for writing token to file."""
+    try:
+        with output.open("w") as f:
+            f.write(token)
+    except OSError as e:
+        raise click.ClickException(str(e)) from e
+    console.print(f"Token written to file: {str(output)}")
+
+
 @click.command()
+@click.argument(
+    # TODO(gboutry): remove required=False when option is fully removed
+    "name",
+    required=False,
+    type=str,
+)
 @click.option(
     "--name",
+    "name_param",
     type=str,
-    prompt=True,
-    help="Fully qualified node name",
+    help="Fully qualified node name. Deprecated, use argument.",
 )
 @click.option(
     "-f",
@@ -708,8 +734,28 @@ def bootstrap(
     help="Output file for join token.",
 )
 @click.pass_context
-def add(ctx: click.Context, name: str, format: str, output: Path | None) -> None:
-    """Generate a token for a new node to join the cluster."""
+def add(
+    ctx: click.Context,
+    name: str | None,
+    name_param: str | None,
+    format: str,
+    output: Path | None,
+) -> None:
+    """Generate a token for a new node to join the cluster.
+
+    NAME must be a fully qualified domain name.
+    """
+    if name and name_param:
+        raise click.ClickException("Name cannot be passed as argument and option")
+    elif not name:
+        if name_param is None:
+            raise click.ClickException("Name is required")
+        LOG.debug(
+            "Using name from option. This behavior is deprecated."
+            " Please use argument."
+        )
+        name = name_param
+
     preflight_checks = [DaemonGroupCheck(), VerifyFQDNCheck(name)]
     run_preflight_checks(preflight_checks, console)
     name = remove_trailing_dot(name)
@@ -733,40 +779,20 @@ def add(ctx: click.Context, name: str, format: str, output: Path | None) -> None
     plan2 = [ClusterAddJujuUserStep(client, name, user_token)]
     run_plan(plan2, console)
 
-    def _print_output(token: str):
-        """Helper for printing formatted output."""
-        if format == FORMAT_DEFAULT:
-            console.print(f"Token for the Node {name}: {token}", soft_wrap=True)
-        elif format == FORMAT_YAML:
-            click.echo(yaml.dump({"token": token}))
-        elif format == FORMAT_VALUE:
-            click.echo(token)
-
-    def _write_to_file(token: str):
-        """Helper for writing token to file."""
-        if not output:
-            raise click.ClickException("Output file not provided, bug in code...")
-        try:
-            with output.open("w") as f:
-                f.write(token)
-        except OSError as e:
-            raise click.ClickException(str(e)) from e
-        console.print(f"Token written to file: {str(output)}")
-
     add_node_step_result = get_step_result(plan1_results, ClusterAddNodeStep)
     if add_node_step_result.result_type == ResultType.COMPLETED:
         token = str(add_node_step_result.message)
         if output:
-            _write_to_file(token)
+            _write_to_file(token, output)
         else:
-            _print_output(token)
+            _print_output(token, format, name)
     elif add_node_step_result.result_type == ResultType.SKIPPED:
         if add_node_step_result.message:
             token = str(add_node_step_result.message)
             if output:
-                _write_to_file(token)
+                _write_to_file(token, output)
             else:
-                _print_output(token)
+                _print_output(token, format, name)
         else:
             console.print("Node already a member of the Sunbeam cluster")
 
