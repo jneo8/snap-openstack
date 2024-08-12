@@ -158,7 +158,7 @@ from sunbeam.provider.maas.steps import (
     MachineStorageCheck,
     NetworkMappingCompleteCheck,
 )
-from sunbeam.utils import CatchGroup
+from sunbeam.utils import CatchGroup, argument_with_deprecated_option
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -860,9 +860,9 @@ def list_nodes(ctx: click.Context, format: str) -> None:
 
 
 @click.command("maas")
-@click.option("-n", "--name", type=str, prompt=True, help="Name of the deployment")
-@click.option("-t", "--token", type=str, prompt=True, help="API token")
-@click.option("-u", "--url", type=str, prompt=True, help="API URL")
+@argument_with_deprecated_option("name", type=str, help="Name of the deployment")
+@argument_with_deprecated_option("token", type=str, help="API token")
+@argument_with_deprecated_option("url", type=str, help="API URL")
 def add_maas(name: str, token: str, url: str) -> None:
     """Add MAAS-backed deployment to registered deployments."""
     preflight_checks = [

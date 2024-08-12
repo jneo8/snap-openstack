@@ -33,6 +33,7 @@ from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import JujuHelper, run_sync
 from sunbeam.jobs.manifest import AddManifestStep, CharmManifest, SoftwareConfig
 from sunbeam.jobs.steps import PatchLoadBalancerServicesStep
+from sunbeam.utils import argument_with_deprecated_option
 from sunbeam.versions import BIND_CHANNEL, OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -136,17 +137,22 @@ class DnsFeature(OpenStackControlPlaneFeature):
         return {}
 
     @click.command()
-    @click.option(
-        "--nameservers",
-        required=True,
-        help="""
+    @argument_with_deprecated_option(
+        "nameservers",
+        type=str,
+        help="""\
         Space delimited list of nameservers. These are the nameservers that
         have been provided to the domain registrar in order to delegate
         the domain to DNS service. e.g. "ns1.example.com. ns2.example.com."
         """,
     )
     def enable_feature(self, nameservers: str) -> None:
-        """Enable dns service."""
+        """Enable dns service.
+
+        NAMESERVERS: Space delimited list of nameservers. These are the nameservers that
+        have been provided to the domain registrar in order to delegate
+        the domain to DNS service. e.g. "ns1.example.com. ns2.example.com."
+        """
         nameservers_split = nameservers.split()
         for nameserver in nameservers_split:
             if nameserver[-1] != ".":

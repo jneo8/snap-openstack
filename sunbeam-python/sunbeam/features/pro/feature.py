@@ -36,6 +36,7 @@ from sunbeam.jobs.common import BaseStep, Result, ResultType, run_plan
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import JujuHelper, TimeoutException, run_sync
 from sunbeam.jobs.manifest import Manifest, SoftwareConfig, TerraformManifest
+from sunbeam.utils import argument_with_deprecated_option
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -239,11 +240,8 @@ class ProFeature(EnableDisableFeature):
         click.echo("Ubuntu Pro disabled.")
 
     @click.command()
-    @click.option(
-        "-t",
-        "--token",
-        help="Ubuntu Pro token to use for subscription attachment",
-        prompt=True,
+    @argument_with_deprecated_option(
+        "token", type=str, short_form="t", help="Ubuntu Pro token"
     )
     def enable_feature(self, token: str) -> None:
         """Enable Ubuntu Pro across deployment.

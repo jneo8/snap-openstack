@@ -153,7 +153,7 @@ from sunbeam.provider.local.steps import (
     LocalClusterStatusStep,
     LocalSetHypervisorUnitsOptionsStep,
 )
-from sunbeam.utils import CatchGroup
+from sunbeam.utils import CatchGroup, argument_with_deprecated_option
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -702,18 +702,7 @@ def _write_to_file(token: str, output: Path):
 
 
 @click.command()
-@click.argument(
-    # TODO(gboutry): remove required=False when option is fully removed
-    "name",
-    required=False,
-    type=str,
-)
-@click.option(
-    "--name",
-    "name_param",
-    type=str,
-    help="Fully qualified node name. Deprecated, use argument.",
-)
+@argument_with_deprecated_option("name", type=str, help="Fully qualified node name.")
 @click.option(
     "-f",
     "--format",
@@ -736,8 +725,7 @@ def _write_to_file(token: str, output: Path):
 @click.pass_context
 def add(
     ctx: click.Context,
-    name: str | None,
-    name_param: str | None,
+    name: str,
     format: str,
     output: Path | None,
 ) -> None:
@@ -745,17 +733,6 @@ def add(
 
     NAME must be a fully qualified domain name.
     """
-    if name and name_param:
-        raise click.ClickException("Name cannot be passed as argument and option")
-    elif not name:
-        if name_param is None:
-            raise click.ClickException("Name is required")
-        LOG.debug(
-            "Using name from option. This behavior is deprecated."
-            " Please use argument."
-        )
-        name = name_param
-
     preflight_checks = [DaemonGroupCheck(), VerifyFQDNCheck(name)]
     run_preflight_checks(preflight_checks, console)
     name = remove_trailing_dot(name)
@@ -798,15 +775,7 @@ def add(
 
 
 @click.command()
-@click.argument(
-    # TODO(gboutry): remove required=False when option is fully removed
-    "token",
-    required=False,
-    type=str,
-)
-@click.option(
-    "--token", "token_param", type=str, help="Join token. Deprecated, use argument."
-)
+@argument_with_deprecated_option("token", type=str, help="Join token.")
 @click.option("-a", "--accept-defaults", help="Accept all defaults.", is_flag=True)
 @click.option(
     "--role",
@@ -823,8 +792,7 @@ def add(
 @click.pass_context
 def join(
     ctx: click.Context,
-    token: str | None,
-    token_param: str | None,
+    token: str,
     roles: list[Role],
     accept_defaults: bool = False,
 ) -> None:
@@ -833,17 +801,6 @@ def join(
     Join the node to the cluster.
     Use `-` as token to read from stdin.
     """
-    if token and token_param:
-        raise click.ClickException("Token cannot be passed as argument and option")
-    elif not token:
-        if token_param is None:
-            raise click.ClickException("Token is required")
-        LOG.debug(
-            "Using token from option. This behavior is deprecated."
-            " Please use argument."
-        )
-        token = token_param
-
     if token == "-":
         token = click.get_text_stream("stdin").readline().strip()
     is_control_node = any(role.is_control_node() for role in roles)
@@ -1031,7 +988,7 @@ def list_nodes(
     help=("Skip safety checks and ignore cleanup errors for some tasks"),
     is_flag=True,
 )
-@click.option("--name", type=str, prompt=True, help="Fully qualified node name")
+@argument_with_deprecated_option("name", type=str, help="Fully qualified node name.")
 @click.pass_context
 def remove(ctx: click.Context, name: str, force: bool) -> None:
     """Remove a node from the cluster."""

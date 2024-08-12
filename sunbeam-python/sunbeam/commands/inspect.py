@@ -36,6 +36,7 @@ from sunbeam.jobs.common import (
 )
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.juju import JujuHelper
+from sunbeam.utils import argument_with_deprecated_option
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -122,11 +123,8 @@ def plans(ctx: click.Context, format: str):
 
 
 @inspect.command()
-@click.option(
-    "--plan",
-    type=str,
-    prompt=True,
-    help="Name of the terraform plan to unlock.",
+@argument_with_deprecated_option(
+    "plan", type=str, help="Name of the terraform plan to unlock."
 )
 @click.option("--force", is_flag=True, default=False, help="Force unlock the plan.")
 @click.pass_context

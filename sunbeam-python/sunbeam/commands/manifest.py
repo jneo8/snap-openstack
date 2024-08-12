@@ -30,6 +30,7 @@ from sunbeam.clusterd.service import (
 from sunbeam.jobs.common import FORMAT_TABLE, FORMAT_YAML
 from sunbeam.jobs.deployment import Deployment
 from sunbeam.jobs.manifest import Manifest
+from sunbeam.utils import argument_with_deprecated_option
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -104,12 +105,12 @@ def list(ctx: click.Context, format: str) -> None:
 
 
 @click.command()
-@click.option("--id", type=str, prompt=True, help="Manifest ID")
+@argument_with_deprecated_option("id", type=str, help="Manifest ID")
 @click.pass_context
 def show(ctx: click.Context, id: str) -> None:
     """Show Manifest data.
 
-    Use '--id=latest' to get the last committed manifest.
+    Use ID 'latest' to get the last committed manifest.
     """
     deployment: Deployment = ctx.obj
     client = deployment.get_client()
