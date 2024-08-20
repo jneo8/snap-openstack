@@ -168,7 +168,7 @@ class TestMachineNetworkCheck:
         snap = Mock()
         mocker.patch(
             "sunbeam.provider.maas.client.get_network_mapping",
-            return_value={network: "alpha" for network in Networks.values()},
+            return_value=dict.fromkeys(Networks.values(), "alpha"),
         )
         machine = {"hostname": "test_machine", "roles": [], "spaces": []}
         check = MachineNetworkCheck(snap, machine)
