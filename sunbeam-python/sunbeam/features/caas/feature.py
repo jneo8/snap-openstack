@@ -223,7 +223,7 @@ class CaasFeature(OpenStackControlPlaneFeature):
         admin_credentials = retrieve_admin_credentials(jhelper, OPENSTACK_MODEL)
 
         tfhelper = self.deployment.get_tfhelper(self.configure_plan)
-        tfhelper.env = admin_credentials
+        tfhelper.env = (tfhelper.env or {}) | admin_credentials
         plan = [
             TerraformInitStep(tfhelper),
             CaasConfigureStep(
