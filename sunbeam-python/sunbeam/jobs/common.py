@@ -361,7 +361,7 @@ async def update_status_background(
     """
     if status is None:
         return asyncio.create_task(asyncio.sleep(0))
-    apps = {app: False for app in applications}
+    apps = dict.fromkeys(applications, False)
     nb_apps = len(applications)
     message = (
         step.status + "waiting for services to come online ({nb_active_apps}/{nb_apps})"
