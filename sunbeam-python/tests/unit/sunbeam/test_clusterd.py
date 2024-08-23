@@ -54,10 +54,8 @@ class TestClusterdSteps:
         init_step = ClusterInitStep(cclient, [role], 0, "10.0.0.0/16")
         init_step.client = MagicMock()
         init_step.fqdn = "node1"
-        with mocker.patch(
-            "sunbeam.utils.get_local_ip_by_cidr", return_value="10.0.0.2"
-        ):
-            result = init_step.run()
+        mocker.patch("sunbeam.utils.get_local_ip_by_cidr", return_value="10.0.0.2")
+        result = init_step.run()
         assert result.result_type == ResultType.COMPLETED
         init_step.client.cluster.bootstrap.assert_called_once()
 
