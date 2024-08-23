@@ -25,17 +25,17 @@ from rich.status import Status
 from snaphelpers import Snap
 
 from sunbeam.clusterd.client import Client
-from sunbeam.commands.juju import JujuStepHelper
-from sunbeam.commands.terraform import (
+from sunbeam.core.common import BaseStep, Result, ResultType, run_plan
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import JujuHelper, TimeoutException, run_sync
+from sunbeam.core.manifest import Manifest, SoftwareConfig, TerraformManifest
+from sunbeam.core.terraform import (
     TerraformException,
     TerraformHelper,
     TerraformInitStep,
 )
 from sunbeam.features.interface.v1.base import EnableDisableFeature
-from sunbeam.jobs.common import BaseStep, Result, ResultType, run_plan
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper, TimeoutException, run_sync
-from sunbeam.jobs.manifest import Manifest, SoftwareConfig, TerraformManifest
+from sunbeam.steps.juju import JujuStepHelper
 from sunbeam.utils import argument_with_deprecated_option
 
 LOG = logging.getLogger(__name__)

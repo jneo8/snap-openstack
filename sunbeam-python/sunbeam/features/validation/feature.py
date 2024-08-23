@@ -30,9 +30,20 @@ from rich.table import Column, Table
 
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import ClusterServiceUnavailableException
-from sunbeam.commands.juju import JujuLoginStep
-from sunbeam.commands.openstack import OPENSTACK_MODEL
-from sunbeam.commands.terraform import (
+from sunbeam.core.common import BaseStep, Result, ResultType, run_plan
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.feature import FeatureManager
+from sunbeam.core.juju import (
+    ActionFailedException,
+    ApplicationNotFoundException,
+    JujuHelper,
+    LeaderNotFoundException,
+    UnitNotFoundException,
+    run_sync,
+)
+from sunbeam.core.manifest import CharmManifest, Manifest, SoftwareConfig
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.core.terraform import (
     TerraformException,
     TerraformHelper,
     TerraformInitStep,
@@ -41,18 +52,7 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.jobs.common import BaseStep, Result, ResultType, run_plan
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.feature import FeatureManager
-from sunbeam.jobs.juju import (
-    ActionFailedException,
-    ApplicationNotFoundException,
-    JujuHelper,
-    LeaderNotFoundException,
-    UnitNotFoundException,
-    run_sync,
-)
-from sunbeam.jobs.manifest import CharmManifest, Manifest, SoftwareConfig
+from sunbeam.steps.juju import JujuLoginStep
 from sunbeam.versions import TEMPEST_CHANNEL
 
 LOG = logging.getLogger(__name__)

@@ -19,7 +19,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from sunbeam.commands.proxy import PromptForProxyStep
-from sunbeam.jobs.deployment import PROXY_CONFIG_KEY
+from sunbeam.core.deployment import PROXY_CONFIG_KEY
 
 
 @pytest.fixture()

@@ -27,11 +27,64 @@ from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
 )
-from sunbeam.commands import cluster_status
 from sunbeam.commands import refresh as refresh_cmds
 from sunbeam.commands import resize as resize_cmds
-from sunbeam.commands.bootstrap_state import SetBootstrapped
-from sunbeam.commands.clusterd import (
+from sunbeam.commands.configure import (
+    DemoSetup,
+    SetHypervisorCharmConfigStep,
+    TerraformDemoInitStep,
+    UserOpenRCStep,
+    UserQuestions,
+    retrieve_admin_credentials,
+)
+from sunbeam.commands.proxy import PromptForProxyStep
+from sunbeam.core.checks import (
+    Check,
+    DaemonGroupCheck,
+    JujuControllerRegistrationCheck,
+    JujuSnapCheck,
+    LocalShareCheck,
+    SshKeysConnectedCheck,
+    SystemRequirementsCheck,
+    TokenCheck,
+    VerifyBootstrappedCheck,
+    VerifyFQDNCheck,
+    VerifyHypervisorHostnameCheck,
+    run_preflight_checks,
+)
+from sunbeam.core.common import (
+    CONTEXT_SETTINGS,
+    FORMAT_DEFAULT,
+    FORMAT_TABLE,
+    FORMAT_VALUE,
+    FORMAT_YAML,
+    BaseStep,
+    ResultType,
+    Role,
+    click_option_topology,
+    get_step_message,
+    get_step_result,
+    read_config,
+    roles_to_str_list,
+    run_plan,
+    update_config,
+    validate_roles,
+)
+from sunbeam.core.deployment import Deployment, Networks
+from sunbeam.core.deployments import DeploymentsConfig, deployment_path
+from sunbeam.core.juju import JujuHelper, ModelNotFoundException, run_sync
+from sunbeam.core.manifest import AddManifestStep
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.core.terraform import TerraformInitStep
+from sunbeam.provider.base import ProviderBase
+from sunbeam.provider.local.deployment import LOCAL_TYPE, LocalDeployment
+from sunbeam.provider.local.steps import (
+    LocalClusterStatusStep,
+    LocalSetHypervisorUnitsOptionsStep,
+)
+from sunbeam.steps import cluster_status
+from sunbeam.steps.bootstrap_state import SetBootstrapped
+from sunbeam.steps.clusterd import (
     AskManagementCidrStep,
     ClusterAddJujuUserStep,
     ClusterAddNodeStep,
@@ -42,20 +95,12 @@ from sunbeam.commands.clusterd import (
     ClusterUpdateNodeStep,
     SaveManagementCidrStep,
 )
-from sunbeam.commands.configure import (
-    DemoSetup,
-    SetHypervisorCharmConfigStep,
-    TerraformDemoInitStep,
-    UserOpenRCStep,
-    UserQuestions,
-    retrieve_admin_credentials,
-)
-from sunbeam.commands.hypervisor import (
+from sunbeam.steps.hypervisor import (
     AddHypervisorUnitsStep,
     DeployHypervisorApplicationStep,
     RemoveHypervisorUnitStep,
 )
-from sunbeam.commands.juju import (
+from sunbeam.steps.juju import (
     AddCloudJujuStep,
     AddJujuMachineStep,
     AddJujuModelStep,
@@ -74,7 +119,7 @@ from sunbeam.commands.juju import (
     SaveJujuUserLocallyStep,
     UpdateJujuModelConfigStep,
 )
-from sunbeam.commands.k8s import (
+from sunbeam.steps.k8s import (
     AddK8SCloudStep,
     AddK8SCredentialStep,
     AddK8SUnitsStep,
@@ -83,13 +128,13 @@ from sunbeam.commands.k8s import (
     RemoveK8SUnitsStep,
     StoreK8SKubeConfigStep,
 )
-from sunbeam.commands.microceph import (
+from sunbeam.steps.microceph import (
     AddMicrocephUnitsStep,
     ConfigureMicrocephOSDStep,
     DeployMicrocephApplicationStep,
     RemoveMicrocephUnitsStep,
 )
-from sunbeam.commands.microk8s import (
+from sunbeam.steps.microk8s import (
     AddMicrok8sCloudStep,
     AddMicrok8sCredentialStep,
     AddMicrok8sUnitsStep,
@@ -97,61 +142,16 @@ from sunbeam.commands.microk8s import (
     RemoveMicrok8sUnitsStep,
     StoreMicrok8sConfigStep,
 )
-from sunbeam.commands.mysql import ConfigureMySQLStep
-from sunbeam.commands.openstack import (
-    OPENSTACK_MODEL,
+from sunbeam.steps.mysql import ConfigureMySQLStep
+from sunbeam.steps.openstack import (
     DeployControlPlaneStep,
     OpenStackPatchLoadBalancerServicesStep,
     PromptRegionStep,
 )
-from sunbeam.commands.proxy import PromptForProxyStep
-from sunbeam.commands.sunbeam_machine import (
+from sunbeam.steps.sunbeam_machine import (
     AddSunbeamMachineUnitsStep,
     DeploySunbeamMachineApplicationStep,
     RemoveSunbeamMachineUnitsStep,
-)
-from sunbeam.commands.terraform import TerraformInitStep
-from sunbeam.jobs.checks import (
-    Check,
-    DaemonGroupCheck,
-    JujuControllerRegistrationCheck,
-    JujuSnapCheck,
-    LocalShareCheck,
-    SshKeysConnectedCheck,
-    SystemRequirementsCheck,
-    TokenCheck,
-    VerifyBootstrappedCheck,
-    VerifyFQDNCheck,
-    VerifyHypervisorHostnameCheck,
-    run_preflight_checks,
-)
-from sunbeam.jobs.common import (
-    CONTEXT_SETTINGS,
-    FORMAT_DEFAULT,
-    FORMAT_TABLE,
-    FORMAT_VALUE,
-    FORMAT_YAML,
-    BaseStep,
-    ResultType,
-    Role,
-    click_option_topology,
-    get_step_message,
-    get_step_result,
-    read_config,
-    roles_to_str_list,
-    run_plan,
-    update_config,
-    validate_roles,
-)
-from sunbeam.jobs.deployment import Deployment, Networks
-from sunbeam.jobs.deployments import DeploymentsConfig, deployment_path
-from sunbeam.jobs.juju import JujuHelper, ModelNotFoundException, run_sync
-from sunbeam.jobs.manifest import AddManifestStep
-from sunbeam.provider.base import ProviderBase
-from sunbeam.provider.local.deployment import LOCAL_TYPE, LocalDeployment
-from sunbeam.provider.local.steps import (
-    LocalClusterStatusStep,
-    LocalSetHypervisorUnitsOptionsStep,
 )
 from sunbeam.utils import CatchGroup, argument_with_deprecated_option
 

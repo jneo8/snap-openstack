@@ -18,10 +18,10 @@ import logging
 import click
 from rich.console import Console
 
-from sunbeam.commands.juju import JujuLoginStep
-from sunbeam.jobs.checks import VerifyBootstrappedCheck, run_preflight_checks
-from sunbeam.jobs.common import run_plan
-from sunbeam.jobs.deployment import Deployment
+from sunbeam.core.checks import VerifyBootstrappedCheck, run_preflight_checks
+from sunbeam.core.common import run_plan
+from sunbeam.core.deployment import Deployment
+from sunbeam.steps.juju import JujuLoginStep
 
 LOG = logging.getLogger(__name__)
 console = Console()

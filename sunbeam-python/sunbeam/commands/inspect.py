@@ -27,15 +27,15 @@ from rich.table import Table
 from snaphelpers import Snap
 
 from sunbeam.clusterd.service import ConfigItemNotFoundException
-from sunbeam.commands.juju import WriteCharmLogStep, WriteJujuStatusStep
-from sunbeam.commands.openstack import OPENSTACK_MODEL
-from sunbeam.jobs.common import (
+from sunbeam.core.common import (
     FORMAT_TABLE,
     FORMAT_YAML,
     run_plan,
 )
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import JujuHelper
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.steps.juju import WriteCharmLogStep, WriteJujuStatusStep
 from sunbeam.utils import argument_with_deprecated_option
 
 LOG = logging.getLogger(__name__)

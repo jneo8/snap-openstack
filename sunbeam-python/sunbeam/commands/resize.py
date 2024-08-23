@@ -18,15 +18,15 @@ import click
 from rich.console import Console
 
 from sunbeam.clusterd.client import Client
-from sunbeam.commands.microceph import (
+from sunbeam.core.common import click_option_topology, run_plan
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import JujuHelper
+from sunbeam.core.terraform import TerraformInitStep
+from sunbeam.steps.microceph import (
     DeployMicrocephApplicationStep,
     SetCephMgrPoolSizeStep,
 )
-from sunbeam.commands.openstack import DeployControlPlaneStep
-from sunbeam.commands.terraform import TerraformInitStep
-from sunbeam.jobs.common import click_option_topology, run_plan
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper
+from sunbeam.steps.openstack import DeployControlPlaneStep
 
 LOG = logging.getLogger(__name__)
 console = Console()

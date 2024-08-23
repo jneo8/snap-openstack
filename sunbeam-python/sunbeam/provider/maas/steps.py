@@ -29,43 +29,31 @@ from rich.console import Console
 from rich.status import Status
 from snaphelpers import Snap
 
-import sunbeam.commands.k8s as k8s
-import sunbeam.commands.microceph as microceph
-import sunbeam.commands.microk8s as microk8s
-import sunbeam.jobs.questions
+import sunbeam.core.questions
 import sunbeam.provider.maas.client as maas_client
 import sunbeam.provider.maas.deployment as maas_deployment
+import sunbeam.steps.k8s as k8s
+import sunbeam.steps.microceph as microceph
+import sunbeam.steps.microk8s as microk8s
 import sunbeam.utils as sunbeam_utils
 from sunbeam.clusterd.client import Client
-from sunbeam.commands import clusterd
-from sunbeam.commands.cluster_status import ClusterStatusStep
-from sunbeam.commands.clusterd import APPLICATION as CLUSTERD_APPLICATION
 from sunbeam.commands.configure import (
     CLOUD_CONFIG_SECTION,
     VARIABLE_DEFAULTS,
     SetHypervisorUnitsOptionsStep,
     ext_net_questions,
 )
-from sunbeam.commands.juju import (
-    JUJU_CONTROLLER_CHARM,
-    BootstrapJujuStep,
-    ControllerNotFoundException,
-    JujuStepHelper,
-    SaveControllerStep,
-    ScaleJujuStep,
-)
-from sunbeam.commands.terraform import TerraformHelper
-from sunbeam.jobs.checks import Check, DiagnosticsCheck, DiagnosticsResult
-from sunbeam.jobs.common import (
+from sunbeam.core.checks import Check, DiagnosticsCheck, DiagnosticsResult
+from sunbeam.core.common import (
     RAM_4_GB_IN_MB,
     RAM_32_GB_IN_MB,
     BaseStep,
     Result,
     ResultType,
 )
-from sunbeam.jobs.deployment import CertPair, Networks
-from sunbeam.jobs.deployments import DeploymentsConfig
-from sunbeam.jobs.juju import (
+from sunbeam.core.deployment import CertPair, Networks
+from sunbeam.core.deployments import DeploymentsConfig
+from sunbeam.core.juju import (
     ActionFailedException,
     JujuHelper,
     JujuSecretNotFound,
@@ -74,7 +62,19 @@ from sunbeam.jobs.juju import (
     UnitNotFoundException,
     run_sync,
 )
-from sunbeam.jobs.manifest import Manifest
+from sunbeam.core.manifest import Manifest
+from sunbeam.core.terraform import TerraformHelper
+from sunbeam.steps import clusterd
+from sunbeam.steps.cluster_status import ClusterStatusStep
+from sunbeam.steps.clusterd import APPLICATION as CLUSTERD_APPLICATION
+from sunbeam.steps.juju import (
+    JUJU_CONTROLLER_CHARM,
+    BootstrapJujuStep,
+    ControllerNotFoundException,
+    JujuStepHelper,
+    SaveControllerStep,
+    ScaleJujuStep,
+)
 from sunbeam.versions import JUJU_BASE
 
 LOG = logging.getLogger(__name__)
@@ -2098,14 +2098,14 @@ class MaasUserQuestions(BaseStep):
         :param console: the console to prompt on
         :type console: rich.console.Console (Optional)
         """
-        self.variables = sunbeam.jobs.questions.load_answers(
+        self.variables = sunbeam.core.questions.load_answers(
             self.client, CLOUD_CONFIG_SECTION
         )
         for section in ["user", "external_network"]:
             if not self.variables.get(section):
                 self.variables[section] = {}
 
-        user_bank = sunbeam.jobs.questions.QuestionBank(
+        user_bank = sunbeam.core.questions.QuestionBank(
             questions=maas_deployment.maas_user_questions(self.maas_client),
             console=console,
             preseed=self.preseed.get("user"),
@@ -2114,7 +2114,7 @@ class MaasUserQuestions(BaseStep):
         )
         self.variables["user"]["remote_access_location"] = sunbeam_utils.REMOTE_ACCESS
         # External Network Configuration
-        ext_net_bank = sunbeam.jobs.questions.QuestionBank(
+        ext_net_bank = sunbeam.core.questions.QuestionBank(
             questions=ext_net_questions(),
             console=console,
             preseed=self.preseed.get("external_network"),
@@ -2174,7 +2174,7 @@ class MaasUserQuestions(BaseStep):
                 user_bank.security_group_rules.ask()
             )
 
-        sunbeam.jobs.questions.write_answers(
+        sunbeam.core.questions.write_answers(
             self.client, CLOUD_CONFIG_SECTION, self.variables
         )
 

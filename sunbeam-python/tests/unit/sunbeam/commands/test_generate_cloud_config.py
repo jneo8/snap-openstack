@@ -18,8 +18,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 import sunbeam.commands.generate_cloud_config as generate
-import sunbeam.jobs.questions
-from sunbeam.jobs.common import ResultType
+import sunbeam.core.questions
+from sunbeam.core.common import ResultType
 
 
 @pytest.fixture(autouse=True)
@@ -49,7 +49,7 @@ def tfhelper():
 
 @pytest.fixture()
 def load_answers():
-    with patch.object(sunbeam.jobs.questions, "load_answers") as p:
+    with patch.object(sunbeam.core.questions, "load_answers") as p:
         yield p
 
 

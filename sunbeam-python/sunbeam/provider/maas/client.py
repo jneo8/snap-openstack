@@ -22,8 +22,8 @@ from typing import overload
 from maas.client import bones, connect  # type: ignore [import-untyped]
 from rich.console import Console
 
-from sunbeam.jobs.deployment import Deployment, Networks
-from sunbeam.jobs.deployments import DeploymentsConfig
+from sunbeam.core.deployment import Deployment, Networks
+from sunbeam.core.deployments import DeploymentsConfig
 from sunbeam.provider.maas.deployment import (
     MaasDeployment,
     RoleTags,

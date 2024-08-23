@@ -26,21 +26,21 @@ import click.core
 import yaml
 from rich.console import Console
 
-import sunbeam.jobs.questions
+import sunbeam.core.questions
 from sunbeam.clusterd.client import Client
 from sunbeam.commands.configure import CLOUD_CONFIG_SECTION, retrieve_admin_credentials
-from sunbeam.commands.openstack import OPENSTACK_MODEL
-from sunbeam.commands.terraform import TerraformHelper
-from sunbeam.jobs.checks import VerifyBootstrappedCheck, run_preflight_checks
-from sunbeam.jobs.common import (
+from sunbeam.core.checks import VerifyBootstrappedCheck, run_preflight_checks
+from sunbeam.core.common import (
     BaseStep,
     Result,
     ResultType,
     Status,
     run_plan,
 )
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper, ModelNotFoundException, run_sync
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import JujuHelper, ModelNotFoundException, run_sync
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.core.terraform import TerraformHelper
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -83,7 +83,7 @@ class GenerateCloudConfigStep(BaseStep):
             return Result(ResultType.COMPLETED)
 
         # Check if run_demo_setup is done to get demo user information
-        self.variables = sunbeam.jobs.questions.load_answers(
+        self.variables = sunbeam.core.questions.load_answers(
             self.client, CLOUD_CONFIG_SECTION
         )
         if "user" not in self.variables:

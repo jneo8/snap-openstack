@@ -19,10 +19,10 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 import sunbeam.commands.configure as configure
-import sunbeam.jobs.questions
+import sunbeam.core.questions
 import sunbeam.utils
-from sunbeam.commands.terraform import TerraformException
-from sunbeam.jobs.common import ResultType
+from sunbeam.core.common import ResultType
+from sunbeam.core.terraform import TerraformException
 
 
 @pytest.fixture(autouse=True)
@@ -47,19 +47,19 @@ def cclient():
 
 @pytest.fixture()
 def load_answers():
-    with patch.object(sunbeam.jobs.questions, "load_answers") as p:
+    with patch.object(sunbeam.core.questions, "load_answers") as p:
         yield p
 
 
 @pytest.fixture()
 def write_answers():
-    with patch.object(sunbeam.jobs.questions, "write_answers") as p:
+    with patch.object(sunbeam.core.questions, "write_answers") as p:
         yield p
 
 
 @pytest.fixture()
 def question_bank():
-    with patch.object(sunbeam.jobs.questions, "QuestionBank") as p:
+    with patch.object(sunbeam.core.questions, "QuestionBank") as p:
         yield p
 
 

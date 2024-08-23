@@ -19,18 +19,18 @@ import click
 from packaging.version import Version
 from rich.console import Console
 
-from sunbeam.commands.hypervisor import ReapplyHypervisorTerraformPlanStep
-from sunbeam.commands.terraform import TerraformInitStep
+from sunbeam.core.common import BaseStep, run_plan
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import JujuHelper
+from sunbeam.core.manifest import AddManifestStep, CharmManifest, SoftwareConfig
+from sunbeam.core.terraform import TerraformInitStep
 from sunbeam.features.interface.v1.openstack import (
     DisableOpenStackApplicationStep,
     EnableOpenStackApplicationStep,
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.jobs.common import BaseStep, run_plan
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper
-from sunbeam.jobs.manifest import AddManifestStep, CharmManifest, SoftwareConfig
+from sunbeam.steps.hypervisor import ReapplyHypervisorTerraformPlanStep
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)

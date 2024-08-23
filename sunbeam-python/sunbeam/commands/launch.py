@@ -23,10 +23,10 @@ from rich.console import Console
 from snaphelpers import Snap
 
 from sunbeam.commands.configure import retrieve_admin_credentials
-from sunbeam.commands.openstack import OPENSTACK_MODEL
-from sunbeam.commands.terraform import TerraformException
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper, ModelNotFoundException, run_sync
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import JujuHelper, ModelNotFoundException, run_sync
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.core.terraform import TerraformException
 
 LOG = logging.getLogger(__name__)
 console = Console()

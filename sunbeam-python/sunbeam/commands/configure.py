@@ -21,20 +21,20 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-import sunbeam.jobs.questions
+import sunbeam.core.questions
 from sunbeam import utils
 from sunbeam.clusterd.client import Client
-from sunbeam.commands.terraform import (
-    TerraformException,
-    TerraformHelper,
-    TerraformInitStep,
-)
-from sunbeam.jobs.common import BaseStep, Result, ResultType, Status
-from sunbeam.jobs.juju import (
+from sunbeam.core.common import BaseStep, Result, ResultType, Status
+from sunbeam.core.juju import (
     ActionFailedException,
     JujuHelper,
     LeaderNotFoundException,
     run_sync,
+)
+from sunbeam.core.terraform import (
+    TerraformException,
+    TerraformHelper,
+    TerraformInitStep,
 )
 
 CLOUD_CONFIG_SECTION = "CloudConfig"
@@ -44,31 +44,31 @@ console = Console()
 
 def user_questions():
     return {
-        "run_demo_setup": sunbeam.jobs.questions.ConfirmQuestion(
+        "run_demo_setup": sunbeam.core.questions.ConfirmQuestion(
             "Populate OpenStack cloud with demo user, default images, flavors etc",
             default_value=True,
         ),
-        "username": sunbeam.jobs.questions.PromptQuestion(
+        "username": sunbeam.core.questions.PromptQuestion(
             "Username to use for access to OpenStack", default_value="demo"
         ),
-        "password": sunbeam.jobs.questions.PasswordPromptQuestion(
+        "password": sunbeam.core.questions.PasswordPromptQuestion(
             "Password to use for access to OpenStack",
             default_function=utils.generate_password,
             password=True,
         ),
-        "cidr": sunbeam.jobs.questions.PromptQuestion(
+        "cidr": sunbeam.core.questions.PromptQuestion(
             "Network range to use for project network",
             default_value="192.168.122.0/24",
             validation_function=ipaddress.ip_network,
         ),
-        "nameservers": sunbeam.jobs.questions.PromptQuestion(
+        "nameservers": sunbeam.core.questions.PromptQuestion(
             "List of nameservers guests should use for DNS resolution",
             default_function=lambda: " ".join(utils.get_nameservers()),
         ),
-        "security_group_rules": sunbeam.jobs.questions.ConfirmQuestion(
+        "security_group_rules": sunbeam.core.questions.ConfirmQuestion(
             "Enable ping and SSH access to instances?", default_value=True
         ),
-        "remote_access_location": sunbeam.jobs.questions.PromptQuestion(
+        "remote_access_location": sunbeam.core.questions.PromptQuestion(
             "Local or remote access to VMs",
             choices=[utils.LOCAL_ACCESS, utils.REMOTE_ACCESS],
             default_value=utils.LOCAL_ACCESS,
@@ -78,32 +78,32 @@ def user_questions():
 
 def ext_net_questions():
     return {
-        "cidr": sunbeam.jobs.questions.PromptQuestion(
+        "cidr": sunbeam.core.questions.PromptQuestion(
             "CIDR of network to use for external networking",
             default_value="10.20.20.0/24",
             validation_function=ipaddress.ip_network,
         ),
-        "gateway": sunbeam.jobs.questions.PromptQuestion(
+        "gateway": sunbeam.core.questions.PromptQuestion(
             "IP address of default gateway for external network",
             default_value=None,
             validation_function=ipaddress.ip_address,
         ),
-        "start": sunbeam.jobs.questions.PromptQuestion(
+        "start": sunbeam.core.questions.PromptQuestion(
             "Start of IP allocation range for external network",
             default_value=None,
             validation_function=ipaddress.ip_address,
         ),
-        "end": sunbeam.jobs.questions.PromptQuestion(
+        "end": sunbeam.core.questions.PromptQuestion(
             "End of IP allocation range for external network",
             default_value=None,
             validation_function=ipaddress.ip_address,
         ),
-        "network_type": sunbeam.jobs.questions.PromptQuestion(
+        "network_type": sunbeam.core.questions.PromptQuestion(
             "Network type for access to external network",
             choices=["flat", "vlan"],
             default_value="flat",
         ),
-        "segmentation_id": sunbeam.jobs.questions.PromptQuestion(
+        "segmentation_id": sunbeam.core.questions.PromptQuestion(
             "VLAN ID to use for external network", default_value=0
         ),
     }
@@ -111,7 +111,7 @@ def ext_net_questions():
 
 def ext_net_questions_local_only():
     return {
-        "cidr": sunbeam.jobs.questions.PromptQuestion(
+        "cidr": sunbeam.core.questions.PromptQuestion(
             (
                 "CIDR of OpenStack external network - arbitrary but must not "
                 "be in use"
@@ -119,22 +119,22 @@ def ext_net_questions_local_only():
             default_value="10.20.20.0/24",
             validation_function=ipaddress.ip_network,
         ),
-        "start": sunbeam.jobs.questions.PromptQuestion(
+        "start": sunbeam.core.questions.PromptQuestion(
             "Start of IP allocation range for external network",
             default_value=None,
             validation_function=ipaddress.ip_address,
         ),
-        "end": sunbeam.jobs.questions.PromptQuestion(
+        "end": sunbeam.core.questions.PromptQuestion(
             "End of IP allocation range for external network",
             default_value=None,
             validation_function=ipaddress.ip_address,
         ),
-        "network_type": sunbeam.jobs.questions.PromptQuestion(
+        "network_type": sunbeam.core.questions.PromptQuestion(
             "Network type for access to external network",
             choices=["flat", "vlan"],
             default_value="flat",
         ),
-        "segmentation_id": sunbeam.jobs.questions.PromptQuestion(
+        "segmentation_id": sunbeam.core.questions.PromptQuestion(
             "VLAN ID to use for external network", default_value=0
         ),
     }
@@ -268,7 +268,7 @@ class SetHypervisorCharmConfigStep(BaseStep):
 
         :return:
         """
-        self.variables = sunbeam.jobs.questions.load_answers(
+        self.variables = sunbeam.core.questions.load_answers(
             self.client, CLOUD_CONFIG_SECTION
         )
         self.ext_network = self.variables.get("external_network", {})
@@ -333,7 +333,7 @@ class UserOpenRCStep(BaseStep):
         :return: ResultType.SKIPPED if the Step should be skipped,
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
-        self.variables = sunbeam.jobs.questions.load_answers(
+        self.variables = sunbeam.core.questions.load_answers(
             self.client, CLOUD_CONFIG_SECTION
         )
         if "user" not in self.variables:
@@ -409,14 +409,14 @@ class UserQuestions(BaseStep):
         :param console: the console to prompt on
         :type console: rich.console.Console (Optional)
         """
-        self.variables = sunbeam.jobs.questions.load_answers(
+        self.variables = sunbeam.core.questions.load_answers(
             self.client, CLOUD_CONFIG_SECTION
         )
         for section in ["user", "external_network"]:
             if not self.variables.get(section):
                 self.variables[section] = {}
 
-        user_bank = sunbeam.jobs.questions.QuestionBank(
+        user_bank = sunbeam.core.questions.QuestionBank(
             questions=user_questions(),
             console=console,
             preseed=self.preseed.get("user"),
@@ -428,7 +428,7 @@ class UserQuestions(BaseStep):
         )
         # External Network Configuration
         if self.variables["user"]["remote_access_location"] == utils.LOCAL_ACCESS:
-            ext_net_bank = sunbeam.jobs.questions.QuestionBank(
+            ext_net_bank = sunbeam.core.questions.QuestionBank(
                 questions=ext_net_questions_local_only(),
                 console=console,
                 preseed=self.preseed.get("external_network"),
@@ -436,7 +436,7 @@ class UserQuestions(BaseStep):
                 accept_defaults=self.accept_defaults,
             )
         else:
-            ext_net_bank = sunbeam.jobs.questions.QuestionBank(
+            ext_net_bank = sunbeam.core.questions.QuestionBank(
                 questions=ext_net_questions(),
                 console=console,
                 preseed=self.preseed.get("external_network"),
@@ -499,7 +499,7 @@ class UserQuestions(BaseStep):
                 user_bank.security_group_rules.ask()
             )
 
-        sunbeam.jobs.questions.write_answers(
+        sunbeam.core.questions.write_answers(
             self.client, CLOUD_CONFIG_SECTION, self.variables
         )
 
@@ -531,7 +531,7 @@ class DemoSetup(BaseStep):
         :return: ResultType.SKIPPED if the Step should be skipped,
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
-        self.variables = sunbeam.jobs.questions.load_answers(
+        self.variables = sunbeam.core.questions.load_answers(
             self.client, CLOUD_CONFIG_SECTION
         )
         if self.variables["user"]["run_demo_setup"]:
@@ -541,7 +541,7 @@ class DemoSetup(BaseStep):
 
     def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
-        self.variables = sunbeam.jobs.questions.load_answers(
+        self.variables = sunbeam.core.questions.load_answers(
             self.client, CLOUD_CONFIG_SECTION
         )
         self.tfhelper.write_tfvars(self.variables, self.answer_file)
@@ -569,7 +569,7 @@ class TerraformDemoInitStep(TerraformInitStep):
         :return: ResultType.SKIPPED if the Step should be skipped,
                  ResultType.COMPLETED or ResultType.FAILED otherwise
         """
-        self.variables = sunbeam.jobs.questions.load_answers(
+        self.variables = sunbeam.core.questions.load_answers(
             self.client, CLOUD_CONFIG_SECTION
         )
         if self.variables["user"]["run_demo_setup"]:

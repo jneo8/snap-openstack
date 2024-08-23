@@ -29,7 +29,26 @@ from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
 )
-from sunbeam.commands.openstack import OPENSTACK_MODEL
+from sunbeam.core import questions
+from sunbeam.core.common import (
+    FORMAT_TABLE,
+    FORMAT_YAML,
+    BaseStep,
+    Result,
+    ResultType,
+    read_config,
+    run_plan,
+    str_presenter,
+)
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import (
+    ActionFailedException,
+    JujuHelper,
+    LeaderNotFoundException,
+    run_sync,
+)
+from sunbeam.core.manifest import AddManifestStep, CharmManifest, SoftwareConfig
+from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.features.interface.utils import (
     encode_base64_as_string,
     get_subject_from_csr,
@@ -45,25 +64,6 @@ from sunbeam.features.interface.v1.tls import (
     INGRESS_CHANGE_APPLICATION_TIMEOUT,
     TlsFeatureGroup,
 )
-from sunbeam.jobs import questions
-from sunbeam.jobs.common import (
-    FORMAT_TABLE,
-    FORMAT_YAML,
-    BaseStep,
-    Result,
-    ResultType,
-    read_config,
-    run_plan,
-    str_presenter,
-)
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import (
-    ActionFailedException,
-    JujuHelper,
-    LeaderNotFoundException,
-    run_sync,
-)
-from sunbeam.jobs.manifest import AddManifestStep, CharmManifest, SoftwareConfig
 
 CERTIFICATE_FEATURE_KEY = "TlsProvider"
 CA_APP_NAME = "manual-tls-certificates"

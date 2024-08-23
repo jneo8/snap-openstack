@@ -20,7 +20,9 @@ from requests.exceptions import HTTPError
 
 import sunbeam.clusterd.service as service
 from sunbeam.clusterd.cluster import ClusterService
-from sunbeam.commands.clusterd import (
+from sunbeam.core.common import ResultType
+from sunbeam.core.juju import ApplicationNotFoundException
+from sunbeam.steps.clusterd import (
     ClusterAddJujuUserStep,
     ClusterAddNodeStep,
     ClusterInitStep,
@@ -32,8 +34,6 @@ from sunbeam.commands.clusterd import (
     DeploySunbeamClusterdApplicationStep,
     SaveManagementCidrStep,
 )
-from sunbeam.jobs.common import ResultType
-from sunbeam.jobs.juju import ApplicationNotFoundException
 
 
 @pytest.fixture()

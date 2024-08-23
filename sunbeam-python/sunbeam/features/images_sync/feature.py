@@ -19,13 +19,13 @@ import click
 from packaging.version import Version
 from rich.console import Console
 
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.manifest import CharmManifest, SoftwareConfig
 from sunbeam.features.interface.v1.openstack import (
     ApplicationChannelData,
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.manifest import CharmManifest, SoftwareConfig
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)

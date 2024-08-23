@@ -21,13 +21,7 @@ from rich.console import Console
 from rich.status import Status
 
 from sunbeam.clusterd.service import ConfigItemNotFoundException
-from sunbeam.commands.openstack import OPENSTACK_MODEL
-from sunbeam.features.interface.v1.openstack import (
-    OpenStackControlPlaneFeature,
-    TerraformPlanLocation,
-    WaitForApplicationsStep,
-)
-from sunbeam.jobs.common import (
+from sunbeam.core.common import (
     BaseStep,
     Result,
     ResultType,
@@ -35,12 +29,18 @@ from sunbeam.jobs.common import (
     run_plan,
     update_config,
 )
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import (
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import (
     ActionFailedException,
     JujuHelper,
     LeaderNotFoundException,
     run_sync,
+)
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.features.interface.v1.openstack import (
+    OpenStackControlPlaneFeature,
+    TerraformPlanLocation,
+    WaitForApplicationsStep,
 )
 
 CERTIFICATE_FEATURE_KEY = "TlsProvider"

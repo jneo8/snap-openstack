@@ -26,8 +26,17 @@ from rich.status import Status
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import ClusterServiceUnavailableException
 from sunbeam.commands.configure import retrieve_admin_credentials
-from sunbeam.commands.openstack import OPENSTACK_MODEL
-from sunbeam.commands.terraform import (
+from sunbeam.core.common import BaseStep, Result, ResultType, run_plan
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import JujuHelper
+from sunbeam.core.manifest import (
+    CharmManifest,
+    Manifest,
+    SoftwareConfig,
+    TerraformManifest,
+)
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.core.terraform import (
     TerraformException,
     TerraformHelper,
     TerraformInitStep,
@@ -36,15 +45,6 @@ from sunbeam.features.interface.v1.base import FeatureRequirement
 from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
-)
-from sunbeam.jobs.common import BaseStep, Result, ResultType, run_plan
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper
-from sunbeam.jobs.manifest import (
-    CharmManifest,
-    Manifest,
-    SoftwareConfig,
-    TerraformManifest,
 )
 from sunbeam.versions import OPENSTACK_CHANNEL
 
