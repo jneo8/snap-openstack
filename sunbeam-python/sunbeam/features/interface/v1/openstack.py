@@ -412,6 +412,7 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
         feature: OpenStackControlPlaneFeature,
+        app_desired_status: list[str] = ["active"],
     ) -> None:
         """Constructor for the generic plan.
 
@@ -426,6 +427,7 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
         self.tfhelper = tfhelper
         self.jhelper = jhelper
         self.feature = feature
+        self.app_desired_status = app_desired_status
         self.model = OPENSTACK_MODEL
 
     def run(self, status: Status | None = None) -> Result:
@@ -449,9 +451,10 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
         task = run_sync(update_status_background(self, apps, queue, status))
         try:
             run_sync(
-                self.jhelper.wait_until_active(
+                self.jhelper.wait_until_desired_status(
                     self.model,
                     apps,
+                    status=self.app_desired_status,
                     timeout=self.feature.set_application_timeout_on_enable(),
                     queue=queue,
                 )

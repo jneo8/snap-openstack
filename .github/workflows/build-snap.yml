@@ -74,7 +74,7 @@ jobs:
           sg snap_daemon "openstack.sunbeam enable loadbalancer"
           sg snap_daemon "openstack.sunbeam enable dns --nameservers=testing.github."
           sg snap_daemon "openstack.sunbeam enable telemetry"
-          sg snap_daemon "openstack.sunbeam enable observability"
+          sg snap_daemon "openstack.sunbeam enable observability embedded"
           sg snap_daemon "openstack.sunbeam enable vault"
           sg snap_daemon "openstack.sunbeam enable secrets"
           # Disable caas temporarily while MySQL memory gets adjusted
@@ -87,7 +87,7 @@ jobs:
           sg snap_daemon "openstack.sunbeam disable secrets"
           sg snap_daemon "openstack.sunbeam disable vault"
           # Commented disabling observability due to LP#1998282
-          # sg snap_daemon "openstack.sunbeam disable observability"
+          # sg snap_daemon "openstack.sunbeam disable observability embedded"
           # sg snap_daemon "openstack.sunbeam disable telemetry"
           sg snap_daemon "openstack.sunbeam disable dns"
           sg snap_daemon "openstack.sunbeam disable loadbalancer"
