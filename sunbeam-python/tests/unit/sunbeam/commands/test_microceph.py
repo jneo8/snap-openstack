@@ -109,6 +109,7 @@ class TestSetCephMgrPoolSizeStep:
         assert result.result_type == ResultType.COMPLETED
 
     def test_run(self, cclient, jhelper):
+        jhelper.run_action.return_value = Mock()
         step = SetCephMgrPoolSizeStep(cclient, jhelper, "test-model")
         result = step.run()
 
