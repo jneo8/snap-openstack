@@ -19,13 +19,13 @@ import click
 from rich.console import Console
 from snaphelpers import Snap
 
-from sunbeam.commands.juju import (
+from sunbeam.core.common import BaseStep, run_plan
+from sunbeam.core.deployment import Deployment
+from sunbeam.steps.juju import (
     RegisterRemoteJujuUserStep,
     SwitchToController,
     UnregisterJujuController,
 )
-from sunbeam.jobs.common import BaseStep, run_plan
-from sunbeam.jobs.deployment import Deployment
 
 LOG = logging.getLogger(__name__)
 console = Console()

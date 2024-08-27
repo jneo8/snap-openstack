@@ -34,10 +34,40 @@ from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
 )
-from sunbeam.commands.juju import JujuStepHelper
-from sunbeam.commands.k8s import CREDENTIAL_SUFFIX
-from sunbeam.commands.openstack import OPENSTACK_MODEL
-from sunbeam.commands.terraform import (
+from sunbeam.core.checks import (
+    Check,
+    JujuControllerRegistrationCheck,
+    run_preflight_checks,
+)
+from sunbeam.core.common import (
+    BaseStep,
+    Result,
+    ResultType,
+    convert_proxy_to_model_configs,
+    read_config,
+    run_plan,
+    update_config,
+    update_status_background,
+)
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import (
+    JujuHelper,
+    JujuStepHelper,
+    JujuWaitException,
+    TimeoutException,
+    run_sync,
+)
+from sunbeam.core.k8s import K8SHelper
+from sunbeam.core.manifest import (
+    AddManifestStep,
+    CharmManifest,
+    Manifest,
+    SoftwareConfig,
+    TerraformManifest,
+)
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.core.steps import PatchLoadBalancerServicesStep
+from sunbeam.core.terraform import (
     TerraformException,
     TerraformHelper,
     TerraformInitStep,
@@ -49,32 +79,7 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.jobs.checks import (
-    Check,
-    JujuControllerRegistrationCheck,
-    run_preflight_checks,
-)
-from sunbeam.jobs.common import (
-    BaseStep,
-    Result,
-    ResultType,
-    convert_proxy_to_model_configs,
-    read_config,
-    run_plan,
-    update_config,
-    update_status_background,
-)
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
-from sunbeam.jobs.k8s import K8SHelper
-from sunbeam.jobs.manifest import (
-    AddManifestStep,
-    CharmManifest,
-    Manifest,
-    SoftwareConfig,
-    TerraformManifest,
-)
-from sunbeam.jobs.steps import PatchLoadBalancerServicesStep
+from sunbeam.steps.k8s import CREDENTIAL_SUFFIX
 
 LOG = logging.getLogger(__name__)
 console = Console()

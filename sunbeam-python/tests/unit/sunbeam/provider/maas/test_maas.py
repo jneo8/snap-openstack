@@ -20,10 +20,10 @@ import pytest
 from maas.client.bones import CallError
 
 import sunbeam.provider.maas.steps as maas_steps
-from sunbeam.jobs.checks import DiagnosticResultType
-from sunbeam.jobs.deployment import Networks
-from sunbeam.jobs.deployments import DeploymentsConfig
-from sunbeam.jobs.juju import ControllerNotFoundException
+from sunbeam.core.checks import DiagnosticResultType
+from sunbeam.core.deployment import Networks
+from sunbeam.core.deployments import DeploymentsConfig
+from sunbeam.core.juju import ControllerNotFoundException
 from sunbeam.provider.maas.deployment import (
     MaasDeployment,
     NicTags,
@@ -692,7 +692,7 @@ class TestMaasBootstrapJujuStep:
             ],
         )
         mocker.patch(
-            "sunbeam.commands.juju.BootstrapJujuStep.is_skip",
+            "sunbeam.steps.juju.BootstrapJujuStep.is_skip",
             return_value=Result(ResultType.COMPLETED),
         )
         mocker.patch.object(maas_steps, "Snap", return_value=snap)
@@ -717,7 +717,7 @@ class TestMaasBootstrapJujuStep:
             ],
         )
         mocker.patch(
-            "sunbeam.commands.juju.BootstrapJujuStep.is_skip",
+            "sunbeam.steps.juju.BootstrapJujuStep.is_skip",
             return_value=Result(ResultType.COMPLETED),
         )
         mocker.patch.object(maas_steps, "Snap", return_value=snap)

@@ -21,16 +21,16 @@ from typing import Any, TextIO
 from rich.console import Console
 from rich.prompt import InvalidResponse, PromptBase
 
-import sunbeam.jobs.questions
+import sunbeam.core.questions
 from sunbeam import utils
 from sunbeam.clusterd.client import Client
-from sunbeam.commands import hypervisor
-from sunbeam.commands.cluster_status import ClusterStatusStep
 from sunbeam.commands.configure import (
     CLOUD_CONFIG_SECTION,
     SetHypervisorUnitsOptionsStep,
 )
-from sunbeam.jobs.juju import JujuHelper
+from sunbeam.core.juju import JujuHelper
+from sunbeam.steps import hypervisor
+from sunbeam.steps.cluster_status import ClusterStatusStep
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -99,7 +99,7 @@ class NicPrompt(PromptBase[str]):
                 return return_value
 
 
-class NicQuestion(sunbeam.jobs.questions.Question[str]):
+class NicQuestion(sunbeam.core.questions.Question[str]):
     """Ask the user a simple yes / no question."""
 
     @property
@@ -143,7 +143,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
 
     def prompt_for_nic(self) -> str | None:
         """Prompt user for nic to use and do some validation."""
-        local_hypervisor_bank = sunbeam.jobs.questions.QuestionBank(
+        local_hypervisor_bank = sunbeam.core.questions.QuestionBank(
             questions=local_hypervisor_questions(),
             console=console,
             accept_defaults=False,
@@ -154,7 +154,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
             if not nic:
                 continue
             if utils.is_configured(nic):
-                agree_nic_up = sunbeam.jobs.questions.ConfirmQuestion(
+                agree_nic_up = sunbeam.core.questions.ConfirmQuestion(
                     f"WARNING: Interface {nic} is configured. Any "
                     "configuration will be lost, are you sure you want to "
                     "continue?"
@@ -162,7 +162,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
                 if not agree_nic_up:
                     continue
             if utils.is_nic_up(nic) and not utils.is_nic_connected(nic):
-                agree_nic_no_link = sunbeam.jobs.questions.ConfirmQuestion(
+                agree_nic_no_link = sunbeam.core.questions.ConfirmQuestion(
                     f"WARNING: Interface {nic} is not connected. Are "
                     "you sure you want to continue?"
                 ).ask()
@@ -175,7 +175,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         """Determines if the step can take input from the user."""
         # If adding a node before configure step has run then answers will
         # not be populated yet.
-        self.variables = sunbeam.jobs.questions.load_answers(
+        self.variables = sunbeam.core.questions.load_answers(
             self.client, CLOUD_CONFIG_SECTION
         )
         remote_access_location = self.variables.get("user", {}).get(

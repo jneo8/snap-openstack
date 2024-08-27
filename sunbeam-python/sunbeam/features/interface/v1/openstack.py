@@ -28,16 +28,8 @@ from rich.status import Status
 from snaphelpers import Snap
 
 from sunbeam.clusterd.service import ConfigItemNotFoundException
-from sunbeam.commands.juju import JujuStepHelper
-from sunbeam.commands.openstack import OPENSTACK_MODEL, TOPOLOGY_KEY
-from sunbeam.commands.terraform import (
-    TerraformException,
-    TerraformHelper,
-    TerraformInitStep,
-)
-from sunbeam.features.interface.v1.base import EnableDisableFeature
-from sunbeam.jobs.checks import VerifyBootstrappedCheck, run_preflight_checks
-from sunbeam.jobs.common import (
+from sunbeam.core.checks import VerifyBootstrappedCheck, run_preflight_checks
+from sunbeam.core.common import (
     BaseStep,
     Result,
     ResultType,
@@ -46,15 +38,24 @@ from sunbeam.jobs.common import (
     run_plan,
     update_status_background,
 )
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import (
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import (
     ApplicationNotFoundException,
     JujuHelper,
+    JujuStepHelper,
     JujuWaitException,
     TimeoutException,
     run_sync,
 )
-from sunbeam.jobs.manifest import AddManifestStep, Manifest
+from sunbeam.core.manifest import AddManifestStep, Manifest
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.core.terraform import (
+    TerraformException,
+    TerraformHelper,
+    TerraformInitStep,
+)
+from sunbeam.features.interface.v1.base import EnableDisableFeature
+from sunbeam.steps.openstack import TOPOLOGY_KEY
 
 LOG = logging.getLogger(__name__)
 console = Console()

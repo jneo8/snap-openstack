@@ -27,21 +27,8 @@ from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
 )
-from sunbeam.commands import cluster_status
 from sunbeam.commands import refresh as refresh_cmds
 from sunbeam.commands import resize as resize_cmds
-from sunbeam.commands.bootstrap_state import SetBootstrapped
-from sunbeam.commands.clusterd import (
-    AskManagementCidrStep,
-    ClusterAddJujuUserStep,
-    ClusterAddNodeStep,
-    ClusterInitStep,
-    ClusterJoinNodeStep,
-    ClusterRemoveNodeStep,
-    ClusterUpdateJujuControllerStep,
-    ClusterUpdateNodeStep,
-    SaveManagementCidrStep,
-)
 from sunbeam.commands.configure import (
     DemoSetup,
     SetHypervisorCharmConfigStep,
@@ -50,68 +37,8 @@ from sunbeam.commands.configure import (
     UserQuestions,
     retrieve_admin_credentials,
 )
-from sunbeam.commands.hypervisor import (
-    AddHypervisorUnitsStep,
-    DeployHypervisorApplicationStep,
-    RemoveHypervisorUnitStep,
-)
-from sunbeam.commands.juju import (
-    AddCloudJujuStep,
-    AddJujuMachineStep,
-    AddJujuModelStep,
-    AddJujuSpaceStep,
-    BackupBootstrapUserStep,
-    BindJujuApplicationStep,
-    BootstrapJujuStep,
-    CreateJujuUserStep,
-    JujuGrantModelAccessStep,
-    JujuLoginStep,
-    JujuStepHelper,
-    RegisterJujuUserStep,
-    RemoveJujuMachineStep,
-    SaveControllerStep,
-    SaveJujuRemoteUserLocallyStep,
-    SaveJujuUserLocallyStep,
-    UpdateJujuModelConfigStep,
-)
-from sunbeam.commands.k8s import (
-    AddK8SCloudStep,
-    AddK8SCredentialStep,
-    AddK8SUnitsStep,
-    DeployK8SApplicationStep,
-    EnableK8SFeatures,
-    RemoveK8SUnitsStep,
-    StoreK8SKubeConfigStep,
-)
-from sunbeam.commands.microceph import (
-    AddMicrocephUnitsStep,
-    ConfigureMicrocephOSDStep,
-    DeployMicrocephApplicationStep,
-    RemoveMicrocephUnitsStep,
-)
-from sunbeam.commands.microk8s import (
-    AddMicrok8sCloudStep,
-    AddMicrok8sCredentialStep,
-    AddMicrok8sUnitsStep,
-    DeployMicrok8sApplicationStep,
-    RemoveMicrok8sUnitsStep,
-    StoreMicrok8sConfigStep,
-)
-from sunbeam.commands.mysql import ConfigureMySQLStep
-from sunbeam.commands.openstack import (
-    OPENSTACK_MODEL,
-    DeployControlPlaneStep,
-    OpenStackPatchLoadBalancerServicesStep,
-    PromptRegionStep,
-)
 from sunbeam.commands.proxy import PromptForProxyStep
-from sunbeam.commands.sunbeam_machine import (
-    AddSunbeamMachineUnitsStep,
-    DeploySunbeamMachineApplicationStep,
-    RemoveSunbeamMachineUnitsStep,
-)
-from sunbeam.commands.terraform import TerraformInitStep
-from sunbeam.jobs.checks import (
+from sunbeam.core.checks import (
     Check,
     DaemonGroupCheck,
     JujuControllerRegistrationCheck,
@@ -125,7 +52,7 @@ from sunbeam.jobs.checks import (
     VerifyHypervisorHostnameCheck,
     run_preflight_checks,
 )
-from sunbeam.jobs.common import (
+from sunbeam.core.common import (
     CONTEXT_SETTINGS,
     FORMAT_DEFAULT,
     FORMAT_TABLE,
@@ -143,15 +70,92 @@ from sunbeam.jobs.common import (
     update_config,
     validate_roles,
 )
-from sunbeam.jobs.deployment import Deployment, Networks
-from sunbeam.jobs.deployments import DeploymentsConfig, deployment_path
-from sunbeam.jobs.juju import JujuHelper, ModelNotFoundException, run_sync
-from sunbeam.jobs.manifest import AddManifestStep
+from sunbeam.core.deployment import Deployment, Networks
+from sunbeam.core.deployments import DeploymentsConfig, deployment_path
+from sunbeam.core.juju import (
+    JujuHelper,
+    JujuStepHelper,
+    ModelNotFoundException,
+    run_sync,
+)
+from sunbeam.core.manifest import AddManifestStep
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.core.terraform import TerraformInitStep
 from sunbeam.provider.base import ProviderBase
 from sunbeam.provider.local.deployment import LOCAL_TYPE, LocalDeployment
 from sunbeam.provider.local.steps import (
     LocalClusterStatusStep,
     LocalSetHypervisorUnitsOptionsStep,
+)
+from sunbeam.steps import cluster_status
+from sunbeam.steps.bootstrap_state import SetBootstrapped
+from sunbeam.steps.clusterd import (
+    AskManagementCidrStep,
+    ClusterAddJujuUserStep,
+    ClusterAddNodeStep,
+    ClusterInitStep,
+    ClusterJoinNodeStep,
+    ClusterRemoveNodeStep,
+    ClusterUpdateJujuControllerStep,
+    ClusterUpdateNodeStep,
+    SaveManagementCidrStep,
+)
+from sunbeam.steps.hypervisor import (
+    AddHypervisorUnitsStep,
+    DeployHypervisorApplicationStep,
+    RemoveHypervisorUnitStep,
+)
+from sunbeam.steps.juju import (
+    AddCloudJujuStep,
+    AddJujuMachineStep,
+    AddJujuModelStep,
+    AddJujuSpaceStep,
+    BackupBootstrapUserStep,
+    BindJujuApplicationStep,
+    BootstrapJujuStep,
+    CreateJujuUserStep,
+    JujuGrantModelAccessStep,
+    JujuLoginStep,
+    RegisterJujuUserStep,
+    RemoveJujuMachineStep,
+    SaveControllerStep,
+    SaveJujuRemoteUserLocallyStep,
+    SaveJujuUserLocallyStep,
+    UpdateJujuModelConfigStep,
+)
+from sunbeam.steps.k8s import (
+    AddK8SCloudStep,
+    AddK8SCredentialStep,
+    AddK8SUnitsStep,
+    DeployK8SApplicationStep,
+    EnableK8SFeatures,
+    RemoveK8SUnitsStep,
+    StoreK8SKubeConfigStep,
+)
+from sunbeam.steps.microceph import (
+    AddMicrocephUnitsStep,
+    ConfigureMicrocephOSDStep,
+    DeployMicrocephApplicationStep,
+    RemoveMicrocephUnitsStep,
+)
+from sunbeam.steps.microk8s import (
+    AddMicrok8sCloudStep,
+    AddMicrok8sCredentialStep,
+    AddMicrok8sUnitsStep,
+    DeployMicrok8sApplicationStep,
+    RemoveMicrok8sUnitsStep,
+    StoreMicrok8sConfigStep,
+)
+from sunbeam.steps.mysql import ConfigureMySQLStep
+from sunbeam.steps.openstack import (
+    DeployControlPlaneStep,
+    OpenStackPatchLoadBalancerServicesStep,
+    PromptRegionStep,
+)
+from sunbeam.steps.sunbeam_machine import (
+    AddSunbeamMachineUnitsStep,
+    DeploySunbeamMachineApplicationStep,
+    RemoveSunbeamMachineUnitsStep,
 )
 from sunbeam.utils import CatchGroup, argument_with_deprecated_option
 

@@ -18,13 +18,13 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from sunbeam.commands.upgrades.base import UpgradeCoordinator
-from sunbeam.commands.upgrades.inter_channel import ChannelUpgradeCoordinator
-from sunbeam.commands.upgrades.intra_channel import LatestInChannelCoordinator
-from sunbeam.jobs.common import run_plan
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper
-from sunbeam.jobs.manifest import AddManifestStep
+from sunbeam.core.common import run_plan
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import JujuHelper
+from sunbeam.core.manifest import AddManifestStep
+from sunbeam.steps.upgrades.base import UpgradeCoordinator
+from sunbeam.steps.upgrades.inter_channel import ChannelUpgradeCoordinator
+from sunbeam.steps.upgrades.intra_channel import LatestInChannelCoordinator
 
 LOG = logging.getLogger(__name__)
 console = Console()

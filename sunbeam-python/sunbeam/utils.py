@@ -31,7 +31,7 @@ import click
 import netifaces  # type: ignore [import-not-found]
 from pyroute2 import IPDB, NDB  # type: ignore [import-untyped]
 
-from sunbeam.jobs.common import SunbeamException
+from sunbeam.core.common import SunbeamException
 
 LOG = logging.getLogger(__name__)
 LOCAL_ACCESS = "local"

@@ -27,9 +27,9 @@ from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ManifestItemNotFoundException,
 )
-from sunbeam.jobs.common import FORMAT_TABLE, FORMAT_YAML
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.manifest import Manifest
+from sunbeam.core.common import FORMAT_TABLE, FORMAT_YAML
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.manifest import Manifest
 from sunbeam.utils import argument_with_deprecated_option
 
 LOG = logging.getLogger(__name__)

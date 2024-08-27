@@ -32,8 +32,8 @@ from sunbeam.commands import openrc as openrc_cmds
 from sunbeam.commands import prepare_node as prepare_node_cmds
 from sunbeam.commands import proxy as proxy_cmds
 from sunbeam.commands import utils as utils_cmds
-from sunbeam.jobs import deployments as deployments_jobs
-from sunbeam.jobs.feature import FeatureManager
+from sunbeam.core import deployments as deployments_jobs
+from sunbeam.core.feature import FeatureManager
 from sunbeam.provider import commands as provider_cmds
 from sunbeam.utils import CatchGroup
 

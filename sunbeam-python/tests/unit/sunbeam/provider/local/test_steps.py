@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from rich.console import Console
 
-import sunbeam.jobs.questions
+import sunbeam.core.questions
 import sunbeam.provider.local.steps as local_steps
 import sunbeam.utils
 
@@ -46,19 +46,19 @@ def cclient():
 
 @pytest.fixture()
 def load_answers():
-    with patch.object(sunbeam.jobs.questions, "load_answers") as p:
+    with patch.object(sunbeam.core.questions, "load_answers") as p:
         yield p
 
 
 @pytest.fixture()
 def write_answers():
-    with patch.object(sunbeam.jobs.questions, "write_answers") as p:
+    with patch.object(sunbeam.core.questions, "write_answers") as p:
         yield p
 
 
 @pytest.fixture()
 def question_bank():
-    with patch.object(sunbeam.jobs.questions, "QuestionBank") as p:
+    with patch.object(sunbeam.core.questions, "QuestionBank") as p:
         yield p
 
 

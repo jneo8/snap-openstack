@@ -18,10 +18,10 @@ import logging
 import click
 from rich.console import Console
 
-from sunbeam.commands.openstack import OPENSTACK_MODEL
-from sunbeam.jobs import juju
-from sunbeam.jobs.checks import VerifyBootstrappedCheck, run_preflight_checks
-from sunbeam.jobs.deployment import Deployment
+from sunbeam.core import juju
+from sunbeam.core.checks import VerifyBootstrappedCheck, run_preflight_checks
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.openstack import OPENSTACK_MODEL
 
 LOG = logging.getLogger(__name__)
 console = Console()

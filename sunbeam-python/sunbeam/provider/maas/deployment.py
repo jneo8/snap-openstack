@@ -25,11 +25,11 @@ from sunbeam.commands.configure import (
     ext_net_questions,
     user_questions,
 )
-from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.proxy import proxy_questions
-from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment, Networks
-from sunbeam.jobs.feature import FeatureManager
-from sunbeam.jobs.questions import Question, QuestionBank, load_answers, show_questions
+from sunbeam.core.deployment import PROXY_CONFIG_KEY, Deployment, Networks
+from sunbeam.core.feature import FeatureManager
+from sunbeam.core.questions import Question, QuestionBank, load_answers, show_questions
+from sunbeam.steps.openstack import REGION_CONFIG_KEY, region_questions
 
 if TYPE_CHECKING:
     from sunbeam.provider.maas.client import MaasClient

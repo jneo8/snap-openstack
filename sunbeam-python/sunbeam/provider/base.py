@@ -19,7 +19,7 @@ from typing import Tuple, Type
 import click
 from rich.console import Console
 
-from sunbeam.jobs.deployment import Deployment
+from sunbeam.core.deployment import Deployment
 
 console = Console()
 

@@ -26,12 +26,8 @@ from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
 )
-from sunbeam.commands.juju import UpdateJujuModelConfigStep
-from sunbeam.commands.openstack import UpdateOpenStackModelConfigStep
-from sunbeam.commands.sunbeam_machine import DeploySunbeamMachineApplicationStep
-from sunbeam.commands.terraform import TerraformInitStep
-from sunbeam.jobs.checks import VerifyBootstrappedCheck, run_preflight_checks
-from sunbeam.jobs.common import (
+from sunbeam.core.checks import VerifyBootstrappedCheck, run_preflight_checks
+from sunbeam.core.common import (
     FORMAT_TABLE,
     FORMAT_YAML,
     BaseStep,
@@ -42,16 +38,20 @@ from sunbeam.jobs.common import (
     run_plan,
     update_config,
 )
-from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, Deployment
-from sunbeam.jobs.feature import FeatureManager
-from sunbeam.jobs.juju import CONTROLLER_MODEL, JujuHelper
-from sunbeam.jobs.questions import (
+from sunbeam.core.deployment import PROXY_CONFIG_KEY, Deployment
+from sunbeam.core.feature import FeatureManager
+from sunbeam.core.juju import CONTROLLER_MODEL, JujuHelper
+from sunbeam.core.questions import (
     ConfirmQuestion,
     PromptQuestion,
     QuestionBank,
     load_answers,
     write_answers,
 )
+from sunbeam.core.terraform import TerraformInitStep
+from sunbeam.steps.juju import UpdateJujuModelConfigStep
+from sunbeam.steps.openstack import UpdateOpenStackModelConfigStep
+from sunbeam.steps.sunbeam_machine import DeploySunbeamMachineApplicationStep
 
 LOG = logging.getLogger(__name__)
 console = Console()

@@ -26,36 +26,36 @@ from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
 )
-from sunbeam.commands.clusterd import (
-    BOOTSTRAP_CONFIG_KEY,
-    CLUSTERD_PORT,
-    bootstrap_questions,
-)
 from sunbeam.commands.configure import (
     CLOUD_CONFIG_SECTION,
     ext_net_questions,
     ext_net_questions_local_only,
     user_questions,
 )
-from sunbeam.commands.k8s import K8S_ADDONS_CONFIG_KEY, k8s_addons_questions
-from sunbeam.commands.microceph import CONFIG_DISKS_KEY, microceph_questions
-from sunbeam.commands.microk8s import (
-    MICROK8S_ADDONS_CONFIG_KEY,
-    microk8s_addons_questions,
-)
-from sunbeam.commands.openstack import REGION_CONFIG_KEY, region_questions
 from sunbeam.commands.proxy import proxy_questions
-from sunbeam.jobs.checks import DaemonGroupCheck
-from sunbeam.jobs.common import SunbeamException
-from sunbeam.jobs.deployment import PROXY_CONFIG_KEY, CertPair, Deployment, Networks
-from sunbeam.jobs.feature import FeatureManager
-from sunbeam.jobs.juju import (
+from sunbeam.core.checks import DaemonGroupCheck
+from sunbeam.core.common import SunbeamException
+from sunbeam.core.deployment import PROXY_CONFIG_KEY, CertPair, Deployment, Networks
+from sunbeam.core.feature import FeatureManager
+from sunbeam.core.juju import (
     CONTROLLER,
     JujuAccount,
     JujuAccountNotFound,
     JujuController,
 )
-from sunbeam.jobs.questions import QuestionBank, load_answers, show_questions
+from sunbeam.core.questions import QuestionBank, load_answers, show_questions
+from sunbeam.steps.clusterd import (
+    BOOTSTRAP_CONFIG_KEY,
+    CLUSTERD_PORT,
+    bootstrap_questions,
+)
+from sunbeam.steps.k8s import K8S_ADDONS_CONFIG_KEY, k8s_addons_questions
+from sunbeam.steps.microceph import CONFIG_DISKS_KEY, microceph_questions
+from sunbeam.steps.microk8s import (
+    MICROK8S_ADDONS_CONFIG_KEY,
+    microk8s_addons_questions,
+)
+from sunbeam.steps.openstack import REGION_CONFIG_KEY, region_questions
 
 LOG = logging.getLogger(__name__)
 LOCAL_TYPE = "local"

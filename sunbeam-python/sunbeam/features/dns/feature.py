@@ -20,19 +20,19 @@ from packaging.version import Version
 from rich.console import Console
 
 from sunbeam.clusterd.service import ClusterServiceUnavailableException
-from sunbeam.commands.openstack import OPENSTACK_MODEL
-from sunbeam.commands.terraform import TerraformInitStep
+from sunbeam.core.common import BaseStep, run_plan
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import JujuHelper, run_sync
+from sunbeam.core.manifest import AddManifestStep, CharmManifest, SoftwareConfig
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.core.steps import PatchLoadBalancerServicesStep
+from sunbeam.core.terraform import TerraformInitStep
 from sunbeam.features.interface.v1.openstack import (
     ApplicationChannelData,
     EnableOpenStackApplicationStep,
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.jobs.common import BaseStep, run_plan
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.juju import JujuHelper, run_sync
-from sunbeam.jobs.manifest import AddManifestStep, CharmManifest, SoftwareConfig
-from sunbeam.jobs.steps import PatchLoadBalancerServicesStep
 from sunbeam.utils import argument_with_deprecated_option
 from sunbeam.versions import BIND_CHANNEL, OPENSTACK_CHANNEL
 

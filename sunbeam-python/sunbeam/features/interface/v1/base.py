@@ -27,11 +27,11 @@ from packaging.version import Version
 from snaphelpers import Snap
 
 from sunbeam.clusterd.service import ConfigItemNotFoundException
+from sunbeam.core.common import SunbeamException, read_config, update_config
+from sunbeam.core.deployment import Deployment
+from sunbeam.core.feature import FeatureManager
+from sunbeam.core.manifest import SoftwareConfig
 from sunbeam.features.interface import utils
-from sunbeam.jobs.common import SunbeamException, read_config, update_config
-from sunbeam.jobs.deployment import Deployment
-from sunbeam.jobs.feature import FeatureManager
-from sunbeam.jobs.manifest import SoftwareConfig
 
 LOG = logging.getLogger(__name__)
 

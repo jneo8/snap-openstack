@@ -25,15 +25,15 @@ from rich.console import Console
 from rich.table import Table
 from snaphelpers import Snap
 
-from sunbeam.jobs.checks import LocalShareCheck, run_preflight_checks
-from sunbeam.jobs.common import (
+from sunbeam.core.checks import LocalShareCheck, run_preflight_checks
+from sunbeam.core.common import (
     CONTEXT_SETTINGS,
     FORMAT_TABLE,
     FORMAT_YAML,
     run_plan,
 )
-from sunbeam.jobs.deployment import Deployment, register_deployment_type
-from sunbeam.jobs.deployments import (
+from sunbeam.core.deployment import Deployment, register_deployment_type
+from sunbeam.core.deployments import (
     DeploymentsConfig,
     deployment_path,
     list_deployments,
