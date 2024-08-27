@@ -28,6 +28,7 @@ from sunbeam.core.juju import (
     ActionFailedException,
     ApplicationNotFoundException,
     JujuHelper,
+    JujuStepHelper,
     LeaderNotFoundException,
     UnsupportedKubeconfigException,
     run_sync,
@@ -45,7 +46,6 @@ from sunbeam.core.steps import (
     RemoveMachineUnitsStep,
 )
 from sunbeam.core.terraform import TerraformHelper
-from sunbeam.steps.juju import JujuStepHelper
 from sunbeam.steps.k8s import AddK8SCredentialStep
 
 LOG = logging.getLogger(__name__)

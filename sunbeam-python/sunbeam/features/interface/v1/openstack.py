@@ -42,6 +42,7 @@ from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import (
     ApplicationNotFoundException,
     JujuHelper,
+    JujuStepHelper,
     JujuWaitException,
     TimeoutException,
     run_sync,
@@ -54,7 +55,6 @@ from sunbeam.core.terraform import (
     TerraformInitStep,
 )
 from sunbeam.features.interface.v1.base import EnableDisableFeature
-from sunbeam.steps.juju import JujuStepHelper
 from sunbeam.steps.openstack import TOPOLOGY_KEY
 
 LOG = logging.getLogger(__name__)

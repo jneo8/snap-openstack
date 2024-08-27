@@ -29,11 +29,16 @@ from sunbeam.core.common import (
 )
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.feature import FeatureManager
-from sunbeam.core.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
+from sunbeam.core.juju import (
+    JujuHelper,
+    JujuStepHelper,
+    JujuWaitException,
+    TimeoutException,
+    run_sync,
+)
 from sunbeam.core.manifest import Manifest
 from sunbeam.core.terraform import TerraformException, TerraformHelper
 from sunbeam.steps.hypervisor import CONFIG_KEY as HYPERVISOR_CONFIG_KEY
-from sunbeam.steps.juju import JujuStepHelper
 from sunbeam.steps.k8s import K8S_CONFIG_KEY
 from sunbeam.steps.microceph import CONFIG_KEY as MICROCEPH_CONFIG_KEY
 from sunbeam.steps.microk8s import MICROK8S_CONFIG_KEY

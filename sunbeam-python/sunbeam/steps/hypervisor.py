@@ -29,6 +29,7 @@ from sunbeam.core.deployment import Deployment, Networks
 from sunbeam.core.juju import (
     ApplicationNotFoundException,
     JujuHelper,
+    JujuStepHelper,
     TimeoutException,
     run_sync,
 )
@@ -37,7 +38,6 @@ from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.core.openstack_api import guests_on_hypervisor, remove_hypervisor
 from sunbeam.core.steps import AddMachineUnitsStep, DeployMachineApplicationStep
 from sunbeam.core.terraform import TerraformException, TerraformHelper
-from sunbeam.steps.juju import JujuStepHelper
 
 LOG = logging.getLogger(__name__)
 CONFIG_KEY = "TerraformVarsHypervisor"

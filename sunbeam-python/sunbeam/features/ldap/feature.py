@@ -38,7 +38,13 @@ from sunbeam.core.common import (
     update_status_background,
 )
 from sunbeam.core.deployment import Deployment
-from sunbeam.core.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
+from sunbeam.core.juju import (
+    JujuHelper,
+    JujuStepHelper,
+    JujuWaitException,
+    TimeoutException,
+    run_sync,
+)
 from sunbeam.core.manifest import CharmManifest, SoftwareConfig
 from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.core.terraform import TerraformException, TerraformInitStep
@@ -46,7 +52,6 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.steps.juju import JujuStepHelper
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)

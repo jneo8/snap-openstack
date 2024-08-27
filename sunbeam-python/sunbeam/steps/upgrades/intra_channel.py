@@ -19,11 +19,10 @@ from rich.console import Console
 from rich.status import Status
 
 from sunbeam.core.common import BaseStep, Result, ResultType
-from sunbeam.core.juju import JujuHelper, run_sync
+from sunbeam.core.juju import JujuHelper, JujuStepHelper, run_sync
 from sunbeam.core.manifest import Manifest
 from sunbeam.core.terraform import TerraformInitStep
 from sunbeam.steps.hypervisor import ReapplyHypervisorTerraformPlanStep
-from sunbeam.steps.juju import JujuStepHelper
 from sunbeam.steps.k8s import DeployK8SApplicationStep
 from sunbeam.steps.microceph import DeployMicrocephApplicationStep
 from sunbeam.steps.microk8s import DeployMicrok8sApplicationStep

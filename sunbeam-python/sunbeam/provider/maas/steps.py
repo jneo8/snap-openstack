@@ -57,6 +57,7 @@ from sunbeam.core.juju import (
     ActionFailedException,
     JujuHelper,
     JujuSecretNotFound,
+    JujuStepHelper,
     LeaderNotFoundException,
     TimeoutException,
     UnitNotFoundException,
@@ -71,7 +72,6 @@ from sunbeam.steps.juju import (
     JUJU_CONTROLLER_CHARM,
     BootstrapJujuStep,
     ControllerNotFoundException,
-    JujuStepHelper,
     SaveControllerStep,
     ScaleJujuStep,
 )

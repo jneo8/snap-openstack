@@ -72,7 +72,12 @@ from sunbeam.core.common import (
 )
 from sunbeam.core.deployment import Deployment, Networks
 from sunbeam.core.deployments import DeploymentsConfig, deployment_path
-from sunbeam.core.juju import JujuHelper, ModelNotFoundException, run_sync
+from sunbeam.core.juju import (
+    JujuHelper,
+    JujuStepHelper,
+    ModelNotFoundException,
+    run_sync,
+)
 from sunbeam.core.manifest import AddManifestStep
 from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.core.terraform import TerraformInitStep
@@ -111,7 +116,6 @@ from sunbeam.steps.juju import (
     CreateJujuUserStep,
     JujuGrantModelAccessStep,
     JujuLoginStep,
-    JujuStepHelper,
     RegisterJujuUserStep,
     RemoveJujuMachineStep,
     SaveControllerStep,

@@ -34,7 +34,13 @@ from sunbeam.core.common import (
     update_status_background,
 )
 from sunbeam.core.deployment import Deployment
-from sunbeam.core.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
+from sunbeam.core.juju import (
+    JujuHelper,
+    JujuStepHelper,
+    JujuWaitException,
+    TimeoutException,
+    run_sync,
+)
 from sunbeam.core.k8s import CREDENTIAL_SUFFIX, K8SHelper
 from sunbeam.core.manifest import Manifest
 from sunbeam.core.openstack import OPENSTACK_MODEL
@@ -46,7 +52,6 @@ from sunbeam.core.questions import (
 )
 from sunbeam.core.steps import PatchLoadBalancerServicesStep
 from sunbeam.core.terraform import TerraformException, TerraformHelper
-from sunbeam.steps.juju import JujuStepHelper
 
 LOG = logging.getLogger(__name__)
 OPENSTACK_DEPLOY_TIMEOUT = 5400  # 90 minutes

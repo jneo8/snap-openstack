@@ -50,7 +50,13 @@ from sunbeam.core.common import (
     update_status_background,
 )
 from sunbeam.core.deployment import Deployment
-from sunbeam.core.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
+from sunbeam.core.juju import (
+    JujuHelper,
+    JujuStepHelper,
+    JujuWaitException,
+    TimeoutException,
+    run_sync,
+)
 from sunbeam.core.k8s import K8SHelper
 from sunbeam.core.manifest import (
     AddManifestStep,
@@ -73,7 +79,6 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.steps.juju import JujuStepHelper
 from sunbeam.steps.k8s import CREDENTIAL_SUFFIX
 
 LOG = logging.getLogger(__name__)

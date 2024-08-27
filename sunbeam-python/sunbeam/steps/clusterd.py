@@ -40,12 +40,13 @@ from sunbeam.core.juju import (
     ApplicationNotFoundException,
     JujuController,
     JujuHelper,
+    JujuStepHelper,
     JujuWaitException,
     TimeoutException,
     run_sync,
 )
 from sunbeam.core.manifest import CharmManifest, Manifest
-from sunbeam.steps.juju import BOOTSTRAP_CONFIG_KEY, JujuStepHelper
+from sunbeam.steps.juju import BOOTSTRAP_CONFIG_KEY
 
 LOG = logging.getLogger(__name__)
 APPLICATION = "sunbeam-clusterd"

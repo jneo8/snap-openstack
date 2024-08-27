@@ -36,6 +36,7 @@ from sunbeam.core.juju import (
     ApplicationNotFoundException,
     JujuException,
     JujuHelper,
+    JujuStepHelper,
     LeaderNotFoundException,
     UnsupportedKubeconfigException,
     run_sync,
@@ -59,7 +60,6 @@ from sunbeam.core.steps import (
     RemoveMachineUnitsStep,
 )
 from sunbeam.core.terraform import TerraformHelper
-from sunbeam.steps.juju import JujuStepHelper
 
 LOG = logging.getLogger(__name__)
 K8S_CONFIG_KEY = "TerraformVarsK8S"
