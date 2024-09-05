@@ -60,3 +60,5 @@ software:
       channel: reef/candidate
       config:
         snap-channel: reef/candidate
+    watcher-k8s:
+      channel: 2024.1/candidate

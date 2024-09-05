@@ -60,3 +60,5 @@ software:
       channel: reef/edge
       config:
         snap-channel: reef/edge
+    watcher-k8s:
+      channel: 2024.1/edge

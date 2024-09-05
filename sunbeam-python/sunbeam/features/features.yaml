@@ -79,3 +79,9 @@ sunbeam-features:
       path: sunbeam.features.images_sync.feature.ImagesSyncFeature
       supported_architectures:
         - amd64
+    - name: "resource-optimization"
+      version: "0.0.1"
+      description: "OpenStack Watcher feature"
+      path: sunbeam.features.optimization.feature.ResourceOptimizationFeature
+      supported_architectures:
+        - amd64
