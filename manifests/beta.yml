@@ -60,3 +60,5 @@ software:
       channel: reef/beta
       config:
         snap-channel: reef/beta
+    watcher-k8s:
+      channel: 2024.1/beta
