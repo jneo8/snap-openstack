@@ -23,26 +23,27 @@ from sunbeam.core.deployment import Deployment
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 test_manifest = """
-software:
-  juju:
-    bootstrap_args:
-      - --agent-version=3.2.4
-  charms:
-    keystone-k8s:
-      channel: 2023.1/stable
-      revision: 234
-      config:
-        debug: True
-    glance-k8s:
-      channel: 2023.1/stable
-      revision: 134
-      config:
-        ceph-osd-replication-count: 5
-  terraform:
-    openstack-plan:
-      source: /home/ubuntu/openstack-tf
-    hypervisor-plan:
-      source: /home/ubuntu/hypervisor-tf
+core:
+  software:
+    juju:
+      bootstrap_args:
+        - --agent-version=3.2.4
+    charms:
+      keystone-k8s:
+        channel: 2023.1/stable
+        revision: 234
+        config:
+          debug: True
+      glance-k8s:
+        channel: 2023.1/stable
+        revision: 134
+        config:
+          ceph-osd-replication-count: 5
+    terraform:
+      openstack-plan:
+        source: /home/ubuntu/openstack-tf
+      hypervisor-plan:
+        source: /home/ubuntu/hypervisor-tf
 """
 
 
@@ -52,12 +53,19 @@ def deployment():
         dep = p(name="", url="", type="")
         dep.get_manifest.side_effect = functools.partial(Deployment.get_manifest, dep)
         dep.get_tfhelper.side_effect = functools.partial(Deployment.get_tfhelper, dep)
+        dep.parse_manifest.side_effect = functools.partial(
+            Deployment.parse_manifest, dep
+        )
         dep._load_tfhelpers.side_effect = functools.partial(
             Deployment._load_tfhelpers, dep
         )
         dep.__setattr__("_tfhelpers", {})
         dep._manifest = None
         dep.__setattr__("name", "test_deployment")
+        dep.get_feature_manager.return_value = Mock(
+            get_all_feature_manifests=Mock(return_value={}),
+            get_all_feature_manifest_tfvar_map=Mock(return_value={}),
+        )
         yield dep
 
 

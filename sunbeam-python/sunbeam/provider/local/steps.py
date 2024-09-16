@@ -29,6 +29,7 @@ from sunbeam.commands.configure import (
     SetHypervisorUnitsOptionsStep,
 )
 from sunbeam.core.juju import JujuHelper
+from sunbeam.core.manifest import Manifest
 from sunbeam.steps import hypervisor
 from sunbeam.steps.cluster_status import ClusterStatusStep
 
@@ -124,14 +125,14 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         jhelper: JujuHelper,
         model: str,
         join_mode: bool = False,
-        deployment_preseed: dict | None = None,
+        manifest: Manifest | None = None,
     ):
         super().__init__(
             client,
             [name],
             jhelper,
             model,
-            deployment_preseed or {},
+            manifest,
             "Apply local hypervisor settings",
             "Applying local hypervisor settings",
         )
@@ -183,12 +184,17 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         )
         # If adding new nodes to the cluster then local access makes no sense
         # so always prompt for the nic.
+        preseed = {}
+        if self.manifest and (
+            ext_network := self.manifest.core.config.external_network
+        ):
+            preseed = ext_network.model_dump()
+
         if self.join_mode or remote_access_location == utils.REMOTE_ACCESS:
-            ext_net_preseed = self.preseed.get("external_network", {})
             # If nic is in the preseed assume the user knows what they are doing and
             # bypass validation
-            if ext_net_preseed.get("nic"):
-                self.nics[self.names[0]] = ext_net_preseed.get("nic")
+            if nic := preseed.get("nic"):
+                self.nics[self.names[0]] = nic
             else:
                 self.nics[self.names[0]] = self.prompt_for_nic()
 

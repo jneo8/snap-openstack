@@ -21,10 +21,10 @@ from snaphelpers import Snap
 
 from sunbeam.clusterd.client import Client
 from sunbeam.core.common import BaseStep, Result, ResultType, run_plan
-from sunbeam.core.deployments import Deployment
-from sunbeam.core.feature import FeatureManager
+from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper
 from sunbeam.core.manifest import Manifest
+from sunbeam.feature_manager import FeatureManager
 
 LOG = logging.getLogger(__name__)
 console = Console()

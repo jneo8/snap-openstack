@@ -1,64 +1,97 @@
-software:
-  charms:
-    aodh-k8s:
-      channel: 2024.1/beta
-    barbican-k8s:
-      channel: 2024.1/beta
-    ceilometer-k8s:
-      channel: 2024.1/beta
-    cinder-ceph-k8s:
-      channel: 2024.1/beta
-    cinder-k8s:
-      channel: 2024.1/beta
-    designate-bind-k8s:
-      channel: 9/beta
-    designate-k8s:
-      channel: 2024.1/beta
-    glance-k8s:
-      channel: 2024.1/beta
-    gnocchi-k8s:
-      channel: 2024.1/beta
-    heat-k8s:
-      channel: 2024.1/beta
-    horizon-k8s:
-      channel: 2024.1/beta
-    keystone-k8s:
-      channel: 2024.1/beta
-    keystone-ldap-k8s:
-      channel: 2024.1/beta
-    magnum-k8s:
-      channel: 2024.1/beta
-    neutron-k8s:
-      channel: 2024.1/beta
-    nova-k8s:
-      channel: 2024.1/beta
-    octavia-k8s:
-      channel: 2024.1/beta
-    openstack-exporter-k8s:
-      channel: 2024.1/beta
-    openstack-hypervisor:
-      channel: 2024.1/beta
-      config:
-        snap-channel: 2024.1/beta
-    openstack-images-sync-k8s:
-      channel: 2024.1/beta
-    ovn-central-k8s:
-      channel: 24.03/beta
-    ovn-relay-k8s:
-      channel: 24.03/beta
-    placement-k8s:
-      channel: 2024.1/beta
-    sunbeam-clusterd:
-      channel: 2024.1/beta
-      config:
-        snap-channel: 2024.1/beta
-    sunbeam-machine:
-      channel: 2024.1/beta
-    tempest-k8s:
-      channel: 2024.1/beta
-    microceph:
-      channel: reef/beta
-      config:
-        snap-channel: reef/beta
-    watcher-k8s:
-      channel: 2024.1/beta
+core:
+  software:
+    charms:
+      cinder-ceph-k8s:
+        channel: 2024.1/beta
+      cinder-k8s:
+        channel: 2024.1/beta
+      glance-k8s:
+        channel: 2024.1/beta
+      horizon-k8s:
+        channel: 2024.1/beta
+      keystone-k8s:
+        channel: 2024.1/beta
+      neutron-k8s:
+        channel: 2024.1/beta
+      nova-k8s:
+        channel: 2024.1/beta
+      openstack-hypervisor:
+        channel: 2024.1/beta
+        config:
+          snap-channel: 2024.1/beta
+      ovn-central-k8s:
+        channel: 24.03/beta
+      ovn-relay-k8s:
+        channel: 24.03/beta
+      placement-k8s:
+        channel: 2024.1/beta
+      sunbeam-clusterd:
+        channel: 2024.1/beta
+        config:
+          snap-channel: 2024.1/beta
+      sunbeam-machine:
+        channel: 2024.1/beta
+      microceph:
+        channel: reef/beta
+        config:
+          snap-channel: reef/beta
+features:
+  caas:
+    software:
+      charms:
+        magnum-k8s:
+          channel: 2024.1/beta
+  dns:
+    software:
+      charms:
+        designate-bind-k8s:
+          channel: 9/beta
+        designate-k8s:
+          channel: 2024.1/beta
+  images-sync:
+    software:
+      charms:
+        openstack-images-sync-k8s:
+          channel: 2024.1/beta
+  ldap:
+    software:
+      charms:
+        keystone-ldap-k8s:
+          channel: 2024.1/beta
+  loadbalancer:
+    software:
+      charms:
+        octavia-k8s:
+          channel: 2024.1/beta
+  orchestration:
+    software:
+      charms:
+        heat-k8s:
+          channel: 2024.1/beta
+  resource-optimization:
+    software:
+      charms:
+        watcher-k8s:
+          channel: 2024.1/beta
+  secrets:
+    software:
+      charms:
+        barbican-k8s:
+          channel: 2024.1/beta
+  telemetry:
+    software:
+      charms:
+        aodh-k8s:
+          channel: 2024.1/beta
+        ceilometer-k8s:
+          channel: 2024.1/beta
+        gnocchi-k8s:
+          channel: 2024.1/beta
+        openstack-exporter-k8s:
+          channel: 2024.1/beta
+  validation:
+    software:
+      charms:
+        tempest-k8s:
+          channel: 2024.1/beta
+

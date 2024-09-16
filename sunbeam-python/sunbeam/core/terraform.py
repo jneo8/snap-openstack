@@ -432,7 +432,12 @@ class TerraformHelper:
 
         # handle tfvars for charms section
         for charm, per_charm_tfvar_map in charms_tfvar_map.items():
-            charm_manifest = manifest.software.charms.get(charm)
+            charm_manifest = manifest.core.software.charms.get(charm)
+            if not charm_manifest:
+                for _, feature in manifest.get_features():
+                    charm_manifest = feature.software.charms.get(charm)
+                    if charm_manifest:
+                        break
             if charm_manifest:
                 manifest_charm = charm_manifest.model_dump()
                 for charm_attribute_name, tfvar_name in per_charm_tfvar_map.items():

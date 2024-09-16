@@ -29,43 +29,46 @@ from sunbeam.clusterd.service import (
 from sunbeam.core.common import ResultType
 
 test_manifest = """
-software:
-  juju:
-    bootstrap_args:
-      - --agent-version=3.2.4
-  charms:
-    keystone-k8s:
-      channel: 2023.1/stable
-      revision: 234
-      config:
-        debug: True
-    glance-k8s:
-      channel: 2023.1/stable
-      revision: 134
-  terraform:
-    openstack-plan:
-      source: /home/ubuntu/openstack-tf
-    hypervisor-plan:
-      source: /home/ubuntu/hypervisor-tf
+core:
+  software:
+    juju:
+      bootstrap_args:
+        - --agent-version=3.2.4
+    charms:
+      keystone-k8s:
+        channel: 2023.1/stable
+        revision: 234
+        config:
+          debug: True
+      glance-k8s:
+        channel: 2023.1/stable
+        revision: 134
+    terraform:
+      openstack-plan:
+        source: /home/ubuntu/openstack-tf
+      hypervisor-plan:
+        source: /home/ubuntu/hypervisor-tf
 """
 
 malformed_test_manifest = """
-software:
-  charms:
-    keystone-k8s:
-      channel: 2023.1/stable
-      revision: 234
-      conf
+core:
+  software:
+    charms:
+      keystone-k8s:
+        channel: 2023.1/stable
+        revision: 234
+        conf
 """
 
 test_manifest_invalid_values = """
-software:
-  charms:
-    keystone-k8s:
-      channel: 2023.1/stable
-      revision: 234
-      # Config value should be dictionary but provided str
-      config: debug
+core:
+  software:
+    charms:
+      keystone-k8s:
+        channel: 2023.1/stable
+        revision: 234
+        # Config value should be dictionary but provided str
+        config: debug
 """
 
 test_manifest_incorrect_terraform_key = {
@@ -109,36 +112,40 @@ class TestSoftwareConfig:
 class TestManifest:
     def test_merge(self):
         manifest1 = manifest_mod.Manifest(
-            software=manifest_mod.SoftwareConfig(
-                charms={"my-charm-1": manifest_mod.CharmManifest()}
+            core=manifest_mod.CoreManifest(
+                software=manifest_mod.SoftwareConfig(
+                    charms={"my-charm-1": manifest_mod.CharmManifest()}
+                )
             )
         )
         manifest2 = manifest_mod.Manifest(
-            software=manifest_mod.SoftwareConfig(
-                charms={"my-charm-2": manifest_mod.CharmManifest(channel="37")}
+            core=manifest_mod.CoreManifest(
+                software=manifest_mod.SoftwareConfig(
+                    charms={"my-charm-2": manifest_mod.CharmManifest(channel="37")}
+                )
             )
         )
-        software_merged = manifest1.software.merge(manifest2.software)
+        software_merged = manifest1.core.software.merge(manifest2.core.software)
         result = manifest_mod.Manifest.merge(manifest1, manifest2)
-        assert result.software == software_merged
+        assert result.core.software == software_merged
 
     def test_load(self, mocker, snap, tmpdir):
         mocker.patch.object(manifest_mod, "Snap", return_value=snap)
         manifest_file = tmpdir.mkdir("manifests").join("test_manifest.yaml")
         manifest_file.write(test_manifest)
         manifest_obj = manifest_mod.Manifest.from_file(manifest_file)
-        ks_manifest = manifest_obj.software.charms["keystone-k8s"]
+        ks_manifest = manifest_obj.core.software.charms["keystone-k8s"]
         assert ks_manifest.channel == "2023.1/stable"
         assert ks_manifest.revision == 234
         assert ks_manifest.config == {"debug": True}
 
         # Assert defaults does not exist
-        assert "nova" not in manifest_obj.software.charms.keys()
+        assert "nova" not in manifest_obj.core.software.charms.keys()
 
         test_manifest_dict = yaml.safe_load(test_manifest)
         assert (
-            manifest_obj.software.juju.bootstrap_args
-            == test_manifest_dict["software"]["juju"]["bootstrap_args"]  # noqa: W503
+            manifest_obj.core.software.juju.bootstrap_args
+            == test_manifest_dict["core"]["software"]["juju"]["bootstrap_args"]  # noqa: W503
         )
 
     def test_malformed_manifest(self, mocker, snap, tmpdir):
@@ -155,19 +162,21 @@ class TestManifest:
         with pytest.raises(ValidationError):
             manifest_mod.Manifest.from_file(manifest_file)
 
-    def test_validate_terraform_keys(self):
+    def test_validate_terraform_keys(self, snap):
         manifest_ = manifest_mod.Manifest.model_validate(
             test_manifest_incorrect_terraform_key
         )
         with pytest.raises(ValueError):
             manifest_.validate_against_default(
                 manifest_mod.Manifest(
-                    software=manifest_mod.SoftwareConfig(
-                        terraform={
-                            "openstack-plan": manifest_mod.TerraformManifest(
-                                source=Path("...")
-                            )
-                        }
+                    core=manifest_mod.CoreManifest(
+                        software=manifest_mod.SoftwareConfig(
+                            terraform={
+                                "openstack-plan": manifest_mod.TerraformManifest(
+                                    source=Path("...")
+                                )
+                            }
+                        )
                     )
                 )
             )

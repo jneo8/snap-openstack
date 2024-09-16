@@ -25,6 +25,7 @@ import socket
 import string
 import sys
 import typing
+from functools import update_wrapper
 from pathlib import Path
 
 import click
@@ -448,3 +449,18 @@ def argument_with_deprecated_option(
         return arg_def(option_def(func))
 
     return decorator
+
+
+def pass_method_obj(f):
+    """Pass the context object to a method.
+
+    Similar to :func:`pass_context`, but only pass the object on the
+    context onwards (:attr:`Context.obj`).  This is useful if that object
+    represents the state of a nested system.
+    """
+    import click
+
+    def new_func(self, *args, **kwargs):
+        return f(self, click.get_current_context().obj, *args, **kwargs)
+
+    return update_wrapper(new_func, f)

@@ -69,7 +69,7 @@ class DeployCertificatesProviderApplicationStep(BaseStep):
         # Deploy on first controller machine
         machines = machines[:1]
         self.update_status(status, "deploying application")
-        charm_manifest: CharmManifest = self.manifest.software.charms[CHARM]
+        charm_manifest: CharmManifest = self.manifest.core.software.charms[CHARM]
         run_sync(
             self.jhelper.deploy(
                 APPLICATION,

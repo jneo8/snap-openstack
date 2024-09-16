@@ -16,6 +16,7 @@
 import logging
 
 import click
+import pydantic
 from packaging.version import Version
 from rich.console import Console
 from rich.status import Status
@@ -36,12 +37,14 @@ from sunbeam.core.juju import (
     LeaderNotFoundException,
     run_sync,
 )
+from sunbeam.core.manifest import FeatureConfig
 from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.features.interface.v1.base import BaseFeatureGroup
 from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
-    TerraformPlanLocation,
     WaitForApplicationsStep,
 )
+from sunbeam.utils import pass_method_obj
 
 CERTIFICATE_FEATURE_KEY = "TlsProvider"
 # Time out for keystone to settle once ingress change relation data
@@ -50,16 +53,29 @@ LOG = logging.getLogger(__name__)
 console = Console()
 
 
-class TlsFeatureGroup(OpenStackControlPlaneFeature):
-    version = Version("0.0.1")
+class TlsFeatureConfig(FeatureConfig):
+    ca: str | None = None
+    ca_chain: str | None = None
+    endpoints: list[str] = pydantic.Field(default_factory=list)
 
-    def __init__(
-        self, name: str, deployment: Deployment, tf_plan_location: TerraformPlanLocation
-    ) -> None:
-        super().__init__(name, deployment, tf_plan_location)
-        self.group = "tls"
-        self.ca: str | None = None
-        self.ca_chain: str | None = None
+
+class TlsFeatureGroup(BaseFeatureGroup):
+    name = "tls"
+
+    @click.group()
+    @pass_method_obj
+    def enable_group(self, deployment: Deployment) -> None:
+        """Enable tls group."""
+
+    @click.group()
+    @pass_method_obj
+    def disable_group(self, deployment: Deployment) -> None:
+        """Disable TLS group."""
+
+
+class TlsFeature(OpenStackControlPlaneFeature):
+    version = Version("0.0.1")
+    group = TlsFeatureGroup
 
     @click.group()
     def enable_tls(self) -> None:
@@ -69,48 +85,53 @@ class TlsFeatureGroup(OpenStackControlPlaneFeature):
     def disable_tls(self) -> None:
         """Disable TLS group."""
 
-    def commands(self) -> dict:
-        """Return a dictionary of commands for the feature."""
-        return {
-            "enable": [{"name": self.group, "command": self.enable_tls}],
-            "disable": [{"name": self.group, "command": self.disable_tls}],
-        }
-
-    def pre_enable(self):
-        """Handler to perform tasks before enabling the feature."""
-        super().pre_enable()
+    def provider_config(self, deployment: Deployment) -> dict:
+        """Return stored provider configuration."""
         try:
-            config = read_config(self.deployment.get_client(), CERTIFICATE_FEATURE_KEY)
+            provider_config = read_config(
+                deployment.get_client(), CERTIFICATE_FEATURE_KEY
+            )
         except ConfigItemNotFoundException:
-            config = {}
+            provider_config = {}
+        return provider_config
 
-        provider = config.get("provider")
+    def pre_enable(self, deployment: Deployment, config: TlsFeatureConfig) -> None:
+        """Handler to perform tasks before enabling the feature."""
+        super().pre_enable(deployment, config)
+
+        provider_config = self.provider_config(deployment)
+
+        provider = provider_config.get("provider")
         if provider and provider != self.name:
             raise Exception(f"Certificate provider already set to {provider!r}")
 
-    def post_enable(self) -> None:
+    def post_enable(self, deployment: Deployment, config: TlsFeatureConfig) -> None:
         """Handler to perform tasks after the feature is enabled."""
-        super().post_enable()
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
-            AddCACertsToKeystoneStep(jhelper, self.feature_key, self.ca, self.ca_chain)  # type: ignore
+            AddCACertsToKeystoneStep(
+                jhelper,
+                self.feature_key,
+                config.ca,  # type: ignore
+                config.ca_chain,  # type: ignore
+            )
         ]
         run_plan(plan, console)
 
-        config = {
+        stored_config = {
             "provider": self.name,
-            "ca": self.ca,
-            "chain": self.ca_chain,
-            "endpoints": self.endpoints,  # type: ignore
+            "ca": config.ca,
+            "chain": config.ca_chain,
+            "endpoints": config.endpoints,
         }
-        update_config(self.deployment.get_client(), CERTIFICATE_FEATURE_KEY, config)
+        update_config(deployment.get_client(), CERTIFICATE_FEATURE_KEY, stored_config)
 
-    def post_disable(self) -> None:
+    def post_disable(self, deployment: Deployment) -> None:
         """Handler to perform tasks after the feature is disabled."""
-        super().post_disable()
+        super().post_disable(deployment)
 
-        client = self.deployment.get_client()
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        client = deployment.get_client()
+        jhelper = JujuHelper(deployment.get_connected_controller())
 
         model = OPENSTACK_MODEL
         apps_to_monitor = ["traefik", "traefik-public", "keystone"]
@@ -126,7 +147,7 @@ class TlsFeatureGroup(OpenStackControlPlaneFeature):
         run_plan(plan, console)
 
         config: dict = {}
-        update_config(self.deployment.get_client(), CERTIFICATE_FEATURE_KEY, config)
+        update_config(deployment.get_client(), CERTIFICATE_FEATURE_KEY, config)
 
 
 class AddCACertsToKeystoneStep(BaseStep):

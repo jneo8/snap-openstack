@@ -53,7 +53,12 @@ class LatestInChannel(BaseStep, JujuStepHelper):
     def is_track_changed_for_any_charm(self, deployed_apps: dict):
         """Check if chanel track is same in manifest and deployed app."""
         for app_name, (charm, channel, _) in deployed_apps.items():
-            charm_manifest = self.manifest.software.charms.get(charm)
+            charm_manifest = self.manifest.core.software.charms.get(charm)
+            if not charm_manifest:
+                for _, feature in self.manifest.get_features():
+                    charm_manifest = feature.software.charms.get(charm)
+                    if not charm_manifest:
+                        continue
             if not charm_manifest:
                 LOG.debug(f"Charm not present in manifest: {charm}")
                 continue
@@ -79,7 +84,12 @@ class LatestInChannel(BaseStep, JujuStepHelper):
         Otherwise ignore so that terraform plan apply will take care of charm upgrade.
         """
         for app_name, (charm, channel, _) in apps.items():
-            manifest_charm = self.manifest.software.charms.get(charm)
+            manifest_charm = self.manifest.core.software.charms.get(charm)
+            if not manifest_charm:
+                for _, feature in self.manifest.get_features():
+                    manifest_charm = feature.software.charms.get(charm)
+                    if manifest_charm:
+                        break
             if not manifest_charm:
                 continue
 

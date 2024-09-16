@@ -19,11 +19,12 @@ import click
 from packaging.version import Version
 
 from sunbeam.core.deployment import Deployment
-from sunbeam.core.manifest import CharmManifest, SoftwareConfig
+from sunbeam.core.manifest import CharmManifest, FeatureConfig, SoftwareConfig
 from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
+from sunbeam.utils import pass_method_obj
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -32,14 +33,10 @@ LOG = logging.getLogger(__name__)
 class LoadbalancerFeature(OpenStackControlPlaneFeature):
     version = Version("0.0.1")
 
-    def __init__(self, deployment: Deployment) -> None:
-        super().__init__(
-            "loadbalancer",
-            deployment,
-            tf_plan_location=TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO,
-        )
+    name = "loadbalancer"
+    tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
 
-    def manifest_defaults(self) -> SoftwareConfig:
+    def default_software_overrides(self) -> SoftwareConfig:
         """Feature software configuration."""
         return SoftwareConfig(
             charms={"octavia-k8s": CharmManifest(channel=OPENSTACK_CHANNEL)}
@@ -59,38 +56,44 @@ class LoadbalancerFeature(OpenStackControlPlaneFeature):
             }
         }
 
-    def set_application_names(self) -> list:
+    def set_application_names(self, deployment: Deployment) -> list:
         """Application names handled by the terraform plan."""
         apps = ["octavia", "octavia-mysql-router"]
-        if self.get_database_topology() == "multi":
+        if self.get_database_topology(deployment) == "multi":
             apps.extend(["octavia-mysql"])
 
         return apps
 
-    def set_tfvars_on_enable(self) -> dict:
+    def set_tfvars_on_enable(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to enable the application."""
         return {
             "enable-octavia": True,
-            **self.add_horizon_plugin_to_tfvars("octavia"),
+            **self.add_horizon_plugin_to_tfvars(deployment, "octavia"),
         }
 
-    def set_tfvars_on_disable(self) -> dict:
+    def set_tfvars_on_disable(self, deployment: Deployment) -> dict:
         """Set terraform variables to disable the application."""
         return {
             "enable-octavia": False,
-            **self.remove_horizon_plugin_from_tfvars("octavia"),
+            **self.remove_horizon_plugin_from_tfvars(deployment, "octavia"),
         }
 
-    def set_tfvars_on_resize(self) -> dict:
+    def set_tfvars_on_resize(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to resize the application."""
         return {}
 
     @click.command()
-    def enable_feature(self) -> None:
+    @pass_method_obj
+    def enable_cmd(self, deployment: Deployment) -> None:
         """Enable Loadbalancer service."""
-        super().enable_feature()
+        self.enable_feature(deployment, FeatureConfig())
 
     @click.command()
-    def disable_feature(self) -> None:
+    @pass_method_obj
+    def disable_cmd(self, deployment: Deployment) -> None:
         """Disable Loadbalancer service."""
-        super().disable_feature()
+        self.disable_feature(deployment)

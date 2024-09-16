@@ -80,7 +80,6 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
         jhelper: JujuHelper,
         manifest: Manifest,
         model: str,
-        deployment_preseed: dict | None = None,
         accept_defaults: bool = False,
         refresh: bool = False,
     ):
@@ -98,7 +97,6 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
             refresh,
         )
 
-        self.preseed = deployment_preseed or {}
         self.accept_defaults = accept_defaults
         self.variables: dict = {}
 
@@ -116,10 +114,14 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
         self.variables = questions.load_answers(self.client, self._ADDONS_CONFIG)
         self.variables.setdefault("addons", {})
 
+        preseed = {}
+        if addons := self.manifest.core.config.addons:
+            preseed = addons.model_dump()
+
         microk8s_addons_bank = questions.QuestionBank(
             questions=microk8s_addons_questions(),
             console=console,  # type: ignore
-            preseed=self.preseed.get("addons"),
+            preseed=preseed,
             previous_answers=self.variables.get("addons", {}),
             accept_defaults=self.accept_defaults,
         )

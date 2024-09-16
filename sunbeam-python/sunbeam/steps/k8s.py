@@ -99,7 +99,6 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
         jhelper: JujuHelper,
         manifest: Manifest,
         model: str,
-        deployment_preseed: dict | None = None,
         accept_defaults: bool = False,
         refresh: bool = False,
     ):
@@ -117,7 +116,6 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
             refresh,
         )
 
-        self.preseed = deployment_preseed or {}
         self.accept_defaults = accept_defaults
         self.variables: dict = {}
 
@@ -131,10 +129,14 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
         self.variables = load_answers(self.client, self._ADDONS_CONFIG)
         self.variables.setdefault("k8s-addons", {})
 
+        preseed = {}
+        if k8s_addons := self.manifest.core.config.k8s_addons:
+            preseed = k8s_addons.model_dump()
+
         k8s_addons_bank = QuestionBank(
             questions=k8s_addons_questions(),
             console=console,  # type: ignore
-            preseed=self.preseed.get("k8s-addons"),
+            preseed=preseed,
             previous_answers=self.variables.get("k8s-addons", {}),
             accept_defaults=self.accept_defaults,
         )

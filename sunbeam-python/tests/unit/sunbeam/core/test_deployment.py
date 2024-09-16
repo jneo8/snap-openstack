@@ -29,24 +29,25 @@ from sunbeam.versions import (
 )
 
 test_manifest = """
-software:
-  juju:
-    bootstrap_args:
-      - --agent-version=3.2.4
-  charms:
-    keystone-k8s:
-      channel: 2023.1/stable
-      revision: 234
-      config:
-        debug: True
-    glance-k8s:
-      channel: 2023.1/stable
-      revision: 134
-  terraform:
-    openstack-plan:
-      source: /home/ubuntu/openstack-tf
-    hypervisor-plan:
-      source: /home/ubuntu/hypervisor-tf
+core:
+  software:
+    juju:
+      bootstrap_args:
+        - --agent-version=3.2.4
+    charms:
+      keystone-k8s:
+        channel: 2023.1/stable
+        revision: 234
+        config:
+          debug: True
+      glance-k8s:
+        channel: 2023.1/stable
+        revision: 134
+    terraform:
+      openstack-plan:
+        source: /home/ubuntu/openstack-tf
+      hypervisor-plan:
+        source: /home/ubuntu/hypervisor-tf
 """
 
 
@@ -60,6 +61,9 @@ def deployment(mocker, snap):
         dep = p(name="", url="", type="")
         dep.get_manifest.side_effect = functools.partial(Deployment.get_manifest, dep)
         dep.get_tfhelper.side_effect = functools.partial(Deployment.get_tfhelper, dep)
+        dep.parse_manifest.side_effect = functools.partial(
+            Deployment.parse_manifest, dep
+        )
         dep._load_tfhelpers.side_effect = functools.partial(
             Deployment._load_tfhelpers, dep
         )
@@ -67,6 +71,10 @@ def deployment(mocker, snap):
         dep.__setattr__("_tfhelpers", {})
         dep._manifest = None
         dep.__setattr__("name", "test_deployment")
+        dep.get_feature_manager.return_value = Mock(
+            get_all_feature_manifests=Mock(return_value={}),
+            get_all_feature_manifest_tfvar_map=Mock(return_value={}),
+        )
         yield dep
 
 
@@ -75,8 +83,12 @@ class TestDeployment:
         manifest = deployment.get_manifest()
 
         # Assert core charms / plans are present
-        assert set(manifest.software.charms.keys()) >= MANIFEST_CHARM_VERSIONS.keys()
-        assert set(manifest.software.terraform.keys()) >= TERRAFORM_DIR_NAMES.keys()
+        assert (
+            set(manifest.core.software.charms.keys()) >= MANIFEST_CHARM_VERSIONS.keys()
+        )
+        assert (
+            set(manifest.core.software.terraform.keys()) >= TERRAFORM_DIR_NAMES.keys()
+        )
 
     def test_load_on_default(self, deployment: Deployment, tmpdir):
         manifest_file = tmpdir.mkdir("manifests").join("test_manifest.yaml")
@@ -84,13 +96,13 @@ class TestDeployment:
         manifest_obj = deployment.get_manifest(manifest_file)
 
         # Check updates from manifest file
-        ks_manifest = manifest_obj.software.charms["keystone-k8s"]
+        ks_manifest = manifest_obj.core.software.charms["keystone-k8s"]
         assert ks_manifest.channel == "2023.1/stable"
         assert ks_manifest.revision == 234
         assert ks_manifest.config == {"debug": True}
 
         # Check default ones
-        nova_manifest = manifest_obj.software.charms["nova-k8s"]
+        nova_manifest = manifest_obj.core.software.charms["nova-k8s"]
         assert nova_manifest.channel == OPENSTACK_CHANNEL
         assert nova_manifest.revision is None
         assert nova_manifest.config is None
@@ -101,13 +113,13 @@ class TestDeployment:
         deployment.get_client.side_effect = None
         deployment.get_client.return_value = client
         manifest = deployment.get_manifest()
-        ks_manifest = manifest.software.charms["keystone-k8s"]
+        ks_manifest = manifest.core.software.charms["keystone-k8s"]
         assert ks_manifest.channel == "2023.1/stable"
         assert ks_manifest.revision == 234
         assert ks_manifest.config == {"debug": True}
 
         # Assert defaults unchanged
-        nova_manifest = manifest.software.charms["nova-k8s"]
+        nova_manifest = manifest.core.software.charms["nova-k8s"]
         assert nova_manifest.channel == OPENSTACK_CHANNEL
         assert nova_manifest.revision is None
         assert nova_manifest.config is None
@@ -149,7 +161,9 @@ class TestDeployment:
         test_manifest_dict = yaml.safe_load(test_manifest)
         copytree.assert_any_call(
             Path(
-                test_manifest_dict["software"]["terraform"]["openstack-plan"]["source"]
+                test_manifest_dict["core"]["software"]["terraform"]["openstack-plan"][
+                    "source"
+                ]
             ),
             Path(snap.paths.user_common / "etc" / deployment.name / tfplan_dir),
             dirs_exist_ok=True,
@@ -169,15 +183,3 @@ class TestDeployment:
         # _load_tfhelpers should be cached
         tfhelper = deployment.get_tfhelper(tfplan)
         assert deployment._load_tfhelpers.call_count == 1
-
-    def test_get_tfhelper_missing_terraform_source(
-        self, mocker, snap, copytree, deployment: Deployment
-    ):
-        tfplan = "openstack-plan"
-        mocker.patch.object(deployment_mod, "Snap", return_value=snap)
-        mocker.patch.object(manifest_mod, "Snap", return_value=snap)
-        mocker.patch.object(terraform_mod, "Snap", return_value=snap)
-        deployment.get_manifest.side_effect = lambda: manifest_mod.Manifest()
-        with pytest.raises(deployment_mod.MissingTerraformInfoException):
-            deployment.get_tfhelper(tfplan)
-        copytree.assert_not_called()

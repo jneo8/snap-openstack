@@ -1,64 +1,98 @@
-software:
-  charms:
-    aodh-k8s:
-      channel: 2024.1/candidate
-    barbican-k8s:
-      channel: 2024.1/candidate
-    ceilometer-k8s:
-      channel: 2024.1/candidate
-    cinder-ceph-k8s:
-      channel: 2024.1/candidate
-    cinder-k8s:
-      channel: 2024.1/candidate
-    designate-bind-k8s:
-      channel: 9/candidate
-    designate-k8s:
-      channel: 2024.1/candidate
-    glance-k8s:
-      channel: 2024.1/candidate
-    gnocchi-k8s:
-      channel: 2024.1/candidate
-    heat-k8s:
-      channel: 2024.1/candidate
-    horizon-k8s:
-      channel: 2024.1/candidate
-    keystone-k8s:
-      channel: 2024.1/candidate
-    keystone-ldap-k8s:
-      channel: 2024.1/candidate
-    magnum-k8s:
-      channel: 2024.1/candidate
-    neutron-k8s:
-      channel: 2024.1/candidate
-    nova-k8s:
-      channel: 2024.1/candidate
-    octavia-k8s:
-      channel: 2024.1/candidate
-    openstack-exporter-k8s:
-      channel: 2024.1/candidate
-    openstack-hypervisor:
-      channel: 2024.1/candidate
-      config:
-        snap-channel: 2024.1/candidate
-    openstack-images-sync-k8s:
-      channel: 2024.1/candidate
-    ovn-central-k8s:
-      channel: 24.03/candidate
-    ovn-relay-k8s:
-      channel: 24.03/candidate
-    placement-k8s:
-      channel: 2024.1/candidate
-    sunbeam-clusterd:
-      channel: 2024.1/candidate
-      config:
-        snap-channel: 2024.1/candidate
-    sunbeam-machine:
-      channel: 2024.1/candidate
-    tempest-k8s:
-      channel: 2024.1/candidate
-    microceph:
-      channel: reef/candidate
-      config:
-        snap-channel: reef/candidate
-    watcher-k8s:
-      channel: 2024.1/candidate
+core:
+  software:
+    charms:
+      cinder-ceph-k8s:
+        channel: 2024.1/candidate
+      cinder-k8s:
+        channel: 2024.1/candidate
+      glance-k8s:
+        channel: 2024.1/candidate
+      horizon-k8s:
+        channel: 2024.1/candidate
+      keystone-k8s:
+        channel: 2024.1/candidate
+      neutron-k8s:
+        channel: 2024.1/candidate
+      nova-k8s:
+        channel: 2024.1/candidate
+      openstack-hypervisor:
+        channel: 2024.1/candidate
+        config:
+          snap-channel: 2024.1/candidate
+      ovn-central-k8s:
+        channel: 24.03/candidate
+      ovn-relay-k8s:
+        channel: 24.03/candidate
+      placement-k8s:
+        channel: 2024.1/candidate
+      sunbeam-clusterd:
+        channel: 2024.1/candidate
+        config:
+          snap-channel: 2024.1/candidate
+      sunbeam-machine:
+        channel: 2024.1/candidate
+      microceph:
+        channel: reef/candidate
+        config:
+          snap-channel: reef/candidate
+features:
+  caas:
+    software:
+      charms:
+        magnum-k8s:
+          channel: 2024.1/candidate
+  dns:
+    software:
+      charms:
+        designate-bind-k8s:
+          channel: 9/candidate
+        designate-k8s:
+          channel: 2024.1/candidate
+  images-sync:
+    software:
+      charms:
+        openstack-images-sync-k8s:
+          channel: 2024.1/candidate
+  ldap:
+    software:
+      charms:
+        keystone-ldap-k8s:
+          channel: 2024.1/candidate
+  loadbalancer:
+    software:
+      charms:
+        octavia-k8s:
+          channel: 2024.1/candidate
+  orchestration:
+    software:
+      charms:
+        heat-k8s:
+          channel: 2024.1/candidate
+  resource-optimization:
+    software:
+      charms:
+        watcher-k8s:
+          channel: 2024.1/candidate
+  secrets:
+    software:
+      charms:
+        barbican-k8s:
+          channel: 2024.1/candidate
+  telemetry:
+    software:
+      charms:
+        aodh-k8s:
+          channel: 2024.1/candidate
+        ceilometer-k8s:
+          channel: 2024.1/candidate
+        gnocchi-k8s:
+          channel: 2024.1/candidate
+        openstack-exporter-k8s:
+          channel: 2024.1/candidate
+  validation:
+    software:
+      charms:
+        tempest-k8s:
+          channel: 2024.1/candidate
+
+

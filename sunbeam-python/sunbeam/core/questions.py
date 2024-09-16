@@ -317,12 +317,13 @@ def show_questions(
     subsection=None,
     section_description=None,
     comment_out=False,
+    initial_indent=4,
 ) -> list:
     """Return preseed questions as list."""
     lines = []
     space = " "
     indent = ""
-    outer_indent = space * 2
+    outer_indent = space * initial_indent
     if comment_out:
         comment = "# "
     else:

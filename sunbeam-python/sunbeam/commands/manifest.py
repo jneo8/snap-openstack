@@ -16,6 +16,7 @@
 
 import logging
 import os
+import typing
 from pathlib import Path
 
 import click
@@ -29,20 +30,25 @@ from sunbeam.clusterd.service import (
 )
 from sunbeam.core.common import FORMAT_TABLE, FORMAT_YAML
 from sunbeam.core.deployment import Deployment
-from sunbeam.core.manifest import Manifest
+from sunbeam.core.manifest import Manifest, SoftwareConfig
 from sunbeam.utils import argument_with_deprecated_option
+
+if typing.TYPE_CHECKING:
+    from sunbeam.features.interface.v1.base import BaseFeature
 
 LOG = logging.getLogger(__name__)
 console = Console()
 
 
-def generate_software_manifest(manifest: Manifest) -> str:
+def generate_software_manifest(
+    software_config: SoftwareConfig, initial_indent: int = 2
+) -> str:
     space = " "
-    indent = space * 2
+    indent = space * initial_indent
     comment = "# "
 
     try:
-        software_dict = manifest.software.model_dump()
+        software_dict = software_config.model_dump()
         LOG.debug(f"Manifest software dict with extra fields: {software_dict}")
 
         # Remove terraform default sources
@@ -60,17 +66,44 @@ def generate_software_manifest(manifest: Manifest) -> str:
 
         # add comment to each line
         software_lines = (
-            f"{indent}{comment}{line}" for line in software_yaml.split("\n")
+            f"{space * initial_indent}{comment}{space * 2}{line}"
+            for line in software_yaml.split("\n")
+            if line
         )
         software_yaml_commented = "\n".join(software_lines)
-        software_content = f"software:\n{software_yaml_commented}"
+        software_content = f"{indent}{comment}software:\n{software_yaml_commented}"
         return software_content
     except Exception as e:
         LOG.debug(e)
         raise click.ClickException(f"Manifest generation failed: {str(e)}")
 
 
-@click.command()
+def _dump_feature(
+    name: str, feature: "BaseFeature", manifest: Manifest, base_indent: int = 2
+) -> str:
+    space = " "
+    indent = base_indent
+    if feature.group:
+        display_name = name.removeprefix(f"{feature.group.name}.")
+    else:
+        display_name = name
+    feature_manifest_content = indent * space + display_name + ":\n"
+    feature_indent = indent + 2
+    feature_manifest_content += f"{feature_indent * space}# config:"
+    if content := feature.preseed_questions_content():
+        feature_manifest_content += "\n"
+        for line in content:
+            feature_manifest_content += f"{indent * space}{line}\n"
+    else:
+        feature_manifest_content += " null\n"
+    if feature_manifest := manifest.get_feature(name):
+        feature_manifest_content += generate_software_manifest(
+            feature_manifest.software, feature_indent
+        )
+    return feature_manifest_content
+
+
+@click.command("list")
 @click.option(
     "-f",
     "--format",
@@ -79,7 +112,7 @@ def generate_software_manifest(manifest: Manifest) -> str:
     help="Output format.",
 )
 @click.pass_context
-def list(ctx: click.Context, format: str) -> None:
+def list_manifests(ctx: click.Context, format: str) -> None:
     """List manifests."""
     deployment: Deployment = ctx.obj
     client = deployment.get_client()
@@ -153,15 +186,30 @@ def generate(
 
     manifest = deployment.get_manifest()
 
-    preseed_content = deployment.generate_preseed(console)
-    software_content = generate_software_manifest(manifest)
+    manifest_content = deployment.generate_core_config(console)
+    manifest_content += "\n" + generate_software_manifest(manifest.core.software)
+    fm = deployment.get_feature_manager()
+    indent = 2
+    manifest_content += "\nfeatures:"
+
+    groups_content: dict[str, list[str]] = {}
+    for name, feature in fm.features().items():
+        if feature.group:
+            groups_content.setdefault(feature.group.name, []).append(
+                _dump_feature(name, feature, manifest, indent + 2)
+            )
+        else:
+            manifest_content += "\n" + _dump_feature(name, feature, manifest, indent)
+
+    for group, features_content in groups_content.items():
+        manifest_content += f"\n  {group}:"
+        for feature_content in features_content:
+            manifest_content += "\n" + feature_content
 
     try:
         with manifest_file.open("w") as file:
             file.write("# Generated Sunbeam Deployment Manifest\n\n")
-            file.write(preseed_content)
-            file.write("\n")
-            file.write(software_content)
+            file.write(manifest_content)
     except IOError as e:
         LOG.debug(e)
         raise click.ClickException(f"Manifest generation failed: {str(e)}")

@@ -36,7 +36,6 @@ from sunbeam.commands.proxy import proxy_questions
 from sunbeam.core.checks import DaemonGroupCheck
 from sunbeam.core.common import SunbeamException
 from sunbeam.core.deployment import PROXY_CONFIG_KEY, CertPair, Deployment, Networks
-from sunbeam.core.feature import FeatureManager
 from sunbeam.core.juju import (
     CONTROLLER,
     JujuAccount,
@@ -62,7 +61,7 @@ LOCAL_TYPE = "local"
 
 
 class LocalDeployment(Deployment):
-    name: str = petname.Generate()
+    name: str = petname.generate()  # type: ignore
     url: str = "local"
     type: str = LOCAL_TYPE
     _client: Client | None = pydantic.PrivateAttr(default=None)
@@ -158,15 +157,15 @@ class LocalDeployment(Deployment):
         address = f"https://{local_ip}:{CLUSTERD_PORT}"
         return address
 
-    def generate_preseed(self, console: Console) -> str:
+    def generate_core_config(self, console: Console) -> str:
         """Generate preseed for deployment."""
         try:
             management_cidr = self.get_management_cidr()
-        except ValueError:
+        except (ValueError, ClusterServiceUnavailableException):
             management_cidr = None
         fqdn = utils.get_fqdn(management_cidr)
         client = self.get_client()
-        preseed_content = ["deployment:"]
+        preseed_content = ["core:", "  config:"]
         try:
             variables = load_answers(client, PROXY_CONFIG_KEY)
         except ClusterServiceUnavailableException:
@@ -296,8 +295,6 @@ class LocalDeployment(Deployment):
             else:
                 microceph_content.extend(lines[2:])
         preseed_content.extend(microceph_content)
-
-        preseed_content.extend(FeatureManager().get_preseed_questions_content(self))
 
         preseed_content_final = "\n".join(preseed_content)
         return preseed_content_final

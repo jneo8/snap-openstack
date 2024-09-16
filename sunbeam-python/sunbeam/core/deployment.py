@@ -38,12 +38,21 @@ from sunbeam.core.common import (
     read_config,
 )
 from sunbeam.core.juju import JujuAccount, JujuController
-from sunbeam.core.manifest import Manifest, embedded_manifest_path
+from sunbeam.core.manifest import (
+    FeatureGroupManifest,
+    FeatureManifest,
+    Manifest,
+    embedded_manifest_path,
+)
 from sunbeam.core.terraform import TerraformHelper
 from sunbeam.versions import MANIFEST_ATTRIBUTES_TFVAR_MAP, TERRAFORM_DIR_NAMES
 
 if TYPE_CHECKING:
-    from sunbeam.core.feature import FeatureManager
+    from sunbeam.feature_manager import FeatureManager
+    from sunbeam.features.interface.v1.base import BaseFeature
+else:
+    FeatureManager = object
+    BaseFeature = object
 
 LOG = logging.getLogger(__name__)
 PROXY_CONFIG_KEY = "ProxySettings"
@@ -98,6 +107,7 @@ class Deployment(pydantic.BaseModel):
     clusterd_certpair: CertPair | None = None
     _manifest: Manifest | None = pydantic.PrivateAttr(default=None)
     _tfhelpers: dict[str, TerraformHelper] = pydantic.PrivateAttr(default={})
+    _feature_manager: FeatureManager | None = pydantic.PrivateAttr(default=None)
 
     @property
     def openstack_machines_model(self) -> str:
@@ -147,7 +157,7 @@ class Deployment(pydantic.BaseModel):
             )
         return self.juju_controller.to_controller(self.juju_account)
 
-    def generate_preseed(self, console) -> str:
+    def generate_core_config(self, console) -> str:
         """Generate preseed for deployment."""
         return NotImplemented
 
@@ -157,10 +167,12 @@ class Deployment(pydantic.BaseModel):
 
     def get_feature_manager(self) -> "FeatureManager":
         """Return the feature manager for the deployment."""
-        from sunbeam.core.feature import FeatureManager
+        from sunbeam.feature_manager import FeatureManager
 
-        feature_manager = FeatureManager()
-        return feature_manager
+        if self._feature_manager is None:
+            self._feature_manager = FeatureManager()
+
+        return self._feature_manager
 
     def get_proxy_settings(self) -> dict:
         """Fetch proxy settings from clusterd, if not available use defaults."""
@@ -190,24 +202,82 @@ class Deployment(pydantic.BaseModel):
 
         return proxy
 
+    def parse_feature_manifest(self, feature_manifest_data: dict[str, dict]) -> dict:
+        """Parse feature manifest data."""
+        if not feature_manifest_data:
+            return {}
+        features = self.get_feature_manager().features()
+        groups = self.get_feature_manager().groups()
+        feature_manifests: dict[str, FeatureManifest | FeatureGroupManifest] = {}
+
+        def _parse_feature(
+            feature: BaseFeature, feature_manifest_dict: dict
+        ) -> FeatureManifest:
+            feature_config_dict = feature_manifest_dict.pop("config", None)
+            feature_manifest = FeatureManifest.model_validate(feature_manifest_dict)
+            feature_config_type = feature.config_type()
+            if feature_config_type:
+                feature_manifest.config = feature_config_type.model_validate(
+                    feature_config_dict
+                )
+            return feature_manifest
+
+        for name, feature_or_group_manifest_dict in feature_manifest_data.items():
+            feature = features.get(name)
+            group = groups.get(name)
+            if not feature and not group:
+                LOG.warning(f"Feature {name} not found in feature manager.")
+                continue
+            if feature and feature_or_group_manifest_dict:
+                feature_manifests[name] = _parse_feature(
+                    feature, feature_or_group_manifest_dict
+                )
+            elif group and feature_or_group_manifest_dict:
+                group_manifest = FeatureGroupManifest(root={})
+                for (
+                    name,
+                    feature_manifest_dict,
+                ) in feature_or_group_manifest_dict.items():
+                    feature = features.get(group.name + "." + name)
+                    if not feature:
+                        LOG.warning(f"Feature {name} not found in group {group.name}.")
+                        continue
+                    if not feature_manifest_dict:
+                        continue
+                    group_manifest.root[name] = _parse_feature(
+                        feature, feature_manifest_dict
+                    )
+                if group_manifest.root:
+                    feature_manifests[group.name] = group_manifest
+
+        return feature_manifests
+
+    def parse_manifest(self, manifest_data: dict) -> Manifest:
+        """Parse manifest data."""
+        features = manifest_data.pop("features", {})
+        manifest = Manifest.model_validate(manifest_data)
+        if features:
+            manifest.features = self.parse_feature_manifest(features)
+        return manifest
+
     def get_manifest(self, manifest_file: pathlib.Path | None = None) -> Manifest:
         """Return the manifest for the deployment."""
         if self._manifest is not None:
             return self._manifest
 
         feature_manager = self.get_feature_manager()
-
-        manifest = Manifest.get_default(feature_manager.get_all_feature_manifests(self))
+        manifest = Manifest(features=feature_manager.get_all_feature_manifests())
 
         override_manifest = None
         if manifest_file is not None:
-            override_manifest = Manifest.from_file(manifest_file)
+            manifest_dict = yaml.safe_load(manifest_file.read_text("utf-8"))
+            override_manifest = self.parse_manifest(manifest_dict)
             LOG.debug("Manifest loaded from file.")
         else:
             try:
                 client = self.get_client()
-                override_manifest = Manifest(
-                    **yaml.safe_load(client.cluster.get_latest_manifest()["data"])
+                override_manifest = self.parse_manifest(
+                    yaml.safe_load(client.cluster.get_latest_manifest()["data"])
                 )
                 LOG.debug("Manifest loaded from clusterd.")
             except ClusterServiceUnavailableException:
@@ -232,18 +302,17 @@ class Deployment(pydantic.BaseModel):
                 if risk != RiskLevel.STABLE:
                     manifest_file = embedded_manifest_path(snap, risk)
                     LOG.debug(f"Risk {risk.value} detected, loading {manifest_file}...")
-                    override_manifest = Manifest.from_file(manifest_file)
+                    override_manifest = self.parse_manifest(
+                        yaml.safe_load(manifest_file.read_text())
+                    )
                     LOG.debug("Manifest loaded from embedded manifest.")
 
         if override_manifest is not None:
             override_manifest.validate_against_default(manifest)
             manifest = manifest.merge(override_manifest)
 
-        # TODO(gboutry): Manage extra better
-        feature_manager.add_manifest_section(self, manifest.software)
-
         self._manifest = manifest
-        return self._manifest
+        return manifest
 
     def _load_tfhelpers(self):
         feature_manager = self.get_feature_manager()
@@ -251,12 +320,17 @@ class Deployment(pydantic.BaseModel):
         snap = Snap()
 
         tfvar_map = copy.deepcopy(MANIFEST_ATTRIBUTES_TFVAR_MAP)
-        tfvar_map_feature = feature_manager.get_all_feature_manifest_tfvar_map(self)
+        tfvar_map_feature = feature_manager.get_all_feature_manifest_tfvar_map()
         tfvar_map = sunbeam_utils.merge_dict(tfvar_map, tfvar_map_feature)
 
         manifest = self.get_manifest()
-        if not manifest.software.terraform:
+        if not manifest.core.software.terraform:
             raise MissingTerraformInfoException("Manifest is missing terraform plans.")
+        terraform_plans = manifest.core.software.terraform.copy()
+        for _, feature in manifest.get_features():
+            if not feature.software.terraform:
+                continue
+            terraform_plans.update(feature.software.terraform.copy())
 
         env = {}
         if self.juju_controller and self.juju_account:
@@ -279,7 +353,7 @@ class Deployment(pydantic.BaseModel):
             )
         env.update(self.get_proxy_settings())
 
-        for tfplan, tf_manifest in manifest.software.terraform.items():
+        for tfplan, tf_manifest in terraform_plans.items():
             tfplan_dir = TERRAFORM_DIR_NAMES.get(tfplan, tfplan)
             src = tf_manifest.source
             dst = snap.paths.user_common / "etc" / self.name / tfplan_dir

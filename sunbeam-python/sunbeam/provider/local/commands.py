@@ -272,9 +272,8 @@ def bootstrap(
     deployments = DeploymentsConfig.load(path)
     manifest = deployment.get_manifest(manifest_path)
 
-    LOG.debug(f"Manifest used for deployment - preseed: {manifest.deployment}")
-    LOG.debug(f"Manifest used for deployment - software: {manifest.software}")
-    preseed = manifest.deployment
+    LOG.debug(f"Manifest used for deployment - core: {manifest.core}")
+    LOG.debug(f"Manifest used for deployment - features: {manifest.features}")
 
     # Bootstrap node must always have the control role
     if Role.CONTROL not in roles:
@@ -291,7 +290,7 @@ def bootstrap(
     LOG.debug(f"Bootstrap node: roles {roles_str}")
 
     k8s_provider = snap.config.get("k8s.provider")
-    juju_bootstrap_args = manifest.software.juju.bootstrap_args
+    juju_bootstrap_args = manifest.core.software.juju.bootstrap_args
     data_location = snap.paths.user_data
 
     preflight_checks: list[Check] = []
@@ -321,7 +320,7 @@ def bootstrap(
         pass
 
     cidr_plan = []
-    cidr_plan.append(AskManagementCidrStep(client, preseed, accept_defaults))
+    cidr_plan.append(AskManagementCidrStep(client, manifest, accept_defaults))
     results = run_plan(cidr_plan, console)
     management_cidr = get_step_message(results, AskManagementCidrStep)
 
@@ -366,7 +365,7 @@ def bootstrap(
     plan.append(AddManifestStep(client, manifest_path))
     plan.append(
         PromptForProxyStep(
-            deployment, accept_defaults=accept_defaults, deployment_preseed=preseed
+            deployment, accept_defaults=accept_defaults, manifest=manifest
         )
     )
     run_plan(plan, console)
@@ -513,7 +512,7 @@ def bootstrap(
             )
         )
 
-    plan4.append(PromptRegionStep(client, preseed, accept_defaults))
+    plan4.append(PromptRegionStep(client, manifest, accept_defaults))
     # Deploy sunbeam machine charm
     sunbeam_machine_tfhelper = deployment.get_tfhelper("sunbeam-machine-plan")
     plan4.append(TerraformInitStep(sunbeam_machine_tfhelper))
@@ -547,7 +546,6 @@ def bootstrap(
                 manifest,
                 deployment.openstack_machines_model,
                 accept_defaults=accept_defaults,
-                deployment_preseed=preseed,
             )
         )
         plan4.append(
@@ -572,7 +570,6 @@ def bootstrap(
                 manifest,
                 deployment.openstack_machines_model,
                 accept_defaults=accept_defaults,
-                deployment_preseed=preseed,
             )
         )
         plan4.append(
@@ -614,7 +611,7 @@ def bootstrap(
                 jhelper,
                 deployment.openstack_machines_model,
                 accept_defaults=accept_defaults,
-                deployment_preseed=preseed,
+                manifest=manifest,
             )
         )
 
@@ -889,7 +886,6 @@ def join(
     deployment.reload_credentials()
     # Get manifest object once the cluster is joined
     manifest = deployment.get_manifest()
-    preseed = manifest.deployment
 
     machine_id = -1
     machine_id_result = get_step_message(plan3_results, AddJujuMachineStep)
@@ -933,7 +929,7 @@ def join(
                 jhelper,
                 deployment.openstack_machines_model,
                 accept_defaults=accept_defaults,
-                deployment_preseed=preseed,
+                manifest=manifest,
             )
         )
 
@@ -949,7 +945,7 @@ def join(
                     jhelper,
                     deployment.openstack_machines_model,
                     join_mode=True,
-                    deployment_preseed=preseed,
+                    manifest=manifest,
                 ),
             ]
         )
@@ -1086,9 +1082,8 @@ def configure_cmd(
     # Validate manifest file
     manifest = deployment.get_manifest(manifest_path)
 
-    LOG.debug(f"Manifest used for deployment - preseed: {manifest.deployment}")
-    LOG.debug(f"Manifest used for deployment - software: {manifest.software}")
-    preseed = manifest.deployment
+    LOG.debug(f"Manifest used for deployment - core: {manifest.core}")
+    LOG.debug(f"Manifest used for deployment - features: {manifest.features}")
 
     name = utils.get_fqdn(deployment.get_management_cidr())
     jhelper = JujuHelper(deployment.get_connected_controller())
@@ -1111,7 +1106,7 @@ def configure_cmd(
         UserQuestions(
             client,
             answer_file=answer_file,
-            deployment_preseed=preseed,
+            manifest=manifest,
             accept_defaults=accept_defaults,
         ),
         TerraformDemoInitStep(client, tfhelper),
@@ -1147,7 +1142,7 @@ def configure_cmd(
                 # Accept preseed file but do not allow 'accept_defaults' as nic
                 # selection may vary from machine to machine and is potentially
                 # destructive if it takes over an unintended nic.
-                deployment_preseed=preseed,
+                manifest=manifest,
             )
         )
     run_plan(plan, console)

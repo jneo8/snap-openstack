@@ -28,7 +28,6 @@ from sunbeam.core.common import (
     update_status_background,
 )
 from sunbeam.core.deployment import Deployment
-from sunbeam.core.feature import FeatureManager
 from sunbeam.core.juju import (
     JujuHelper,
     JujuStepHelper,
@@ -222,7 +221,9 @@ class UpgradeControlPlane(BaseUpgrade):
         # Step 3: Upgrade all features that uses openstack-plan
         LOG.debug("Upgrading openstack features that are enabled")
         # TODO(gboutry): We have a loaded manifest, can't we get charms from there ?
-        charms = FeatureManager().get_all_charms_in_openstack_plan(self.deployment)
+        charms = (
+            self.deployment.get_feature_manager().get_all_charms_in_openstack_plan()
+        )
         apps = self.get_apps_filter_by_charms(self.model, charms)
         result = self.upgrade_applications(
             apps,

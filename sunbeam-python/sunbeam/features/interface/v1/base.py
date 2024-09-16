@@ -13,27 +13,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-import inspect
 import logging
 import typing
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Literal, Type
+from typing import Generic, Literal, Type
 
 import click
 from packaging.requirements import Requirement
 from packaging.version import Version
 from snaphelpers import Snap
 
+from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import ConfigItemNotFoundException
 from sunbeam.core.common import SunbeamException, read_config, update_config
 from sunbeam.core.deployment import Deployment
-from sunbeam.core.feature import FeatureManager
-from sunbeam.core.manifest import SoftwareConfig
+from sunbeam.core.manifest import FeatureConfig, Manifest, SoftwareConfig
+
+# from sunbeam.feature_manager import FeatureManager
 from sunbeam.features.interface import utils
 
 LOG = logging.getLogger(__name__)
+_GROUPS: dict[str, Type["BaseFeatureGroup"]] = {}
+_FEATURES: dict[str, Type["BaseFeature"]] = {}
+
+
+def features() -> typing.Mapping[str, Type["BaseFeature"]]:
+    return _FEATURES
+
+
+def groups() -> typing.Mapping[str, Type["BaseFeatureGroup"]]:
+    return _GROUPS
 
 
 class FeatureError(SunbeamException):
@@ -67,220 +77,17 @@ class NotAutomaticFeatureError(FeatureError):
 class ClickInstantiator:
     """Support invoking click commands on instance methods."""
 
-    def __init__(self, command, klass, client):
+    def __init__(self, command: click.Command, registerable: "BaseRegisterable"):
         self.command = command
-        self.klass = klass
-        self.client = client
+        self.registerable = registerable
 
     def __call__(self, *args, **kwargs):
         """Invoke the click command on the instance method."""
-        return self.command(self.klass(self.client), *args, **kwargs)
+        return self.command(self.registerable, *args, **kwargs)
 
 
-class BaseFeature(ABC):
-    """Base class for Feature interface."""
-
-    # Version of feature interface used by Feature
-    interface_version = Version("0.0.1")
-
-    # Version of feature
-    version = Version("0.0.0")
-
-    # Name of feature
+class BaseRegisterable(ABC):
     name: str
-
-    # Deployment object
-    deployment: Deployment
-
-    def __init__(self, name: str, deployment: Deployment) -> None:
-        """Constructor for Base feature.
-
-        :param name: Name of the feature
-        """
-        self.name = name
-        self.deployment = deployment
-
-    @property
-    def feature_key(self) -> str:
-        """Key used to store feature info in cluster database Config table."""
-        return self._get_feature_key(self.name)
-
-    def _get_feature_key(self, feature: str) -> str:
-        """Generate feature key from feature."""
-        return f"Feature-{feature}"
-
-    def install_hook(self) -> None:
-        """Install hook for the feature.
-
-        snap-openstack install hook handler invokes this function on all the
-        features. Features should override this function if required.
-        """
-        pass
-
-    def upgrade_hook(self, upgrade_release: bool = False) -> None:
-        """Upgrade hook for the feature.
-
-        snap-openstack upgrade hook handler invokes this function on all the
-        features. Features should override this function if required.
-        """
-        pass
-
-    def configure_hook(self) -> None:
-        """Configure hook for the feature.
-
-        snap-openstack configure hook handler invokes this function on all the
-        features. Features should override this function if required.
-        """
-        pass
-
-    def pre_refresh_hook(self) -> None:
-        """Pre refresh hook for the feature.
-
-        snap-openstack pre-refresh hook handler invokes this function on all the
-        features. Features should override this function if required.
-        """
-        pass
-
-    def post_refresh_hook(self) -> None:
-        """Post refresh hook for the feature.
-
-        snap-openstack post-refresh hook handler invokes this function on all the
-        features. Features should override this function if required.
-        """
-        pass
-
-    def remove_hook(self) -> None:
-        """Remove hook for the feature.
-
-        snap-openstack remove hook handler invokes this function on all the
-        features. Features should override this function if required.
-        """
-        pass
-
-    def get_feature_info(self) -> dict:
-        """Get feature information from clusterdb.
-
-        :returns: Dictionay with feature details like version, and any other information
-                  uploded by feature.
-        """
-        try:
-            return read_config(self.deployment.get_client(), self.feature_key)
-        except ConfigItemNotFoundException as e:
-            LOG.debug(str(e))
-            return {}
-
-    def update_feature_info(self, info: dict) -> None:
-        """Update feature information in clusterdb.
-
-        Adds version info as well to the info dictionary to update in the cluster db.
-
-        :param info: Feature specific information as dictionary
-        """
-        info_from_db = self.get_feature_info()
-        info_from_db.update(info)
-        info_from_db.update({"version": str(self.version)})
-        update_config(self.deployment.get_client(), self.feature_key, info_from_db)
-
-    def fetch_feature_version(self, feature: str) -> Version:
-        """Fetch feature version stored in database.
-
-        :param feature: Name of the feature
-        :returns: Version of the feature
-        """
-        try:
-            config = read_config(
-                self.deployment.get_client(), self._get_feature_key(feature)
-            )
-        except ConfigItemNotFoundException as e:
-            raise MissingFeatureError(f"Feature {feature} not found") from e
-        version = config.get("version")
-        if version is None:
-            raise MissingVersionInfoError(
-                f"Version info for feature {feature} not found"
-            )
-
-        return Version(version)
-
-    def manifest_defaults(self) -> SoftwareConfig:
-        """Return manifest part of the feature.
-
-        Define manifest charms involved and default values for charm attributes
-        and terraform plan.
-        Sample manifest:
-        {
-            "charms": {
-                "heat-k8s": {
-                    "channel": <>.
-                    "revision": <>,
-                    "config": <>,
-                }
-            },
-            "terraform": {
-                "<feature>-plan": {
-                    "source": <Path of terraform plan>,
-                }
-            }
-        }
-
-        The features that uses terraform plan should override this function.
-        """
-        return SoftwareConfig()
-
-    def add_manifest_section(self, manifest) -> None:
-        """Add manifest section.
-
-        Any new attributes to the manifest introduced by the feature will be read as
-        dict. This function should convert the new attribute to a dataclass if
-        required and reassign it to manifest object. This will also help in
-        validation of new attributes.
-        """
-        pass
-
-    def manifest_attributes_tfvar_map(self) -> dict:
-        """Return terraform var map for the manifest attributes.
-
-        Map terraform variable for each manifest attribute.
-        Sample return value:
-        {
-            <tf plan1>: {
-                "charms": {
-                    "heat-k8s": {
-                        "channel": <tfvar for heat channel>,
-                        "revision": <tfvar for heat revision>,
-                        "config": <tfvar for heat config>,
-                    }
-                }
-            },
-            <tfplan2>: {
-                "caas-config": {
-                    "image-url": <tfvar map for caas image url>
-                }
-            }
-        }
-
-        The features that uses terraform plan should override this function.
-        """
-        return {}
-
-    def preseed_questions_content(self) -> list:
-        """Generate preseed manifest content.
-
-        The returned content will be used in generation of manifest.
-        """
-        return []
-
-    def update_proxy_model_configs(self) -> None:
-        """Update proxy model configs.
-
-        Features that creates a new model should override this function
-        to update model-configs for the model.
-        Feature can get proxies using get_proxy_settings(self.feature.deployment)
-        """
-        pass
-
-    def get_terraform_plans_base_path(self) -> Path:
-        """Return Terraform plan base location."""
-        return Snap().paths.user_common
 
     def validate_commands(self) -> bool:
         """Validate the commands dictionary.
@@ -292,8 +99,9 @@ class BaseFeature(ABC):
 
         :returns: True if validation is successful, else False.
         """
-        LOG.debug(f"Validating commands: {self.commands}")
-        for group, commands in self.commands().items():
+        self_commands = self.commands()
+        LOG.debug(f"Validating commands: {self_commands}")
+        for group, commands in self_commands.items():
             for command in commands:
                 cmd_name = command.get("name")
                 cmd_func = command.get("command")
@@ -319,26 +127,10 @@ class BaseFeature(ABC):
         LOG.debug("Validation successful")
         return True
 
-    def is_openstack_control_plane(self) -> bool:
-        """Is feature deploys openstack control plane.
-
-        :returns: True if feature deploys openstack control plane, else False.
-                  Defaults to False.
-        """
-        return False
-
-    def is_cluster_bootstrapped(self) -> bool:
-        """Is sunbeam cluster bootstrapped.
-
-        :returns: True if sunbeam cluster is bootstrapped, else False.
-        """
-        try:
-            return self.deployment.get_client().cluster.check_sunbeam_bootstrapped()
-        except ValueError:
-            return False
-
     @abstractmethod
-    def commands(self) -> dict:
+    def commands(
+        self, conditions: typing.Mapping[str, str | bool] = {}
+    ) -> dict[str, list[dict]]:
         """Dict of clickgroup along with commands.
 
         Should be of form
@@ -435,6 +227,12 @@ class BaseFeature(ABC):
 
             for command in commands:
                 cmd = command.get("command")
+                if not cmd:
+                    LOG.warning(
+                        f"Feature {self.name}: Not able to register command "
+                        f"{command.get('name')} in group {group} as command is None"
+                    )
+                    continue
                 cmd_name = command.get("name")
                 if cmd_name in group_obj.list_commands({}):
                     if isinstance(cmd, click.Command):
@@ -450,9 +248,7 @@ class BaseFeature(ABC):
                         )
                     continue
 
-                cmd.callback = ClickInstantiator(
-                    cmd.callback, type(self), self.deployment
-                )
+                cmd.callback = ClickInstantiator(cmd.callback, self)
                 group_obj.add_command(cmd, cmd_name)
                 LOG.debug(
                     f"Feature {self.name}: Command {cmd_name} registered in "
@@ -466,6 +262,266 @@ class BaseFeature(ABC):
                     groups[f"{group}.{cmd_name}"] = cmd
 
 
+class BaseFeatureGroup(BaseRegisterable):
+    """A feature group assumes enable/disable."""
+
+    name: str
+
+    enable_group: click.Group
+    disable_group: click.Group
+
+    def __init_subclass__(cls, **kwargs):
+        """Register inherited feature group classes."""
+        super().__init_subclass__(**kwargs)
+        if name := getattr(cls, "name", None):
+            _GROUPS[name] = cls
+
+    def commands(
+        self, conditions: typing.Mapping[str, str | bool] = {}
+    ) -> dict[str, list[dict]]:
+        """Define commands for the group."""
+        return {
+            "enable": [{"name": self.name, "command": self.enable_group}],
+            "disable": [{"name": self.name, "command": self.disable_group}],
+        }
+
+
+ConfigType = typing.TypeVar("ConfigType", bound=FeatureConfig)
+
+
+class BaseFeature(BaseRegisterable, Generic[ConfigType]):
+    """Base class for Feature interface."""
+
+    # Version of feature interface used by Feature
+    interface_version = Version("0.0.1")
+
+    # Version of feature
+    version = Version("0.0.0")
+
+    # Name of feature
+    name: str
+    group: type[BaseFeatureGroup] | None = None
+
+    def __init_subclass__(cls, **kwargs):
+        """Register inherited features classes."""
+        super().__init_subclass__(**kwargs)
+        if name := getattr(cls, "name", None):
+            _FEATURES[name] = cls
+
+    @property
+    def display_name(self) -> str:
+        """Return the display name of the feature."""
+        if not self.group:
+            return self.name
+        return " ".join(part.capitalize() for part in self.name.split("."))
+
+    @property
+    def feature_key(self) -> str:
+        """Key used to store feature info in cluster database Config table."""
+        return self._get_feature_key(self.name)
+
+    def _get_feature_key(self, feature: str) -> str:
+        """Generate feature key from feature."""
+        return f"Feature-{feature}"
+
+    def config_type(self) -> Type[ConfigType] | None:
+        """Return the config type for the feature."""
+        return None
+
+    def install_hook(self) -> None:
+        """Install hook for the feature.
+
+        snap-openstack install hook handler invokes this function on all the
+        features. Features should override this function if required.
+        """
+        pass
+
+    def upgrade_hook(
+        self, deployment: Deployment, upgrade_release: bool = False
+    ) -> None:
+        """Upgrade hook for the feature.
+
+        snap-openstack upgrade hook handler invokes this function on all the
+        features. Features should override this function if required.
+        """
+        pass
+
+    def configure_hook(
+        self,
+        deployment: Deployment,
+    ) -> None:
+        """Configure hook for the feature.
+
+        snap-openstack configure hook handler invokes this function on all the
+        features. Features should override this function if required.
+        """
+        pass
+
+    def pre_refresh_hook(
+        self,
+        deployment: Deployment,
+    ) -> None:
+        """Pre refresh hook for the feature.
+
+        snap-openstack pre-refresh hook handler invokes this function on all the
+        features. Features should override this function if required.
+        """
+        pass
+
+    def post_refresh_hook(
+        self,
+        deployment: Deployment,
+    ) -> None:
+        """Post refresh hook for the feature.
+
+        snap-openstack post-refresh hook handler invokes this function on all the
+        features. Features should override this function if required.
+        """
+        pass
+
+    def remove_hook(
+        self,
+        deployment: Deployment,
+    ) -> None:
+        """Remove hook for the feature.
+
+        snap-openstack remove hook handler invokes this function on all the
+        features. Features should override this function if required.
+        """
+        pass
+
+    def get_feature_info(self, client: Client) -> dict:
+        """Get feature information from clusterdb.
+
+        :returns: Dictionay with feature details like version, and any other information
+                  uploded by feature.
+        """
+        try:
+            return read_config(client, self.feature_key)
+        except ConfigItemNotFoundException as e:
+            LOG.debug(str(e))
+            return {}
+
+    def update_feature_info(self, client: Client, info: dict) -> None:
+        """Update feature information in clusterdb.
+
+        Adds version info as well to the info dictionary to update in the cluster db.
+
+        :param info: Feature specific information as dictionary
+        """
+        info_from_db = self.get_feature_info(client)
+        info_from_db.update(info)
+        info_from_db.update({"version": str(self.version)})
+        update_config(client, self.feature_key, info_from_db)
+
+    def fetch_feature_version(self, client: Client, feature: str) -> Version:
+        """Fetch feature version stored in database.
+
+        :param feature: Name of the feature
+        :returns: Version of the feature
+        """
+        try:
+            config = read_config(client, self._get_feature_key(feature))
+        except ConfigItemNotFoundException as e:
+            raise MissingFeatureError(f"Feature {feature} not found") from e
+        version = config.get("version")
+        if version is None:
+            raise MissingVersionInfoError(
+                f"Version info for feature {feature} not found"
+            )
+
+        return Version(version)
+
+    def default_software_overrides(self) -> SoftwareConfig:
+        """Return manifest pa of the feature.
+
+        Define manifest charms involved and default values for charm attributes
+        and terraform plan.
+        Sample manifest:
+        {
+            "charms": {
+                "heat-k8s": {
+                    "channel": <>.
+                    "revision": <>,
+                    "config": <>,
+                }
+            },
+            "terraform": {
+                "<feature>-plan": {
+                    "source": <Path of terraform plan>,
+                }
+            }
+        }
+
+        The features that uses terraform plan should override this function.
+        """
+        return SoftwareConfig()
+
+    def manifest_attributes_tfvar_map(self) -> dict:
+        """Return terraform var map for the manifest attributes.
+
+        Map terraform variable for each manifest attribute.
+        Sample return value:
+        {
+            <tf plan1>: {
+                "charms": {
+                    "heat-k8s": {
+                        "channel": <tfvar for heat channel>,
+                        "revision": <tfvar for heat revision>,
+                        "config": <tfvar for heat config>,
+                    }
+                }
+            },
+            <tfplan2>: {
+                "caas-config": {
+                    "image-url": <tfvar map for caas image url>
+                }
+            }
+        }
+
+        The features that uses terraform plan should override this function.
+        """
+        return {}
+
+    def preseed_questions_content(self) -> list:
+        """Generate preseed manifest content.
+
+        The returned content will be used in generation of manifest.
+        """
+        return []
+
+    def update_proxy_model_configs(self, deployment: Deployment) -> None:
+        """Update proxy model configs.
+
+        Features that creates a new model should override this function
+        to update model-configs for the model.
+        Feature can get proxies using get_proxy_settings(self.feature.deployment)
+        """
+        pass
+
+    def get_terraform_plans_base_path(self) -> Path:
+        """Return Terraform plan base location."""
+        return Snap().paths.user_common
+
+    def is_openstack_control_plane(self) -> bool:
+        """Is feature deploys openstack control plane.
+
+        :returns: True if feature deploys openstack control plane, else False.
+                  Defaults to False.
+        """
+        return False
+
+    def is_cluster_bootstrapped(self, client: Client) -> bool:
+        """Is sunbeam cluster bootstrapped.
+
+        :returns: True if sunbeam cluster is bootstrapped, else False.
+        """
+        try:
+            return client.cluster.check_sunbeam_bootstrapped()
+        except ValueError:
+            return False
+
+
 class FeatureRequirement(Requirement):
     def __init__(self, requirement_string: str, optional: bool = False):
         super().__init__(requirement_string)
@@ -474,7 +530,7 @@ class FeatureRequirement(Requirement):
     @property
     def klass(self) -> Type["EnableDisableFeature"]:
         """Return the feature class for the requirement."""
-        klass = FeatureManager().resolve_feature(self.name)
+        klass = features().get(self.name)
         if klass is None:
             raise InvalidRequirementError(f"Feature {self.name} not found")
         if not issubclass(klass, EnableDisableFeature):
@@ -486,16 +542,15 @@ class FeatureRequirement(Requirement):
 
 @typing.runtime_checkable
 class NamedEnabledDisableFeatureProtocol(typing.Protocol):
-    def __init__(self, deployment: Deployment) -> None:
-        pass
+    # def __init__(self) -> None:
+    #     pass
 
-    @property
-    def enabled(self) -> bool:
+    def is_enabled(self, client: Client) -> bool:
         """Is the feature enabled."""
         ...
 
 
-class EnableDisableFeature(BaseFeature):
+class EnableDisableFeature(BaseFeature, Generic[ConfigType]):
     """Interface for features of type on/off.
 
     Features that can be enabled or disabled can use this interface instead
@@ -506,16 +561,14 @@ class EnableDisableFeature(BaseFeature):
 
     requires: set[FeatureRequirement] = set()
 
-    def __init__(self, name: str, deployment: Deployment) -> None:
-        """Constructor for feature interface.
+    enable_cmd: click.Command
+    disable_cmd: click.Command
 
-        :param name: Name of the feature
-        """
-        super().__init__(name, deployment)
+    def __init__(self) -> None:
+        """Constructor for feature interface."""
         self.user_manifest: Path | None = None
 
-    @property
-    def enabled(self) -> bool:
+    def is_enabled(self, client: Client) -> bool:
         """Feature is enabled or disabled.
 
         Retrieves enabled field from the Feature info saved in
@@ -523,17 +576,21 @@ class EnableDisableFeature(BaseFeature):
 
         :returns: True if feature is enabled, else False.
         """
-        info = self.get_feature_info()
+        info = self.get_feature_info(client)
         return info.get("enabled", "false").lower() == "true"
 
-    def check_enabled_requirement_is_compatible(self, requirement: FeatureRequirement):
+    def check_enabled_requirement_is_compatible(
+        self, deployment: Deployment, requirement: FeatureRequirement
+    ):
         """Check if an enabled requirement is compatible with current requirer."""
         if len(requirement.specifier) == 0:
             # No version requirement, so no need to check version
             return
 
         try:
-            current_version = self.fetch_feature_version(requirement.name)
+            current_version = self.fetch_feature_version(
+                deployment.get_client(), requirement.name
+            )
             LOG.debug(f"Feature {requirement.name} version {current_version} found")
         except MissingVersionInfoError as e:
             LOG.debug(f"Version info for feature {requirement.name} not found")
@@ -581,11 +638,20 @@ class EnableDisableFeature(BaseFeature):
             )
 
     def check_feature_is_automatically_enableable(
-        self, feature: "EnableDisableFeature"
+        self, feature: "EnableDisableFeature", manifest: Manifest
     ):
         """Check whether a feature can be automatically enabled."""
-        spec = inspect.getfullargspec(feature.enable_feature)
-        if spec.args != ["self"]:
+        feature_manifest = manifest.get_feature(feature.name)
+        if not feature_manifest:
+            raise ValueError(f"Unknown feature {feature.name}")
+        if feature_manifest.config is not None:
+            return
+        config_type = feature.config_type()
+        if config_type is None:
+            return
+        try:
+            config_type()
+        except ValueError:
             raise NotAutomaticFeatureError(
                 f"Feature {self.name} depends on {feature.name},"
                 f" and {feature.name} cannot be automatically enabled."
@@ -595,19 +661,17 @@ class EnableDisableFeature(BaseFeature):
 
     def check_enablement_requirements(
         self,
+        deployment: Deployment,
         state: Literal["enable"] | Literal["disable"] = "enable",
     ):
         """Check whether the feature can be enabled."""
-        features = FeatureManager().get_all_feature_classes()
-        for klass in features:
-            if not isinstance(klass, NamedEnabledDisableFeatureProtocol):
-                LOG.debug(
-                    f"Skipping {klass} as it does not respect"
-                    " NamedEnabledDisableFeatureProtocol"
-                )
+        feature_classes = features().values()
+        for klass in feature_classes:
+            if not issubclass(klass, EnableDisableFeature):
+                LOG.debug(f"Skipping {klass} as it is not of type EnableDisableFeature")
                 continue
-            feature = klass(self.deployment)
-            if not feature.enabled:
+            feature = klass()
+            if not feature.is_enabled(deployment.get_client()):
                 continue
             for requirement in feature.requires:
                 if requirement.name != self.name:
@@ -626,19 +690,19 @@ class EnableDisableFeature(BaseFeature):
                     break
                 raise IncompatibleVersionError(message)
 
-    def enable_requirements(self):
+    def enable_requirements(self, deployment: Deployment):
         """Iterate through requirements, enable features if possible."""
         for requirement in self.requires:
-            if not isinstance(requirement.klass, NamedEnabledDisableFeatureProtocol):
+            if not issubclass(requirement.klass, EnableDisableFeature):
                 LOG.debug(
-                    f"Skipping {requirement.klass} as it does not respect"
-                    " NamedEnabledDisableFeatureProtocol"
+                    f"Skipping {requirement.klass} as it is not of type"
+                    " EnableDisableFeature"
                 )
                 continue
-            feature = requirement.klass(self.deployment)
+            feature = requirement.klass()
 
-            if feature.enabled:
-                self.check_enabled_requirement_is_compatible(requirement)
+            if feature.is_enabled(deployment.get_client()):
+                self.check_enabled_requirement_is_compatible(deployment, requirement)
                 # Feature is already enabled, and has a compatible version.
                 continue
 
@@ -646,30 +710,43 @@ class EnableDisableFeature(BaseFeature):
                 # Skip enablement since feature is optional
                 continue
             self.check_feature_class_is_compatible(feature, requirement)
-            self.check_feature_is_automatically_enableable(feature)
+            self.check_feature_is_automatically_enableable(
+                feature, deployment.get_manifest()
+            )
 
-            ctx = click.get_current_context()
-            ctx.invoke(feature.enable_feature)
+            manifest = deployment.get_manifest()
+            feature_manifest = manifest.get_feature(feature.name)
+            if not feature_manifest:
+                raise ValueError(f"Unknown feature {feature.name}")
+            if feature_manifest.config is not None:
+                config = feature_manifest.config
+            else:
+                config_type = feature.config_type()
+                if config_type is None:
+                    config = FeatureConfig()
+                else:
+                    config = config_type()
 
-    def pre_enable(self) -> None:
+            feature.enable_feature(deployment, config)
+
+    def pre_enable(self, deployment: Deployment, config: ConfigType) -> None:
         """Handler to perform tasks before enabling the feature."""
-        self.check_enablement_requirements()
-        self.enable_requirements()
+        self.check_enablement_requirements(deployment)
+        self.enable_requirements(deployment)
 
-    def post_enable(self) -> None:
+    def post_enable(self, deployment: Deployment, config: ConfigType) -> None:
         """Handler to perform tasks after the feature is enabled."""
         pass
 
     @abstractmethod
-    def run_enable_plans(self) -> None:
+    def run_enable_plans(self, deployment: Deployment, config: ConfigType) -> None:
         """Run plans to enable feature.
 
         The feature implementation is expected to override this function and
         specify the plans to be run to deploy the workload supported by feature.
         """
 
-    @abstractmethod
-    def enable_feature(self) -> None:
+    def enable_feature(self, deployment: Deployment, config: ConfigType) -> None:
         """Enable feature command."""
         self.user_manifest = None
         current_click_context = click.get_current_context()
@@ -680,40 +757,65 @@ class EnableDisableFeature(BaseFeature):
             ):
                 if manifest := current_click_context.parent.params.get("manifest"):
                     self.user_manifest = Path(manifest)
+                    deployment.get_manifest(self.user_manifest)
             current_click_context = current_click_context.parent
 
-        self.pre_enable()
-        self.run_enable_plans()
-        self.post_enable()
-        self.update_feature_info({"enabled": "true"})
+        self.pre_enable(deployment, config)
+        self.run_enable_plans(deployment, config)
+        self.post_enable(deployment, config)
+        self.update_feature_info(deployment.get_client(), {"enabled": "true"})
 
-    def pre_disable(self) -> None:
+    def pre_disable(self, deployment: Deployment) -> None:
         """Handler to perform tasks before disabling the feature."""
-        self.check_enablement_requirements(state="disable")
+        self.check_enablement_requirements(deployment, state="disable")
 
-    def post_disable(self) -> None:
+    def post_disable(self, deployment: Deployment) -> None:
         """Handler to perform tasks after the feature is disabled."""
         pass
 
     @abstractmethod
-    def run_disable_plans(self) -> None:
+    def run_disable_plans(self, deployment: Deployment) -> None:
         """Run plans to disable feature.
 
         The feature implementation is expected to override this function and
         specify the plans to be run to destroy the workload supported by feature.
         """
 
-    @abstractmethod
-    def disable_feature(self) -> None:
+    def disable_feature(self, deployment: Deployment) -> None:
         """Disable feature command."""
-        self.pre_disable()
-        self.run_disable_plans()
-        self.post_disable()
-        self.update_feature_info({"enabled": "false"})
+        self.pre_disable(deployment)
+        self.run_disable_plans(deployment)
+        self.post_disable(deployment)
+        self.update_feature_info(deployment.get_client(), {"enabled": "false"})
 
-    def commands(self) -> dict:
+    def commands(
+        self, conditions: typing.Mapping[str, str | bool] = {}
+    ) -> dict[str, list[dict]]:
         """Dict of clickgroup along with commands."""
-        return {
-            "enable": [{"name": self.name, "command": self.enable_feature}],
-            "disable": [{"name": self.name, "command": self.disable_feature}],
+        enable_cmd, disable_cmd = self.toggle_commands()
+        command_name = self.name
+        enable_group = "enable"
+        disable_group = "disable"
+        if group := self.group:
+            enable_group += f".{group.name}"
+            disable_group += f".{group.name}"
+            if command_name.startswith(group.name + "."):
+                command_name = command_name[len(group.name) + 1 :]
+        commands = {
+            enable_group: [{"name": command_name, "command": enable_cmd}],
+            disable_group: [{"name": command_name, "command": disable_cmd}],
         }
+        if conditions.get("enabled", False):
+            commands.update(self.enabled_commands())
+        return commands
+
+    def toggle_commands(self) -> tuple[click.BaseCommand, click.BaseCommand]:
+        """Return enable and disable commands."""
+        return self.enable_cmd, self.disable_cmd
+
+    def enabled_commands(self) -> dict[str, list[dict]]:
+        """Dict of clickgroup along with commands.
+
+        Return the commands available once the feature is enabled.
+        """
+        return {}

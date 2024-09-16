@@ -15,6 +15,7 @@
 
 import copy
 import logging
+import typing
 from pathlib import Path
 from typing import Any
 
@@ -37,10 +38,12 @@ from sunbeam.core.common import (
     Status,
     infer_risk,
 )
+
+# from sunbeam.feature_manager import FeatureManager
 from sunbeam.versions import MANIFEST_CHARM_VERSIONS, TERRAFORM_DIR_NAMES
 
 LOG = logging.getLogger(__name__)
-EMPTY_MANIFEST: dict[str, dict] = {"charms": {}, "terraform": {}}
+EMPTY_MANIFEST: dict[str, dict] = {"core": {"charms": {}, "terraform": {}}}
 
 
 def embedded_manifest_path(snap: Snap, risk: str) -> Path:
@@ -83,51 +86,15 @@ class CharmManifest(pydantic.BaseModel):
 class TerraformManifest(pydantic.BaseModel):
     source: Path = Field(description="Path to Terraform plan")
 
+    @pydantic.field_serializer("source")
+    def _serialize_source(self, value: Path) -> str:
+        return str(value)
+
 
 class SoftwareConfig(pydantic.BaseModel):
     juju: JujuManifest = JujuManifest()
     charms: dict[str, CharmManifest] = {}
     terraform: dict[str, TerraformManifest] = {}
-
-    model_config = pydantic.ConfigDict(
-        extra="allow",
-    )
-
-    @classmethod
-    def get_default(
-        cls, feature_softwares: dict[str, "SoftwareConfig"] | None = None
-    ) -> "SoftwareConfig":
-        """Load default software config."""
-        # TODO(gboutry): Remove Snap instanciation
-        snap = Snap()
-        charms = {
-            charm: CharmManifest(channel=channel)
-            for charm, channel in MANIFEST_CHARM_VERSIONS.items()
-        }
-        terraform = {
-            tfplan: TerraformManifest(source=Path(snap.paths.snap / "etc" / tfplan_dir))
-            for tfplan, tfplan_dir in TERRAFORM_DIR_NAMES.items()
-        }
-        if feature_softwares is None:
-            LOG.debug("No features provided, skipping")
-            return SoftwareConfig(charms=charms, terraform=terraform)
-
-        extra = {}
-        for feature, software in feature_softwares.items():
-            for charm, charm_manifest in software.charms.items():
-                if charm in charms:
-                    raise ValueError(f"Feature {feature} overrides charm {charm}")
-                charms[charm] = charm_manifest
-            for tfplan, tf_manifest in software.terraform.items():
-                if tfplan in terraform:
-                    raise ValueError(f"Feature {feature} overrides tfplan {tfplan}")
-                terraform[tfplan] = tf_manifest
-            for key in software.extra:
-                if key in extra:
-                    raise ValueError(f"Feature {feature} overrides extra key {key}")
-                extra[key] = software.extra[key]
-
-        return SoftwareConfig(charms=charms, terraform=terraform, **extra)
 
     def validate_terraform_keys(self, default_software_config: "SoftwareConfig"):
         """Validate the terraform keys provided are expected."""
@@ -167,48 +134,206 @@ class SoftwareConfig(pydantic.BaseModel):
         terraform: dict[str, TerraformManifest] = utils.merge_dict(
             copy.deepcopy(self.terraform), copy.deepcopy(other.terraform)
         )
-        extra = utils.merge_dict(copy.deepcopy(self.extra), copy.deepcopy(other.extra))
-        return SoftwareConfig(juju=juju, charms=charms, terraform=terraform, **extra)
+        return SoftwareConfig(juju=juju, charms=charms, terraform=terraform)
 
-    @property
-    def extra(self) -> dict:
-        """Allow storing extra data."""
-        if self.__pydantic_extra__ is None:
-            self.__pydantic_extra__ = {}
-        return self.__pydantic_extra__
+
+class FeatureConfig(pydantic.BaseModel):
+    pass
+
+
+def _default_software_config() -> SoftwareConfig:
+    snap = Snap()
+    return SoftwareConfig(
+        charms={
+            charm: CharmManifest(channel=channel)
+            for charm, channel in MANIFEST_CHARM_VERSIONS.items()
+        },
+        terraform={
+            tfplan: TerraformManifest(source=snap.paths.snap / "etc" / tfplan_dir)
+            for tfplan, tfplan_dir in TERRAFORM_DIR_NAMES.items()
+        },
+    )
+
+
+def _str_serialize(value: Any | None) -> str | None:
+    if value is not None:
+        return str(value)
+    return None
+
+
+class CoreConfig(pydantic.BaseModel):
+    class _ProxyConfig(pydantic.BaseModel):
+        proxy_required: bool | None = None
+        http_proxy: str | None = None
+        https_proxy: str | None = None
+        no_proxy: str | None = None
+
+    class _BootstrapConfig(pydantic.BaseModel):
+        management_cidr: str | None = pydantic.Field(
+            default=None, description="Management network CIDR"
+        )
+
+    class _Addons(pydantic.BaseModel):
+        metallb: str | None = None
+
+    class _K8sAddons(pydantic.BaseModel):
+        loadbalancers: str | None = None
+
+    class _User(pydantic.BaseModel):
+        run_demo_setup: bool | None = None
+        username: str | None = None
+        password: str | None = None
+        cidr: str | None = None
+        nameservers: str | None = None
+        security_group_rules: bool | None = None
+        remote_access_location: typing.Literal["local", "remote"] | None = None
+
+    class _ExternalNetwork(pydantic.BaseModel):
+        nic: str | None = None
+        cidr: str | None = None
+        gateway: str | None = None
+        start: str | None = None
+        end: str | None = None
+        network_type: typing.Literal["vlan", "flat"] | None = None
+        segmentation_id: int | None = None
+
+    class _HostMicroCephConfig(pydantic.BaseModel):
+        osd_devices: str | None = None
+
+    proxy: _ProxyConfig | None = None
+    bootstrap: _BootstrapConfig | None = None
+    region: str | None = None
+    addons: _Addons | None = None
+    k8s_addons: _K8sAddons | None = pydantic.Field(default=None, alias="k8s-addons")
+    user: _User | None = None
+    external_network: _ExternalNetwork | None = None
+    microceph_config: pydantic.RootModel[dict[str, _HostMicroCephConfig]] | None = None
+
+
+class CoreManifest(pydantic.BaseModel):
+    config: CoreConfig = CoreConfig()
+    software: SoftwareConfig = pydantic.Field(default_factory=_default_software_config)
+
+    def merge(self, other: "CoreManifest") -> "CoreManifest":
+        """Merge the core manifest with the provided manifest."""
+        config = CoreConfig(
+            **utils.merge_dict(self.config.model_dump(), other.config.model_dump())
+        )
+        software = self.software.merge(other.software)
+        return type(self)(config=config, software=software)
+
+
+class FeatureManifest(pydantic.BaseModel):
+    config: pydantic.SerializeAsAny[FeatureConfig] | None = None
+    software: SoftwareConfig = SoftwareConfig()
+
+    def merge(self, other: "FeatureManifest") -> "FeatureManifest":
+        """Merge the feature manifest with the provided manifest."""
+        if self.config and other.config:
+            if type(self.config) is not type(other.config):
+                raise ValueError("Feature config types do not match")
+            config = type(self.config)(
+                **utils.merge_dict(self.config.model_dump(), other.config.model_dump())
+            )
+        elif other.config:
+            config = other.config
+        elif self.config:
+            config = self.config
+        else:
+            config = None
+        software = self.software.merge(other.software)
+        return type(self)(config=config, software=software)
+
+
+class FeatureGroupManifest(pydantic.RootModel[dict[str, FeatureManifest]]):
+    def merge(self, other: "FeatureGroupManifest") -> "FeatureGroupManifest":
+        """Merge the feature group manifest with the provided manifest."""
+        features = {}
+        for feature, feature_manifest in self.root.items():
+            if other_manifest := other.root.get(feature):
+                features[feature] = feature_manifest.merge(other_manifest)
+            else:
+                features[feature] = feature_manifest
+
+        return type(self)(root=features)
+
+    def validate_againt_default(self, default_manifest: "FeatureGroupManifest") -> None:
+        """Validate the feature group manifest against the default manifest."""
+        for feature, feature_manifest in self.root.items():
+            if other_manifest := default_manifest.root.get(feature):
+                feature_manifest.software.validate_against_default(
+                    other_manifest.software
+                )
 
 
 class Manifest(pydantic.BaseModel):
-    deployment: dict = {}
-    software: SoftwareConfig = SoftwareConfig()
+    core: CoreManifest = pydantic.Field(default_factory=CoreManifest)
+    features: dict[str, FeatureManifest | FeatureGroupManifest] = {}
 
-    @classmethod
-    def get_default(
-        cls,
-        feature_softwares: dict[str, SoftwareConfig] | None = None,
-    ) -> "Manifest":
-        """Load manifest and override the default manifest."""
-        software_config = SoftwareConfig.get_default(feature_softwares)
-        return Manifest(software=software_config)
+    def get_features(self) -> typing.Generator[tuple[str, FeatureManifest], None, None]:
+        """Return all the features."""
+        for name, feature in self.features.items():
+            if isinstance(feature, FeatureGroupManifest):
+                yield from feature.root.items()
+            else:
+                yield name, feature
+
+    def get_feature(self, name: str) -> FeatureManifest | None:
+        """Return the feature."""
+        for f_o_g_name, feature_or_group_manifest in self.features.items():
+            if f_o_g_name == name and isinstance(
+                feature_or_group_manifest, FeatureManifest
+            ):
+                return feature_or_group_manifest
+            if isinstance(feature_or_group_manifest, FeatureGroupManifest):
+                for (
+                    feature_name,
+                    feature_manifest,
+                ) in feature_or_group_manifest.root.items():
+                    if feature_name == name:
+                        return feature_manifest
+        return None
 
     @classmethod
     def from_file(cls, file: Path) -> "Manifest":
         """Load manifest from file."""
         with file.open() as f:
-            return Manifest.model_validate(yaml.safe_load(f))
+            return cls.model_validate(yaml.safe_load(f))
 
     def merge(self, other: "Manifest") -> "Manifest":
         """Merge the manifest with the provided manifest."""
-        deployment = utils.merge_dict(
-            copy.deepcopy(self.deployment), copy.deepcopy(other.deployment)
-        )
-        software = self.software.merge(other.software)
+        core = self.core.merge(other.core)
+        features: dict[str, FeatureManifest | FeatureGroupManifest] = {}
+        for feature, feature_or_group_manifest in self.features.items():
+            if other_manifest := other.features.get(feature):
+                if isinstance(feature_or_group_manifest, FeatureGroupManifest):
+                    if not isinstance(other_manifest, FeatureGroupManifest):
+                        raise ValueError("Feature group and feature do not match")
+                    features[feature] = feature_or_group_manifest.merge(other_manifest)
+                elif isinstance(feature_or_group_manifest, FeatureManifest):
+                    if not isinstance(other_manifest, FeatureManifest):
+                        raise ValueError("Feature and feature group do not match")
+                    features[feature] = feature_or_group_manifest.merge(other_manifest)
+            else:
+                features[feature] = feature_or_group_manifest
 
-        return Manifest(deployment=deployment, software=software)
+        return type(self)(core=core, features=features)
 
     def validate_against_default(self, default_manifest: "Manifest") -> None:
         """Validate the manifest against the default manifest."""
-        self.software.validate_against_default(default_manifest.software)
+        self.core.software.validate_against_default(default_manifest.core.software)
+        for feature, feature_or_group_manifest in self.features.items():
+            if other_manifest := default_manifest.features.get(feature):
+                if isinstance(feature_or_group_manifest, FeatureGroupManifest):
+                    if not isinstance(other_manifest, FeatureGroupManifest):
+                        raise ValueError("Feature group and feature do not match")
+                    feature_or_group_manifest.validate_againt_default(other_manifest)
+                elif isinstance(feature_or_group_manifest, FeatureManifest):
+                    if not isinstance(other_manifest, FeatureManifest):
+                        raise ValueError("Feature and feature group do not match")
+                    feature_or_group_manifest.software.validate_against_default(
+                        other_manifest.software
+                    )
 
 
 class AddManifestStep(BaseStep):

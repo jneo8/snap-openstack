@@ -22,7 +22,12 @@ from rich.console import Console
 from sunbeam.core.common import BaseStep, run_plan
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper
-from sunbeam.core.manifest import AddManifestStep, CharmManifest, SoftwareConfig
+from sunbeam.core.manifest import (
+    AddManifestStep,
+    CharmManifest,
+    FeatureConfig,
+    SoftwareConfig,
+)
 from sunbeam.core.terraform import TerraformInitStep
 from sunbeam.features.interface.v1.openstack import (
     DisableOpenStackApplicationStep,
@@ -31,6 +36,7 @@ from sunbeam.features.interface.v1.openstack import (
     TerraformPlanLocation,
 )
 from sunbeam.steps.hypervisor import ReapplyHypervisorTerraformPlanStep
+from sunbeam.utils import pass_method_obj
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -40,14 +46,10 @@ console = Console()
 class TelemetryFeature(OpenStackControlPlaneFeature):
     version = Version("0.0.1")
 
-    def __init__(self, deployment: Deployment) -> None:
-        super().__init__(
-            "telemetry",
-            deployment,
-            tf_plan_location=TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO,
-        )
+    name = "telemetry"
+    tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
 
-    def manifest_defaults(self) -> SoftwareConfig:
+    def default_software_overrides(self) -> SoftwareConfig:
         """Feature software configuration."""
         return SoftwareConfig(
             charms={
@@ -87,91 +89,97 @@ class TelemetryFeature(OpenStackControlPlaneFeature):
             }
         }
 
-    def run_enable_plans(self) -> None:
+    def run_enable_plans(self, deployment: Deployment, config: FeatureConfig) -> None:
         """Run plans to enable feature."""
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
-        tfhelper_hypervisor = self.deployment.get_tfhelper("hypervisor-plan")
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        tfhelper = deployment.get_tfhelper(self.tfplan)
+        tfhelper_hypervisor = deployment.get_tfhelper("hypervisor-plan")
+        jhelper = JujuHelper(deployment.get_connected_controller())
         plan: list[BaseStep] = []
         if self.user_manifest:
-            plan.append(
-                AddManifestStep(self.deployment.get_client(), self.user_manifest)
-            )
+            plan.append(AddManifestStep(deployment.get_client(), self.user_manifest))
         plan.extend(
             [
                 TerraformInitStep(tfhelper),
-                EnableOpenStackApplicationStep(tfhelper, jhelper, self),
+                EnableOpenStackApplicationStep(
+                    deployment, config, tfhelper, jhelper, self
+                ),
                 TerraformInitStep(tfhelper_hypervisor),
                 # No need to pass any extra terraform vars for this feature
                 ReapplyHypervisorTerraformPlanStep(
-                    self.deployment.get_client(),
+                    deployment.get_client(),
                     tfhelper_hypervisor,
                     jhelper,
                     self.manifest,
-                    self.deployment.openstack_machines_model,
+                    deployment.openstack_machines_model,
                 ),
             ]
         )
 
         run_plan(plan, console)
-        click.echo(f"OpenStack {self.name} application enabled.")
+        click.echo(f"OpenStack {self.display_name} application enabled.")
 
-    def run_disable_plans(self) -> None:
+    def run_disable_plans(self, deployment: Deployment) -> None:
         """Run plans to disable the feature."""
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
-        tfhelper_hypervisor = self.deployment.get_tfhelper("hypervisor-plan")
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        tfhelper = deployment.get_tfhelper(self.tfplan)
+        tfhelper_hypervisor = deployment.get_tfhelper("hypervisor-plan")
+        jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
             TerraformInitStep(tfhelper),
-            DisableOpenStackApplicationStep(tfhelper, jhelper, self),
+            DisableOpenStackApplicationStep(deployment, tfhelper, jhelper, self),
             TerraformInitStep(tfhelper_hypervisor),
             ReapplyHypervisorTerraformPlanStep(
-                self.deployment.get_client(),
+                deployment.get_client(),
                 tfhelper_hypervisor,
                 jhelper,
                 self.manifest,
-                self.deployment.openstack_machines_model,
+                deployment.openstack_machines_model,
             ),
         ]
 
         run_plan(plan, console)
-        click.echo(f"OpenStack {self.name} application disabled.")
+        click.echo(f"OpenStack {self.display_name} application disabled.")
 
-    def set_application_names(self) -> list:
+    def set_application_names(self, deployment: Deployment) -> list:
         """Application names handled by the terraform plan."""
-        database_topology = self.get_database_topology()
+        database_topology = self.get_database_topology(deployment)
 
         apps = ["aodh", "aodh-mysql-router", "openstack-exporter"]
         if database_topology == "multi":
             apps.append("aodh-mysql")
 
-        if self.deployment.get_client().cluster.list_nodes_by_role("storage"):
+        if deployment.get_client().cluster.list_nodes_by_role("storage"):
             apps.extend(["ceilometer", "gnocchi", "gnocchi-mysql-router"])
             if database_topology == "multi":
                 apps.append("gnocchi-mysql")
 
         return apps
 
-    def set_tfvars_on_enable(self) -> dict:
+    def set_tfvars_on_enable(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to enable the application."""
         return {
             "enable-telemetry": True,
         }
 
-    def set_tfvars_on_disable(self) -> dict:
+    def set_tfvars_on_disable(self, deployment: Deployment) -> dict:
         """Set terraform variables to disable the application."""
         return {"enable-telemetry": False}
 
-    def set_tfvars_on_resize(self) -> dict:
+    def set_tfvars_on_resize(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to resize the application."""
         return {}
 
     @click.command()
-    def enable_feature(self) -> None:
+    @pass_method_obj
+    def enable_cmd(self, deployment: Deployment) -> None:
         """Enable OpenStack Telemetry applications."""
-        super().enable_feature()
+        self.enable_feature(deployment, FeatureConfig())
 
     @click.command()
-    def disable_feature(self) -> None:
+    @pass_method_obj
+    def disable_cmd(self, deployment: Deployment) -> None:
         """Disable OpenStack Telemetry applications."""
-        super().disable_feature()
+        self.disable_feature(deployment)
