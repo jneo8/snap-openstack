@@ -24,13 +24,13 @@ from rich.console import Console
 from rich.status import Status
 
 from sunbeam.clusterd.client import Client
-from sunbeam.clusterd.service import ClusterServiceUnavailableException
 from sunbeam.commands.configure import retrieve_admin_credentials
 from sunbeam.core.common import BaseStep, Result, ResultType, run_plan
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper
 from sunbeam.core.manifest import (
     CharmManifest,
+    FeatureConfig,
     Manifest,
     SoftwareConfig,
     TerraformManifest,
@@ -46,6 +46,7 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
+from sunbeam.utils import pass_method_obj
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -91,16 +92,19 @@ class CaasConfigureStep(BaseStep):
         try:
             override_tfvars = {}
             try:
-                manifest_caas_config = self.manifest.software.extra[
-                    "caas_config"
-                ].model_dump()
+                feature_manifest = self.manifest.get_feature("caas")
+                if not feature_manifest:
+                    raise ValueError("No caas feature found in manifest")
+                manifest_caas_config = feature_manifest.config
+                if not manifest_caas_config:
+                    raise ValueError("No caas configuration found in manifest")
+                manifest_caas_config_dict = manifest_caas_config.model_dump()
                 for caas_config_attribute, tfvar_name in self.tfhelper.tfvar_map.get(
                     "caas_config", {}
                 ).items():
-                    caas_config_attribute_ = manifest_caas_config.get(
+                    if caas_config_attribute_ := manifest_caas_config_dict.get(
                         caas_config_attribute
-                    )
-                    if caas_config_attribute_:
+                    ):
                         override_tfvars[tfvar_name] = caas_config_attribute_
             except AttributeError:
                 # caas_config not defined in manifest, ignore
@@ -124,15 +128,11 @@ class CaasFeature(OpenStackControlPlaneFeature):
         FeatureRequirement("loadbalancer", optional=True),
     }
 
-    def __init__(self, deployment: Deployment) -> None:
-        super().__init__(
-            "caas",
-            deployment,
-            tf_plan_location=TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO,
-        )
-        self.configure_plan = "caas-setup"
+    name = "caas"
+    tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
+    configure_plan = "caas-setup"
 
-    def manifest_defaults(self) -> SoftwareConfig:
+    def default_software_overrides(self) -> SoftwareConfig:
         """Feature software configuration."""
         return SoftwareConfig(
             charms={"magnum-k8s": CharmManifest(channel=OPENSTACK_CHANNEL)},
@@ -166,68 +166,61 @@ class CaasFeature(OpenStackControlPlaneFeature):
             },
         }
 
-    def add_manifest_section(self, software_config: SoftwareConfig) -> None:
-        """Adds manifest section."""
-        caas_config = software_config.extra.get("caas_config")
-        if caas_config is None:
-            software_config.extra["caas_config"] = CaasConfig()
-            return
-        if isinstance(caas_config, CaasConfig):
-            # Already instanciation of the schema, nothing to do
-            return
-        elif isinstance(caas_config, dict):
-            software_config.extra["caas_config"] = CaasConfig(**caas_config)
-        else:
-            raise ValueError(f"Invalid caas_config in manifest: {caas_config!r}")
-
-    def set_application_names(self) -> list:
+    def set_application_names(self, deployment: Deployment) -> list:
         """Application names handled by the terraform plan."""
         apps = ["magnum", "magnum-mysql-router"]
-        if self.get_database_topology() == "multi":
+        if self.get_database_topology(deployment) == "multi":
             apps.extend(["magnum-mysql"])
 
         return apps
 
-    def set_tfvars_on_enable(self) -> dict:
+    def set_tfvars_on_enable(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to enable the application."""
         return {
             "enable-magnum": True,
-            **self.add_horizon_plugin_to_tfvars("magnum"),
+            **self.add_horizon_plugin_to_tfvars(deployment, "magnum"),
         }
 
-    def set_tfvars_on_disable(self) -> dict:
+    def set_tfvars_on_disable(self, deployment: Deployment) -> dict:
         """Set terraform variables to disable the application."""
         return {
             "enable-magnum": False,
-            **self.remove_horizon_plugin_from_tfvars("magnum"),
+            **self.remove_horizon_plugin_from_tfvars(deployment, "magnum"),
         }
 
-    def set_tfvars_on_resize(self) -> dict:
+    def set_tfvars_on_resize(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to resize the application."""
         return {}
 
     @click.command()
-    def enable_feature(self) -> None:
+    @pass_method_obj
+    def enable_cmd(self, deployment: Deployment) -> None:
         """Enable Container as a Service feature."""
-        super().enable_feature()
+        self.enable_feature(deployment, FeatureConfig())
 
     @click.command()
-    def disable_feature(self) -> None:
+    @pass_method_obj
+    def disable_cmd(self, deployment: Deployment) -> None:
         """Disable Container as a Service feature."""
-        super().disable_feature()
+        self.disable_feature(deployment)
 
     @click.command()
-    def configure(self):
+    @pass_method_obj
+    def configure(self, deployment: Deployment) -> None:
         """Configure Cloud for Container as a Service use."""
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
         admin_credentials = retrieve_admin_credentials(jhelper, OPENSTACK_MODEL)
 
-        tfhelper = self.deployment.get_tfhelper(self.configure_plan)
+        tfhelper = deployment.get_tfhelper(self.configure_plan)
         tfhelper.env = (tfhelper.env or {}) | admin_credentials
         plan = [
             TerraformInitStep(tfhelper),
             CaasConfigureStep(
-                self.deployment.get_client(),
+                deployment.get_client(),
                 tfhelper,
                 self.manifest,
                 self.manifest_attributes_tfvar_map(),
@@ -236,22 +229,11 @@ class CaasFeature(OpenStackControlPlaneFeature):
 
         run_plan(plan, console)
 
-    def commands(self) -> dict:
-        """Dict of clickgroup along with commands."""
-        commands = super().commands()
-        try:
-            enabled = self.enabled
-        except ClusterServiceUnavailableException:
-            LOG.debug(
-                "Failed to query for feature status, is cloud bootstrapped ?",
-                exc_info=True,
-            )
-            enabled = False
+    def enabled_commands(self) -> dict[str, list[dict]]:
+        """Dict of clickgroup along with commands.
 
-        if enabled:
-            commands.update(
-                {
-                    "configure": [{"name": "caas", "command": self.configure}],
-                }
-            )
-        return commands
+        Return the commands available once the feature is enabled.
+        """
+        return {
+            "configure": [{"name": "caas", "command": self.configure}],
+        }

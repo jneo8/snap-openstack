@@ -31,6 +31,7 @@ from sunbeam.core.juju import (
     LeaderNotFoundException,
     run_sync,
 )
+from sunbeam.core.manifest import Manifest
 from sunbeam.core.terraform import (
     TerraformException,
     TerraformHelper,
@@ -386,7 +387,7 @@ class UserQuestions(BaseStep):
         self,
         client: Client,
         answer_file: Path,
-        deployment_preseed: dict | None = None,
+        manifest: Manifest | None = None,
         accept_defaults: bool = False,
     ):
         super().__init__(
@@ -394,7 +395,7 @@ class UserQuestions(BaseStep):
         )
         self.client = client
         self.accept_defaults = accept_defaults
-        self.preseed = deployment_preseed or {}
+        self.manifest = manifest
         self.answer_file = answer_file
 
     def has_prompts(self) -> bool:
@@ -415,11 +416,14 @@ class UserQuestions(BaseStep):
         for section in ["user", "external_network"]:
             if not self.variables.get(section):
                 self.variables[section] = {}
+        preseed = {}
+        if self.manifest and (user := self.manifest.core.config.user):
+            preseed = user.model_dump()
 
         user_bank = sunbeam.core.questions.QuestionBank(
             questions=user_questions(),
             console=console,
-            preseed=self.preseed.get("user"),
+            preseed=preseed,
             previous_answers=self.variables.get("user"),
             accept_defaults=self.accept_defaults,
         )
@@ -427,11 +431,16 @@ class UserQuestions(BaseStep):
             user_bank.remote_access_location.ask()
         )
         # External Network Configuration
+        preseed = {}
+        if self.manifest and (
+            ext_network := self.manifest.core.config.external_network
+        ):
+            preseed = ext_network.model_dump()
         if self.variables["user"]["remote_access_location"] == utils.LOCAL_ACCESS:
             ext_net_bank = sunbeam.core.questions.QuestionBank(
                 questions=ext_net_questions_local_only(),
                 console=console,
-                preseed=self.preseed.get("external_network"),
+                preseed=preseed,
                 previous_answers=self.variables.get("external_network"),
                 accept_defaults=self.accept_defaults,
             )
@@ -439,7 +448,7 @@ class UserQuestions(BaseStep):
             ext_net_bank = sunbeam.core.questions.QuestionBank(
                 questions=ext_net_questions(),
                 console=console,
-                preseed=self.preseed.get("external_network"),
+                preseed=preseed,
                 previous_answers=self.variables.get("external_network"),
                 accept_defaults=self.accept_defaults,
             )
@@ -585,7 +594,7 @@ class SetHypervisorUnitsOptionsStep(BaseStep):
         names: list[str] | str,
         jhelper: JujuHelper,
         model: str,
-        deployment_preseed: dict | None = None,
+        manifest: Manifest | None = None,
         msg: str = "Apply hypervisor settings",
         description: str = "Applying hypervisor settings",
     ):
@@ -596,7 +605,7 @@ class SetHypervisorUnitsOptionsStep(BaseStep):
         self.names = names
         self.jhelper = jhelper
         self.model = model
-        self.preseed = deployment_preseed or {}
+        self.manifest = manifest
         self.nics: dict[str, str | None] = {}
 
     def run(self, status: Status | None = None) -> Result:

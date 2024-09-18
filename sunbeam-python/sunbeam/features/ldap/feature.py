@@ -25,7 +25,6 @@ from rich.console import Console
 from rich.status import Status
 
 from sunbeam.clusterd.service import (
-    ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
 )
 from sunbeam.core.common import (
@@ -45,13 +44,14 @@ from sunbeam.core.juju import (
     TimeoutException,
     run_sync,
 )
-from sunbeam.core.manifest import CharmManifest, SoftwareConfig
+from sunbeam.core.manifest import CharmManifest, FeatureConfig, SoftwareConfig
 from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.core.terraform import TerraformException, TerraformInitStep
 from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
+from sunbeam.utils import pass_method_obj
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -66,6 +66,8 @@ class DisableLDAPDomainStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
+        deployment: Deployment,
+        config: FeatureConfig,
         jhelper: JujuHelper,
         feature: OpenStackControlPlaneFeature,
         domain_name: str,
@@ -80,12 +82,14 @@ class DisableLDAPDomainStep(BaseStep, JujuStepHelper):
             f"Enable OpenStack {feature.name}",
             f"Enabling OpenStack {feature.name} application",
         )
+        self.deployment = deployment
+        self.config = config
         self.jhelper = jhelper
         self.feature = feature
         self.model = OPENSTACK_MODEL
         self.domain_name = domain_name
-        self.client = self.feature.deployment.get_client()
-        self.tfhelper = self.feature.deployment.get_tfhelper(self.feature.tfplan)
+        self.client = deployment.get_client()
+        self.tfhelper = deployment.get_tfhelper(self.feature.tfplan)
 
     def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy openstack application."""
@@ -95,7 +99,7 @@ class DisableLDAPDomainStep(BaseStep, JujuStepHelper):
             tfvars = read_config(self.client, config_key)
         except ConfigItemNotFoundException:
             tfvars = {}
-        tfvars.update(self.feature.set_tfvars_on_enable())
+        tfvars.update(self.feature.set_tfvars_on_enable(self.deployment, self.config))
         if tfvars.get("ldap-apps") and self.domain_name in tfvars["ldap-apps"]:
             del tfvars["ldap-apps"][self.domain_name]
         else:
@@ -133,6 +137,7 @@ class DisableLDAPDomainStep(BaseStep, JujuStepHelper):
 class UpdateLDAPDomainStep(BaseStep, JujuStepHelper):
     def __init__(
         self,
+        deployment: Deployment,
         jhelper: JujuHelper,
         feature: OpenStackControlPlaneFeature,
         charm_config: dict,
@@ -147,12 +152,13 @@ class UpdateLDAPDomainStep(BaseStep, JujuStepHelper):
             f"Enable OpenStack {feature.name}",
             f"Enabling OpenStack {feature.name} application",
         )
+        self.deployment = deployment
         self.jhelper = jhelper
         self.feature = feature
         self.model = OPENSTACK_MODEL
         self.charm_config = charm_config
-        self.client = self.feature.deployment.get_client()
-        self.tfhelper = self.feature.deployment.get_tfhelper(self.feature.tfplan)
+        self.client = deployment.get_client()
+        self.tfhelper = deployment.get_tfhelper(self.feature.tfplan)
 
     def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy openstack application."""
@@ -205,6 +211,8 @@ class AddLDAPDomainStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
+        deployment: Deployment,
+        config: FeatureConfig,
         jhelper: JujuHelper,
         feature: OpenStackControlPlaneFeature,
         charm_config: dict,
@@ -219,12 +227,14 @@ class AddLDAPDomainStep(BaseStep, JujuStepHelper):
             f"Enable OpenStack {feature.name}",
             f"Enabling OpenStack {feature.name} application",
         )
+        self.deployment = deployment
+        self.config = config
         self.jhelper = jhelper
         self.feature = feature
         self.model = OPENSTACK_MODEL
         self.charm_config = charm_config
-        self.client = self.feature.deployment.get_client()
-        self.tfhelper = self.feature.deployment.get_tfhelper(self.feature.tfplan)
+        self.client = deployment.get_client()
+        self.tfhelper = deployment.get_tfhelper(self.feature.tfplan)
 
     def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy openstack application."""
@@ -234,7 +244,7 @@ class AddLDAPDomainStep(BaseStep, JujuStepHelper):
             tfvars = read_config(self.client, config_key)
         except ConfigItemNotFoundException:
             tfvars = {}
-        tfvars.update(self.feature.set_tfvars_on_enable())
+        tfvars.update(self.feature.set_tfvars_on_enable(self.deployment, self.config))
         if tfvars.get("ldap-apps"):
             tfvars["ldap-apps"][self.charm_config["domain-name"]] = self.charm_config
         else:
@@ -273,15 +283,14 @@ class AddLDAPDomainStep(BaseStep, JujuStepHelper):
 class LDAPFeature(OpenStackControlPlaneFeature):
     version = Version("0.0.1")
 
-    def __init__(self, deployment: Deployment) -> None:
-        super().__init__(
-            "ldap",
-            deployment,
-            tf_plan_location=TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO,
-        )
+    name = "ldap"
+    tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
+
+    def __init__(self) -> None:
+        super().__init__()
         self.config_flags = None
 
-    def manifest_defaults(self) -> SoftwareConfig:
+    def default_software_overrides(self) -> SoftwareConfig:
         """Feature software configuration."""
         return SoftwareConfig(
             charms={
@@ -302,39 +311,44 @@ class LDAPFeature(OpenStackControlPlaneFeature):
             }
         }
 
-    def set_tfvars_on_enable(self) -> dict:
+    def set_tfvars_on_enable(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to enable the application."""
         return {}
 
-    def set_tfvars_on_disable(self) -> dict:
+    def set_tfvars_on_disable(self, deployment: Deployment) -> dict:
         """Set terraform variables to disable the application."""
         return {"ldap-apps": {}}
 
-    def set_tfvars_on_resize(self) -> dict:
+    def set_tfvars_on_resize(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to resize the application."""
         return {}
 
-    def set_application_names(self) -> list:
+    def set_application_names(self, deployment: Deployment) -> list:
         """Application names handled by the terraform plan."""
         return []
 
     @click.command()
-    def enable_feature(self):
+    @pass_method_obj
+    def enable_cmd(self, deployment: Deployment) -> None:
         """Enable ldap service."""
-        super().enable_feature()
+        self.enable_feature(deployment, FeatureConfig())
 
     @click.command()
-    def disable_feature(self) -> None:
+    @pass_method_obj
+    def disable_cmd(self, deployment: Deployment) -> None:
         """Disable OpenStack LDAP application."""
-        super().disable_feature()
+        self.disable_feature(deployment)
 
     @click.command()
-    def list_domains(self) -> None:
+    @pass_method_obj
+    def list_domains(self, deployment: Deployment) -> None:
         """List LDAP backed domains."""
         try:
-            tfvars = read_config(
-                self.deployment.get_client(), self.get_tfvar_config_key()
-            )
+            tfvars = read_config(deployment.get_client(), self.get_tfvar_config_key())
         except ConfigItemNotFoundException:
             tfvars = {}
         click.echo(" ".join(tfvars.get("ldap-apps", {}).keys()))
@@ -355,8 +369,13 @@ class LDAPFeature(OpenStackControlPlaneFeature):
         CA for contacting ldap
         """,
     )
+    @pass_method_obj
     def add_domain(
-        self, ca_cert_file: str, domain_config_file: str, domain_name: str
+        self,
+        deployment: Deployment,
+        ca_cert_file: str,
+        domain_config_file: str,
+        domain_name: str,
     ) -> None:
         """Add LDAP backed domain."""
         with Path(domain_config_file).open(mode="r") as f:
@@ -371,10 +390,10 @@ class LDAPFeature(OpenStackControlPlaneFeature):
             "domain-name": domain_name,
             "tls-ca-ldap": ca,
         }
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
-            TerraformInitStep(self.deployment.get_tfhelper(self.tfplan)),
-            AddLDAPDomainStep(jhelper, self, charm_config),
+            TerraformInitStep(deployment.get_tfhelper(self.tfplan)),
+            AddLDAPDomainStep(deployment, FeatureConfig(), jhelper, self, charm_config),
         ]
 
         run_plan(plan, console)
@@ -396,8 +415,13 @@ class LDAPFeature(OpenStackControlPlaneFeature):
         CA for contacting ldap
         """,
     )
+    @pass_method_obj
     def update_domain(
-        self, ca_cert_file: str, domain_config_file: str, domain_name: str
+        self,
+        deployment: Deployment,
+        ca_cert_file: str,
+        domain_config_file: str,
+        domain_name: str,
     ) -> None:
         """Add LDAP backed domain."""
         charm_config = {"domain-name": domain_name}
@@ -409,22 +433,25 @@ class LDAPFeature(OpenStackControlPlaneFeature):
             with Path(ca_cert_file).open(mode="r") as f:
                 ca = f.read()
             charm_config["tls-ca-ldap"] = ca
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
-            TerraformInitStep(self.deployment.get_tfhelper(self.tfplan)),
-            UpdateLDAPDomainStep(jhelper, self, charm_config),
+            TerraformInitStep(deployment.get_tfhelper(self.tfplan)),
+            UpdateLDAPDomainStep(deployment, jhelper, self, charm_config),
         ]
 
         run_plan(plan, console)
 
     @click.command()
     @click.argument("domain-name")
-    def remove_domain(self, domain_name: str) -> None:
+    @pass_method_obj
+    def remove_domain(self, deployment: Deployment, domain_name: str) -> None:
         """Remove LDAP backed domain."""
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
-            TerraformInitStep(self.deployment.get_tfhelper(self.tfplan)),
-            DisableLDAPDomainStep(jhelper, self, domain_name),
+            TerraformInitStep(deployment.get_tfhelper(self.tfplan)),
+            DisableLDAPDomainStep(
+                deployment, FeatureConfig(), jhelper, self, domain_name
+            ),
         ]
         run_plan(plan, console)
         click.echo(f"{domain_name} removed.")
@@ -433,28 +460,17 @@ class LDAPFeature(OpenStackControlPlaneFeature):
     def ldap_groups(self):
         """Manage ldap."""
 
-    def commands(self) -> dict:
-        """Dict of clickgroup along with commands."""
-        commands = super().commands()
-        try:
-            enabled = self.enabled
-        except ClusterServiceUnavailableException:
-            LOG.debug(
-                "Failed to query for feature status, is cloud bootstrapped ?",
-                exc_info=True,
-            )
-            enabled = False
+    def enabled_commands(self) -> dict[str, list[dict]]:
+        """Dict of clickgroup along with commands.
 
-        if enabled:
-            commands.update(
-                {
-                    "init": [{"name": "ldap", "command": self.ldap_groups}],
-                    "init.ldap": [
-                        {"name": "list-domains", "command": self.list_domains},
-                        {"name": "add-domain", "command": self.add_domain},
-                        {"name": "update-domain", "command": self.update_domain},
-                        {"name": "remove-domain", "command": self.remove_domain},
-                    ],
-                }
-            )
-        return commands
+        Return the commands available once the feature is enabled.
+        """
+        return {
+            "init": [{"name": "ldap", "command": self.ldap_groups}],
+            "init.ldap": [
+                {"name": "list-domains", "command": self.list_domains},
+                {"name": "add-domain", "command": self.add_domain},
+                {"name": "update-domain", "command": self.update_domain},
+                {"name": "remove-domain", "command": self.remove_domain},
+            ],
+        }

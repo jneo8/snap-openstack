@@ -19,9 +19,9 @@ import click
 import pytest
 
 import sunbeam.core.questions
-import sunbeam.features.ca.feature as ca
 import sunbeam.features.interface.utils
-import sunbeam.features.interface.v1.tls as tls
+import sunbeam.features.tls.ca as ca
+import sunbeam.features.tls.common as tls
 from sunbeam.core.common import ResultType
 from sunbeam.core.juju import ActionFailedException, LeaderNotFoundException
 

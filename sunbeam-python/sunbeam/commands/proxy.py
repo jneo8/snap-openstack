@@ -39,8 +39,8 @@ from sunbeam.core.common import (
     update_config,
 )
 from sunbeam.core.deployment import PROXY_CONFIG_KEY, Deployment
-from sunbeam.core.feature import FeatureManager
 from sunbeam.core.juju import CONTROLLER_MODEL, JujuHelper
+from sunbeam.core.manifest import Manifest
 from sunbeam.core.questions import (
     ConfirmQuestion,
     PromptQuestion,
@@ -121,7 +121,7 @@ def _update_proxy(proxy: dict, deployment: Deployment):
         )
     run_plan(plan, console)
 
-    FeatureManager.update_proxy_model_configs(deployment)
+    deployment.get_feature_manager().update_proxy_model_configs(deployment)
 
 
 @click.command()
@@ -231,12 +231,12 @@ class PromptForProxyStep(BaseStep):
     def __init__(
         self,
         deployment: Deployment,
-        deployment_preseed: dict | None = None,
+        manifest: Manifest | None = None,
         accept_defaults: bool = False,
     ):
         super().__init__("Proxy Settings", "Query user for proxy settings")
         self.deployment = deployment
-        self.preseed = deployment_preseed or {}
+        self.manifest = manifest
         self.accept_defaults = accept_defaults
         try:
             self.client = deployment.get_client()
@@ -278,10 +278,14 @@ class PromptForProxyStep(BaseStep):
 
             previous_answers.update(default_proxy_settings)
 
+        preseed = {}
+        if self.manifest and (proxy := self.manifest.core.config.proxy):
+            preseed = proxy.model_dump()
+
         proxy_bank = QuestionBank(
             questions=proxy_questions(),
             console=console,
-            preseed=self.preseed.get("proxy"),
+            preseed=preseed,
             previous_answers=previous_answers,
             accept_defaults=self.accept_defaults,
         )

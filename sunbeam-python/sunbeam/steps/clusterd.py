@@ -132,12 +132,12 @@ class AskManagementCidrStep(BaseStep):
     def __init__(
         self,
         client: Client,
-        deployment_preseed: dict | None = None,
+        manifest: Manifest | None = None,
         accept_defaults: bool = False,
     ):
         super().__init__("Management CIDR", "Determining management CIDR")
         self.client = client
-        self.preseed = deployment_preseed or {}
+        self.manifest = manifest
         self.accept_defaults = accept_defaults
         self.variables: dict = {}
 
@@ -158,11 +158,14 @@ class AskManagementCidrStep(BaseStep):
         except ClusterServiceUnavailableException:
             self.variables = {}
         self.variables.setdefault("bootstrap", {})
+        preseed = {}
+        if self.manifest and (bootstrap := self.manifest.core.config.bootstrap):
+            preseed = bootstrap.model_dump()
 
         bootstrap_bank = questions.QuestionBank(
             questions=bootstrap_questions(),
             console=console,  # type: ignore
-            preseed=self.preseed.get("bootstrap"),
+            preseed=preseed,
             previous_answers=self.variables.get("bootstrap", {}),
             accept_defaults=self.accept_defaults,
         )
@@ -584,7 +587,7 @@ class DeploySunbeamClusterdApplicationStep(BaseStep):
 
         num_units = num_machines
         self.update_status(status, "deploying application")
-        charm_manifest: CharmManifest = self.manifest.software.charms[
+        charm_manifest: CharmManifest = self.manifest.core.software.charms[
             "sunbeam-clusterd"
         ]
         charm_config = {"snap-channel": versions.SNAP_SUNBEAM_CLUSTERD_CHANNEL}

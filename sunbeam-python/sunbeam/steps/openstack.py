@@ -408,12 +408,12 @@ class PromptRegionStep(BaseStep):
     def __init__(
         self,
         client: Client,
-        deployment_preseed: dict | None = None,
+        manifest: Manifest | None = None,
         accept_defaults: bool = False,
     ):
         super().__init__("Region", "Query user for region")
         self.client = client
-        self.preseed = deployment_preseed or {}
+        self.manifest = manifest
         self.accept_defaults = accept_defaults
         self.variables: dict = {}
 
@@ -430,10 +430,14 @@ class PromptRegionStep(BaseStep):
             # Region cannot be modified once set
             LOG.debug(f"Region already set to {region}")
             return
+        preseed = {}
+        if self.manifest:
+            preseed["region"] = self.manifest.core.config.region
+
         region_bank = QuestionBank(
             questions=region_questions(),
             console=console,
-            preseed=self.preseed,
+            preseed=preseed,
             previous_answers=self.variables,
             accept_defaults=self.accept_defaults,
         )

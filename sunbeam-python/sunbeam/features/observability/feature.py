@@ -61,6 +61,7 @@ from sunbeam.core.k8s import K8SHelper
 from sunbeam.core.manifest import (
     AddManifestStep,
     CharmManifest,
+    FeatureConfig,
     Manifest,
     SoftwareConfig,
     TerraformManifest,
@@ -72,7 +73,7 @@ from sunbeam.core.terraform import (
     TerraformHelper,
     TerraformInitStep,
 )
-from sunbeam.features.interface.v1.base import FeatureRequirement
+from sunbeam.features.interface.v1.base import BaseFeatureGroup, FeatureRequirement
 from sunbeam.features.interface.v1.openstack import (
     DisableOpenStackApplicationStep,
     EnableOpenStackApplicationStep,
@@ -80,6 +81,7 @@ from sunbeam.features.interface.v1.openstack import (
     TerraformPlanLocation,
 )
 from sunbeam.steps.k8s import CREDENTIAL_SUFFIX
+from sunbeam.utils import pass_method_obj
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -114,22 +116,23 @@ class DeployObservabilityStackStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
+        deployment: Deployment,
         feature: "ObservabilityFeature",
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
     ):
         super().__init__("Deploy Observability Stack", "Deploying Observability Stack")
+        self.deployment = deployment
         self.feature = feature
         self.tfhelper = tfhelper
         self.jhelper = jhelper
         self.manifest = self.feature.manifest
-        self.client = self.feature.deployment.get_client()
         self.model = OBSERVABILITY_MODEL
-        self.cloud = K8SHelper.get_cloud(self.feature.deployment.name)
+        self.cloud = K8SHelper.get_cloud(deployment.name)
 
     def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
-        proxy_settings = self.feature.deployment.get_proxy_settings()
+        proxy_settings = self.deployment.get_proxy_settings()
         model_config = convert_proxy_to_model_configs(proxy_settings)
         model_config.update({"workload-storage": K8SHelper.get_default_storageclass()})
         extra_tfvars = {
@@ -142,7 +145,7 @@ class DeployObservabilityStackStep(BaseStep, JujuStepHelper):
         try:
             self.update_status(status, "deploying services")
             self.tfhelper.update_tfvars_and_apply_tf(
-                self.client,
+                self.deployment.get_client(),
                 self.manifest,
                 tfvar_config=self._CONFIG,
                 override_tfvars=extra_tfvars,
@@ -181,6 +184,7 @@ class UpdateObservabilityModelConfigStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
+        deployment: Deployment,
         feature: "ObservabilityFeature",
         tfhelper: TerraformHelper,
     ):
@@ -188,16 +192,17 @@ class UpdateObservabilityModelConfigStep(BaseStep, JujuStepHelper):
             "Update Observability Model Config",
             "Updating Observability proxy related model config",
         )
+        self.deployment = deployment
         self.feature = feature
         self.tfhelper = tfhelper
         self.manifest = self.feature.manifest
-        self.client = self.feature.deployment.get_client()
+        self.client = deployment.get_client()
         self.model = OBSERVABILITY_MODEL
-        self.cloud = K8SHelper.get_cloud(self.feature.deployment.name)
+        self.cloud = K8SHelper.get_cloud(deployment.name)
 
     def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
-        proxy_settings = self.feature.deployment.get_proxy_settings()
+        proxy_settings = self.deployment.get_proxy_settings()
         model_config = convert_proxy_to_model_configs(proxy_settings)
         model_config.update({"workload-storage": K8SHelper.get_default_storageclass()})
         extra_tfvars = {
@@ -336,19 +341,23 @@ class DeployGrafanaAgentStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
+        deployment: Deployment,
+        config: FeatureConfig,
         feature: "ObservabilityFeature",
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
         accepted_app_status: list[str] = ["active"],
     ):
         super().__init__("Deploy Grafana Agent", "Deploy Grafana Agent")
+        self.deployment = deployment
+        self.config = config
         self.feature = feature
         self.tfhelper = tfhelper
         self.jhelper = jhelper
         self.manifest = self.feature.manifest
         self.accepted_app_status = accepted_app_status
-        self.client = self.feature.deployment.get_client()
-        self.model = self.feature.deployment.openstack_machines_model
+        self.client = self.deployment.get_client()
+        self.model = self.deployment.openstack_machines_model
 
     def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
@@ -357,7 +366,9 @@ class DeployGrafanaAgentStep(BaseStep, JujuStepHelper):
             "principal-application": "openstack-hypervisor",
         }
         # Offer URLs from COS are added from feature
-        extra_tfvars.update(self.feature.set_tfvars_on_enable())
+        extra_tfvars.update(
+            self.feature.set_tfvars_on_enable(self.deployment, self.config)
+        )
 
         try:
             self.update_status(status, "deploying services")
@@ -394,17 +405,19 @@ class RemoveObservabilityStackStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
+        deployment: Deployment,
         feature: "ObservabilityFeature",
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
     ):
         super().__init__("Remove Observability Stack", "Removing Observability Stack")
+        self.deployment = deployment
         self.feature = feature
         self.tfhelper = tfhelper
         self.manifest = self.feature.manifest
         self.jhelper = jhelper
         self.model = OBSERVABILITY_MODEL
-        self.cloud = K8SHelper.get_cloud(self.feature.deployment.name)
+        self.cloud = K8SHelper.get_cloud(deployment.name)
 
     def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
@@ -435,17 +448,19 @@ class RemoveGrafanaAgentStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
+        deployment: Deployment,
         feature: "ObservabilityFeature",
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
     ):
         super().__init__("Remove Grafana Agent", "Removing Grafana Agent")
+        self.deployment = deployment
         self.feature = feature
         self.tfhelper = tfhelper
         self.jhelper = jhelper
         self.manifest = self.feature.manifest
-        self.client = self.feature.deployment.get_client()
-        self.model = self.feature.deployment.openstack_machines_model
+        self.client = deployment.get_client()
+        self.model = deployment.openstack_machines_model
 
     def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
@@ -473,7 +488,7 @@ class RemoveGrafanaAgentStep(BaseStep, JujuStepHelper):
             "principal-application": "openstack-hypervisor",
         }
         # Offer URLs from COS are added from feature
-        extra_tfvars.update(self.feature.set_tfvars_on_disable())
+        extra_tfvars.update(self.feature.set_tfvars_on_disable(self.deployment))
         update_config(self.client, self._CONFIG, extra_tfvars)
 
         return Result(ResultType.COMPLETED)
@@ -497,6 +512,7 @@ class IntegrateRemoteCosOffersStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
+        deployment: Deployment,
         feature: "ObservabilityFeature",
         jhelper: JujuHelper,
     ):
@@ -504,6 +520,7 @@ class IntegrateRemoteCosOffersStep(BaseStep, JujuStepHelper):
             "Integrate external Observability offers",
             "Integrating external Observability offers",
         )
+        self.deployment = deployment
         self.feature = feature
         self.jhelper = jhelper
         self.model = OPENSTACK_MODEL
@@ -520,7 +537,7 @@ class IntegrateRemoteCosOffersStep(BaseStep, JujuStepHelper):
         """Execute integrations using external offers."""
         for model in [
             OPENSTACK_MODEL,
-            self.feature.deployment.openstack_machines_model,
+            self.deployment.openstack_machines_model,
         ]:
             for relation_pair in self.relations:
                 if relation_pair[0] and relation_pair[1]:
@@ -532,7 +549,7 @@ class IntegrateRemoteCosOffersStep(BaseStep, JujuStepHelper):
 
         for model in [
             OPENSTACK_MODEL,
-            self.feature.deployment.openstack_machines_model,
+            self.deployment.openstack_machines_model,
         ]:
             app = "grafana-agent"
             LOG.debug(f"Application monitored for readiness: {app}")
@@ -559,6 +576,7 @@ class RemoveRemoteCosOffersStep(BaseStep, JujuStepHelper):
 
     def __init__(
         self,
+        deployment: Deployment,
         feature: "ObservabilityFeature",
         jhelper: JujuHelper,
     ):
@@ -566,6 +584,7 @@ class RemoveRemoteCosOffersStep(BaseStep, JujuStepHelper):
             "Remove external Observability offers",
             "Removing external Observability offers",
         )
+        self.deployment = deployment
         self.feature = feature
         self.jhelper = jhelper
         self.endpoints = [
@@ -591,7 +610,7 @@ class RemoveRemoteCosOffersStep(BaseStep, JujuStepHelper):
         """Execute integrations using external offers."""
         for model in [
             OPENSTACK_MODEL,
-            self.feature.deployment.openstack_machines_model,
+            self.deployment.openstack_machines_model,
         ]:
             relations = self._get_relations(model, self.endpoints)
             LOG.debug(f"List of relations to remove in model {model}: {relations}")
@@ -604,7 +623,7 @@ class RemoveRemoteCosOffersStep(BaseStep, JujuStepHelper):
 
         for model in [
             OPENSTACK_MODEL,
-            self.feature.deployment.openstack_machines_model,
+            self.deployment.openstack_machines_model,
         ]:
             app = "grafana-agent"
             LOG.debug(f"Application monitored for readiness: {app}")
@@ -624,14 +643,30 @@ class RemoveRemoteCosOffersStep(BaseStep, JujuStepHelper):
         return Result(ResultType.COMPLETED)
 
 
+class ObservabilityFeatureGroup(BaseFeatureGroup):
+    name = "observability"
+
+    @click.group()
+    @pass_method_obj
+    def enable_group(self, deployment: Deployment) -> None:
+        """Enable Observability service."""
+
+    @click.group()
+    @pass_method_obj
+    def disable_group(self, deployment: Deployment) -> None:
+        """Disable Observability service."""
+
+
 class ObservabilityFeature(OpenStackControlPlaneFeature):
     version = Version("0.0.1")
     requires = {FeatureRequirement("telemetry")}
 
-    def __init__(self, deployment: Deployment) -> None:
-        super().__init__(
-            "observability", deployment, TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
-        )
+    # name = "observability"
+    group = ObservabilityFeatureGroup
+    tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
+
+    def __init__(self) -> None:
+        super().__init__()
         self.tfplan_cos = COS_TFPLAN
         self.tfplan_cos_dir = "deploy-cos"
         self.tfplan_grafana_agent = GRAFANA_AGENT_TFPLAN
@@ -646,13 +681,15 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
     @property
     def manifest(self) -> Manifest:
         """Return the manifest."""
-        if self._manifest is not None:
+        if self._manifest:
             return self._manifest
 
-        self._manifest: Manifest = self.deployment.get_manifest()
-        return self._manifest
+        manifest = click.get_current_context().obj.get_manifest(self.user_manifest)
+        self._manifest = manifest
 
-    def manifest_defaults(self) -> SoftwareConfig:
+        return manifest
+
+    def default_software_overrides(self) -> SoftwareConfig:
         """Feature software configuration."""
         return SoftwareConfig(
             charms={
@@ -734,41 +771,15 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
             },
         }
 
-    def update_proxy_model_configs(self) -> None:
-        """Update proxy model configs."""
-        try:
-            if not self.enabled:
-                LOG.debug("Observability feature is not enabled, nothing to do")
-                return
-
-            provider = self.get_provider_type_from_cluster()
-            if provider and provider == ProviderType.EXTERNAL:
-                LOG.debug("Observability stack is remote, nothing to do")
-                return
-        except ClusterServiceUnavailableException:
-            LOG.debug(
-                "Failed to query for feature status, is cloud bootstrapped ?",
-                exc_info=True,
-            )
-            return
-
-        plan = [
-            TerraformInitStep(self.deployment.get_tfhelper(self.tfplan_cos)),
-            UpdateObservabilityModelConfigStep(
-                self, self.deployment.get_tfhelper(self.tfplan_cos)
-            ),
-        ]
-        run_plan(plan, console)
-
-    def set_application_names(self) -> list:
+    def set_application_names(self, deployment: Deployment) -> list:
         """Application names handled by the main terraform plan."""
         # main plan only handles grafana-agent-k8s, named grafana-agent
         return ["grafana-agent"]
 
-    def get_cos_offer_urls(self) -> dict:
+    def get_cos_offer_urls(self, deployment: Deployment) -> dict:
         """Return COS offer URLs."""
         if not self.external:
-            tfhelper_cos = self.deployment.get_tfhelper(self.tfplan_cos)
+            tfhelper_cos = deployment.get_tfhelper(self.tfplan_cos)
             output = tfhelper_cos.output()
             return {
                 "grafana-dashboard-offer-url": output["grafana-dashboard-offer-url"],
@@ -783,15 +794,17 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
         # Should return URLs from user input when above bug is fixed
         return {}
 
-    def set_tfvars_on_enable(self) -> dict:
+    def set_tfvars_on_enable(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to enable the application."""
         tfvars = {
             "enable-observability": True,
         }
-        tfvars.update(self.get_cos_offer_urls())
+        tfvars.update(self.get_cos_offer_urls(deployment))
         return tfvars
 
-    def set_tfvars_on_disable(self) -> dict:
+    def set_tfvars_on_disable(self, deployment: Deployment) -> dict:
         """Set terraform variables to disable the application."""
         return {
             "enable-observability": False,
@@ -800,7 +813,9 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
             "receive-remote-write-offer-url": None,
         }
 
-    def set_tfvars_on_resize(self) -> dict:
+    def set_tfvars_on_resize(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to resize the application."""
         return {}
 
@@ -808,200 +823,41 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
         """Return provide type external or embedded."""
         return ProviderType.EXTERNAL if self.external else ProviderType.EMBEDDED
 
-    def get_provider_type_from_cluster(self) -> str | None:
+    def get_provider_type_from_cluster(self, deployment: Deployment) -> str | None:
         """Return provider type from database.
 
         Return None if provider type is not set in database.
         """
         try:
-            config = read_config(
-                self.deployment.get_client(), OBSERVABILITY_FEATURE_KEY
-            )
+            config = read_config(deployment.get_client(), OBSERVABILITY_FEATURE_KEY)
         except ConfigItemNotFoundException:
             config = {}
 
         return config.get("provider")
 
-    def run_enable_plans_embedded(self):
-        """Run the enablement plans for embedded."""
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+    def pre_checks(self, deployment: Deployment) -> None:
+        """Perform preflight checks before enabling the feature.
 
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
-        tfhelper_cos = self.deployment.get_tfhelper(self.tfplan_cos)
-        tfhelper_grafana_agent = self.deployment.get_tfhelper(self.tfplan_grafana_agent)
-
-        client = self.deployment.get_client()
-        plan = []
-        if self.user_manifest:
-            plan.append(AddManifestStep(client, self.user_manifest))
-
-        cos_plan = [
-            TerraformInitStep(tfhelper_cos),
-            DeployObservabilityStackStep(self, tfhelper_cos, jhelper),
-            PatchCosLoadBalancerStep(client),
-        ]
-
-        grafana_agent_k8s_plan = [
-            TerraformInitStep(tfhelper),
-            EnableOpenStackApplicationStep(tfhelper, jhelper, self),
-        ]
-
-        grafana_agent_plan = [
-            TerraformInitStep(tfhelper_grafana_agent),
-            DeployGrafanaAgentStep(self, tfhelper_grafana_agent, jhelper),
-        ]
-
-        run_plan(plan, console)
-        run_plan(cos_plan, console)
-        run_plan(grafana_agent_k8s_plan, console)
-        run_plan(grafana_agent_plan, console)
-
-    def run_disable_plans_embedded(self):
-        """Run the disablement plans for embedded."""
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
-        tfhelper_cos = self.deployment.get_tfhelper(self.tfplan_cos)
-        tfhelper_grafana_agent = self.deployment.get_tfhelper(self.tfplan_grafana_agent)
-
-        agent_grafana_k8s_plan = [
-            TerraformInitStep(tfhelper),
-            DisableOpenStackApplicationStep(tfhelper, jhelper, self),
-            RemoveSaasApplicationsStep(
-                jhelper, OPENSTACK_MODEL, offering_model=OBSERVABILITY_MODEL
-            ),
-        ]
-
-        grafana_agent_plan = [
-            TerraformInitStep(tfhelper_grafana_agent),
-            RemoveGrafanaAgentStep(self, tfhelper_grafana_agent, jhelper),
-            RemoveSaasApplicationsStep(
-                jhelper,
-                self.deployment.openstack_machines_model,
-                offering_model=OBSERVABILITY_MODEL,
-            ),
-        ]
-
-        cos_plan = [
-            TerraformInitStep(tfhelper_cos),
-            RemoveObservabilityStackStep(self, tfhelper_cos, jhelper),
-        ]
-
-        run_plan(agent_grafana_k8s_plan, console)
-        run_plan(grafana_agent_plan, console)
-        run_plan(cos_plan, console)
-
-    def run_enable_plans_external(self):
-        """Run the enablement plans for external."""
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
-
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
-        tfhelper_grafana_agent = self.deployment.get_tfhelper(self.tfplan_grafana_agent)
-
-        client = self.deployment.get_client()
-        plan = []
-        if self.user_manifest:
-            plan.append(AddManifestStep(client, self.user_manifest))
-
-        grafana_agent_k8s_plan = [
-            TerraformInitStep(tfhelper),
-            EnableOpenStackApplicationStep(
-                tfhelper, jhelper, self, app_desired_status=["active", "blocked"]
-            ),
-        ]
-
-        grafana_agent_plan = [
-            TerraformInitStep(tfhelper_grafana_agent),
-            DeployGrafanaAgentStep(
-                self,
-                tfhelper_grafana_agent,
-                jhelper,
-                accepted_app_status=["active", "blocked"],
-            ),
-        ]
-
-        # Workaround as integrations are not handled in terraform plan
-        # https://github.com/juju/terraform-provider-juju/issues/119
-        grafana_integrations_plan = [IntegrateRemoteCosOffersStep(self, jhelper)]
-
-        run_plan(plan, console)
-        run_plan(grafana_agent_k8s_plan, console)
-        run_plan(grafana_agent_plan, console)
-        run_plan(grafana_integrations_plan, console)
-
-    def run_disable_plans_external(self):
-        """Run the disablement plans for external."""
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
-        tfhelper_grafana_agent = self.deployment.get_tfhelper(self.tfplan_grafana_agent)
-
-        # Workaround as integrations are not handled in terraform plan
-        # https://github.com/juju/terraform-provider-juju/issues/119
-        grafana_remove_offers_plan = [RemoveRemoteCosOffersStep(self, jhelper)]
-
-        agent_grafana_k8s_plan = [
-            TerraformInitStep(tfhelper),
-            DisableOpenStackApplicationStep(tfhelper, jhelper, self),
-            RemoveSaasApplicationsStep(
-                jhelper,
-                OPENSTACK_MODEL,
-                offering_interfaces=OBSERVABILITY_OFFER_INTERFACES,
-            ),
-        ]
-
-        grafana_agent_plan = [
-            TerraformInitStep(tfhelper_grafana_agent),
-            RemoveGrafanaAgentStep(self, tfhelper_grafana_agent, jhelper),
-            RemoveSaasApplicationsStep(
-                jhelper,
-                self.deployment.openstack_machines_model,
-                offering_interfaces=OBSERVABILITY_OFFER_INTERFACES,
-            ),
-        ]
-
-        run_plan(grafana_remove_offers_plan, console)
-        run_plan(agent_grafana_k8s_plan, console)
-        run_plan(grafana_agent_plan, console)
-
-    def run_enable_plans(self):
-        """Run the enablement plans."""
-        if self.external:
-            self.run_enable_plans_external()
-        else:
-            self.run_enable_plans_embedded()
-
-        click.echo("Observability enabled.")
-
-    def run_disable_plans(self):
-        """Run the disablement plans."""
-        if self.external:
-            self.run_disable_plans_external()
-        else:
-            self.run_disable_plans_embedded()
-
-        click.echo("Observability disabled.")
-
-    def pre_enable(self) -> None:
-        """Handler to perform tasks before enabling the feature."""
-        super().pre_enable()
-        provider = self.get_provider_type_from_cluster()
+        Also copies terraform plans to required locations.
+        """
+        super().pre_checks(deployment)
+        provider = self.get_provider_type_from_cluster(deployment)
         if provider and provider != self.get_provider_type().name:
             raise Exception(f"Observability provider already set to {provider!r}")
 
-    def post_enable(self) -> None:
+    def post_enable(self, deployment: Deployment, config: FeatureConfig) -> None:
         """Handler to perform tasks after the feature is enabled."""
-        super().post_enable()
-        config = {
+        super().post_enable(deployment, config)
+        provider = {
             "provider": self.get_provider_type().name,
         }
-        update_config(self.deployment.get_client(), OBSERVABILITY_FEATURE_KEY, config)
+        update_config(deployment.get_client(), OBSERVABILITY_FEATURE_KEY, provider)
 
-    def pre_disable(self) -> None:
+    def pre_disable(self, deployment: Deployment) -> None:
         """Handler to perform tasks before disabling the feature."""
-        super().pre_enable()
+        super().pre_disable(deployment)
         try:
-            config = read_config(
-                self.deployment.get_client(), OBSERVABILITY_FEATURE_KEY
-            )
+            config = read_config(deployment.get_client(), OBSERVABILITY_FEATURE_KEY)
         except ConfigItemNotFoundException:
             config = {}
 
@@ -1009,105 +865,145 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
         if provider and provider != self.get_provider_type().name:
             raise Exception(f"Observability provider set to {provider!r}")
 
-    def post_disable(self) -> None:
+    def post_disable(self, deployment: Deployment) -> None:
         """Handler to perform tasks after the feature is disabled."""
-        super().post_disable()
+        super().post_disable(deployment)
 
         config: dict = {}
-        update_config(self.deployment.get_client(), OBSERVABILITY_FEATURE_KEY, config)
+        update_config(deployment.get_client(), OBSERVABILITY_FEATURE_KEY, config)
 
-    @click.command()
-    def enable_embedded_feature(self) -> None:
-        """Deploy Observability stack."""
-        super().enable_feature()
+    # @click.group(invoke_without_command=True)
+    # @pass_method_obj
+    # def enable_cmd(self, deployment: Deployment) -> None:
+    #     """Enable Observability service."""
+    #     ctx = click.get_current_context()
+    #     if ctx.invoked_subcommand is None:
+    #         click.echo(
+    #             "WARNING: This command is deprecated. "
+    #             "Use `sunbeam enable observability embedded` instead."
+    #         )
+    #         self.enable_feature(deployment, FeatureConfig())
 
-    @click.command()
-    def disable_embedded_feature(self) -> None:
-        """Disable Observability stack."""
-        super().disable_feature()
-
-    @click.command()
-    @click.argument(
-        "controller",
-        type=str,
-    )
-    @click.argument(
-        "grafana-dashboard-offer-url",
-        type=str,
-    )
-    @click.argument(
-        "prometheus-receive-remote-write-offer-url",
-        type=str,
-    )
-    @click.argument("loki-logging-offer-url", type=str)
-    def enable_external_feature(
-        self,
-        controller: str,
-        grafana_dashboard_offer_url: str,
-        prometheus_receive_remote_write_offer_url: str,
-        loki_logging_offer_url: str,
-    ) -> None:
-        """Connect to external Observability stack."""
-        self.external = True
-        self.prometheus_offer_url = (
-            f"{controller}:{prometheus_receive_remote_write_offer_url}"
-        )
-        self.grafana_offer_url = f"{controller}:{grafana_dashboard_offer_url}"
-        self.loki_offer_url = f"{controller}:{loki_logging_offer_url}"
-
-        data_location = self.snap.paths.user_data
-        preflight_checks: list[Check] = []
-        preflight_checks.append(
-            JujuControllerRegistrationCheck(controller, data_location)
-        )
-        run_preflight_checks(preflight_checks, console)
-
-        super().enable_feature()
-
-    @click.command()
-    def disable_external_feature(self) -> None:
-        """Disconnect from external Observability stack."""
-        self.external = True
-        super().disable_feature()
-
-    @click.group(invoke_without_command=True)
-    def enable_observability(self) -> None:
-        """Enable Observability service."""
-        ctx = click.get_current_context()
-        if ctx.invoked_subcommand is None:
-            click.echo(
-                "WARNING: This command is deprecated. "
-                "Use `sunbeam enable observability embedded` instead."
-            )
-            super().enable_feature()
-
-    @click.group(invoke_without_command=True)
-    def disable_observability(self) -> None:
-        """Disable Observability service."""
-        ctx = click.get_current_context()
-        if ctx.invoked_subcommand is None:
-            click.echo(
-                "WARNING: This command is deprecated. "
-                "Use `sunbeam disable observability embedded` instead."
-            )
-            super().disable_feature()
-
-    @click.command()
-    def enable_feature(self):
-        """Enable Observaility feature."""
-
-    @click.command()
-    def disable_feature(self):
-        """Disable Observaility feature."""
+    # @click.group(invoke_without_command=True)
+    # @pass_method_obj
+    # def disable_cmd(self, deployment: Deployment) -> None:
+    #     """Disable Observability service."""
+    #     ctx = click.get_current_context()
+    #     if ctx.invoked_subcommand is None:
+    #         click.echo(
+    #             "WARNING: This command is deprecated. "
+    #             "Use `sunbeam disable observability embedded` instead."
+    #         )
+    #         self.disable_feature(deployment, FeatureConfig())
 
     @click.group()
     def observability_group(self):
         """Manage Observability."""
 
+
+class EmbeddedObservabilityFeature(ObservabilityFeature):
+    name = "observability.embedded"
+
+    def update_proxy_model_configs(self, deployment: Deployment) -> None:
+        """Update proxy model configs."""
+        try:
+            if not self.is_enabled(deployment.get_client()):
+                LOG.debug("Observability feature is not enabled, nothing to do")
+                return
+        except ClusterServiceUnavailableException:
+            LOG.debug(
+                "Failed to query for feature status, is cloud bootstrapped ?",
+                exc_info=True,
+            )
+            return
+
+        plan = [
+            TerraformInitStep(deployment.get_tfhelper(self.tfplan_cos)),
+            UpdateObservabilityModelConfigStep(
+                deployment, self, deployment.get_tfhelper(self.tfplan_cos)
+            ),
+        ]
+        run_plan(plan, console)
+
+    def run_enable_plans(self, deployment: Deployment, config: FeatureConfig):
+        """Run the enablement plans for embedded."""
+        jhelper = JujuHelper(deployment.get_connected_controller())
+
+        tfhelper = deployment.get_tfhelper(self.tfplan)
+        tfhelper_cos = deployment.get_tfhelper(self.tfplan_cos)
+        tfhelper_grafana_agent = deployment.get_tfhelper(self.tfplan_grafana_agent)
+
+        client = deployment.get_client()
+        plan = []
+        if self.user_manifest:
+            plan.append(AddManifestStep(client, self.user_manifest))
+
+        cos_plan = [
+            TerraformInitStep(tfhelper_cos),
+            DeployObservabilityStackStep(deployment, self, tfhelper_cos, jhelper),
+            PatchCosLoadBalancerStep(client),
+        ]
+
+        grafana_agent_k8s_plan = [
+            TerraformInitStep(tfhelper),
+            EnableOpenStackApplicationStep(deployment, config, tfhelper, jhelper, self),
+        ]
+
+        grafana_agent_plan = [
+            TerraformInitStep(tfhelper_grafana_agent),
+            DeployGrafanaAgentStep(
+                deployment, config, self, tfhelper_grafana_agent, jhelper
+            ),
+        ]
+
+        run_plan(plan, console)
+        run_plan(cos_plan, console)
+        run_plan(grafana_agent_k8s_plan, console)
+        run_plan(grafana_agent_plan, console)
+
+        click.echo("Observability enabled.")
+
+    def run_disable_plans(self, deployment: Deployment):
+        """Run the disablement plans for embedded."""
+        jhelper = JujuHelper(deployment.get_connected_controller())
+        tfhelper = deployment.get_tfhelper(self.tfplan)
+        tfhelper_cos = deployment.get_tfhelper(self.tfplan_cos)
+        tfhelper_grafana_agent = deployment.get_tfhelper(self.tfplan_grafana_agent)
+
+        agent_grafana_k8s_plan = [
+            TerraformInitStep(tfhelper),
+            DisableOpenStackApplicationStep(deployment, tfhelper, jhelper, self),
+            RemoveSaasApplicationsStep(
+                jhelper, OPENSTACK_MODEL, offering_model=OBSERVABILITY_MODEL
+            ),
+        ]
+
+        grafana_agent_plan = [
+            TerraformInitStep(tfhelper_grafana_agent),
+            RemoveGrafanaAgentStep(deployment, self, tfhelper_grafana_agent, jhelper),
+            RemoveSaasApplicationsStep(
+                jhelper,
+                deployment.openstack_machines_model,
+                offering_model=OBSERVABILITY_MODEL,
+            ),
+        ]
+
+        cos_plan = [
+            TerraformInitStep(tfhelper_cos),
+            RemoveObservabilityStackStep(deployment, self, tfhelper_cos, jhelper),
+        ]
+
+        run_plan(agent_grafana_k8s_plan, console)
+        run_plan(grafana_agent_plan, console)
+        run_plan(cos_plan, console)
+
+        click.echo("Observability disabled.")
+
     @click.command()
-    def dashboard_url(self) -> None:
+    @pass_method_obj
+    def dashboard_url(self, deployment: Deployment) -> None:
         """Retrieve COS Dashboard URL."""
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
 
         with console.status("Retrieving dashboard URL from Grafana service ... "):
             # Retrieve config from juju actions
@@ -1132,43 +1028,163 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
                 _message = "No URL provided by Grafana service"
                 raise click.ClickException(_message)
 
-    def commands(self) -> dict:
-        """Dict of clickgroup along with commands."""
-        try:
-            embedded_provider = False
-            enabled = self.enabled
-            provider = self.get_provider_type_from_cluster()
-            if provider and provider == ProviderType.EMBEDDED.name:
-                embedded_provider = True
-        except ClusterServiceUnavailableException:
-            LOG.debug(
-                "Failed to query for feature status, is cloud bootstrapped ?",
-                exc_info=True,
-            )
-            enabled = False
+    @click.command()
+    @pass_method_obj
+    def enable_cmd(self, deployment: Deployment) -> None:
+        """Deploy Observability stack."""
+        self.enable_feature(deployment, FeatureConfig())
 
-        commands = {
-            "enable": [{"name": self.name, "command": self.enable_observability}],
-            "disable": [{"name": self.name, "command": self.disable_observability}],
-            f"enable.{self.name}": [
-                {"name": "embedded", "command": self.enable_embedded_feature},
-                {"name": "external", "command": self.enable_external_feature},
-            ],
-            f"disable.{self.name}": [
-                {"name": "embedded", "command": self.disable_embedded_feature},
-                {"name": "external", "command": self.disable_external_feature},
+    @click.command()
+    @pass_method_obj
+    def disable_cmd(self, deployment: Deployment) -> None:
+        """Disable Observability stack."""
+        self.disable_feature(deployment)
+
+    def enabled_commands(self) -> dict[str, list[dict]]:
+        """Dict of clickgroup along with commands.
+
+        Return the commands available once the feature is enabled.
+        """
+        return {
+            "init": [{"name": "observability", "command": self.observability_group}],
+            "init.observability": [
+                {"name": "dashboard-url", "command": self.dashboard_url}
             ],
         }
 
-        if enabled and embedded_provider:
-            commands.update(
-                {
-                    "init": [
-                        {"name": "observability", "command": self.observability_group}
-                    ],
-                    "init.observability": [
-                        {"name": "dashboard-url", "command": self.dashboard_url}
-                    ],
-                }
-            )
-        return commands
+
+class ExternalObservabilityFeature(ObservabilityFeature):
+    name = "observability.external"
+
+    def run_enable_plans(self, deployment: Deployment, config: FeatureConfig):
+        """Run the enablement plans for external."""
+        jhelper = JujuHelper(deployment.get_connected_controller())
+
+        tfhelper = deployment.get_tfhelper(self.tfplan)
+        tfhelper_grafana_agent = deployment.get_tfhelper(self.tfplan_grafana_agent)
+
+        client = deployment.get_client()
+        plan = []
+        if self.user_manifest:
+            plan.append(AddManifestStep(client, self.user_manifest))
+
+        grafana_agent_k8s_plan = [
+            TerraformInitStep(tfhelper),
+            EnableOpenStackApplicationStep(
+                deployment,
+                config,
+                tfhelper,
+                jhelper,
+                self,
+                app_desired_status=["active", "blocked"],
+            ),
+        ]
+
+        grafana_agent_plan = [
+            TerraformInitStep(tfhelper_grafana_agent),
+            DeployGrafanaAgentStep(
+                deployment,
+                config,
+                self,
+                tfhelper_grafana_agent,
+                jhelper,
+                accepted_app_status=["active", "blocked"],
+            ),
+        ]
+
+        # Workaround as integrations are not handled in terraform plan
+        # https://github.com/juju/terraform-provider-juju/issues/119
+        grafana_integrations_plan = [
+            IntegrateRemoteCosOffersStep(deployment, self, jhelper)
+        ]
+
+        run_plan(plan, console)
+        run_plan(grafana_agent_k8s_plan, console)
+        run_plan(grafana_agent_plan, console)
+        run_plan(grafana_integrations_plan, console)
+
+        click.echo("Observability enabled.")
+
+    def run_disable_plans(self, deployment: Deployment):
+        """Run the disablement plans for external."""
+        jhelper = JujuHelper(deployment.get_connected_controller())
+        tfhelper = deployment.get_tfhelper(self.tfplan)
+        tfhelper_grafana_agent = deployment.get_tfhelper(self.tfplan_grafana_agent)
+
+        # Workaround as integrations are not handled in terraform plan
+        # https://github.com/juju/terraform-provider-juju/issues/119
+        grafana_remove_offers_plan = [
+            RemoveRemoteCosOffersStep(deployment, self, jhelper)
+        ]
+
+        agent_grafana_k8s_plan = [
+            TerraformInitStep(tfhelper),
+            DisableOpenStackApplicationStep(deployment, tfhelper, jhelper, self),
+            RemoveSaasApplicationsStep(
+                jhelper,
+                OPENSTACK_MODEL,
+                offering_interfaces=OBSERVABILITY_OFFER_INTERFACES,
+            ),
+        ]
+
+        grafana_agent_plan = [
+            TerraformInitStep(tfhelper_grafana_agent),
+            RemoveGrafanaAgentStep(deployment, self, tfhelper_grafana_agent, jhelper),
+            RemoveSaasApplicationsStep(
+                jhelper,
+                deployment.openstack_machines_model,
+                offering_interfaces=OBSERVABILITY_OFFER_INTERFACES,
+            ),
+        ]
+
+        run_plan(grafana_remove_offers_plan, console)
+        run_plan(agent_grafana_k8s_plan, console)
+        run_plan(grafana_agent_plan, console)
+
+        click.echo("Observability disabled.")
+
+    @click.command()
+    @click.argument(
+        "controller",
+        type=str,
+    )
+    @click.argument(
+        "grafana-dashboard-offer-url",
+        type=str,
+    )
+    @click.argument(
+        "prometheus-receive-remote-write-offer-url",
+        type=str,
+    )
+    @click.argument("loki-logging-offer-url", type=str)
+    @pass_method_obj
+    def enable_cmd(
+        self,
+        deployment: Deployment,
+        controller: str,
+        grafana_dashboard_offer_url: str,
+        prometheus_receive_remote_write_offer_url: str,
+        loki_logging_offer_url: str,
+    ) -> None:
+        """Connect to external Observability stack."""
+        self.external = True
+        self.prometheus_offer_url = (
+            f"{controller}:{prometheus_receive_remote_write_offer_url}"
+        )
+        self.grafana_offer_url = f"{controller}:{grafana_dashboard_offer_url}"
+        self.loki_offer_url = f"{controller}:{loki_logging_offer_url}"
+
+        data_location = self.snap.paths.user_data
+        preflight_checks: list[Check] = []
+        preflight_checks.append(
+            JujuControllerRegistrationCheck(controller, data_location)
+        )
+        run_preflight_checks(preflight_checks, console)
+
+        self.enable_feature(deployment, FeatureConfig())
+
+    @click.command()
+    @pass_method_obj
+    def disable_cmd(self, deployment: Deployment) -> None:
+        """Disable Observability stack."""
+        self.disable_feature(deployment)

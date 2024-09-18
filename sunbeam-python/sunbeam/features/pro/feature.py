@@ -19,6 +19,7 @@ import logging
 from pathlib import Path
 
 import click
+import pydantic
 from packaging.version import Version
 from rich.console import Console
 from rich.status import Status
@@ -28,14 +29,19 @@ from sunbeam.clusterd.client import Client
 from sunbeam.core.common import BaseStep, Result, ResultType, run_plan
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper, JujuStepHelper, TimeoutException, run_sync
-from sunbeam.core.manifest import Manifest, SoftwareConfig, TerraformManifest
+from sunbeam.core.manifest import (
+    FeatureConfig,
+    Manifest,
+    SoftwareConfig,
+    TerraformManifest,
+)
 from sunbeam.core.terraform import (
     TerraformException,
     TerraformHelper,
     TerraformInitStep,
 )
 from sunbeam.features.interface.v1.base import EnableDisableFeature
-from sunbeam.utils import argument_with_deprecated_option
+from sunbeam.utils import argument_with_deprecated_option, pass_method_obj
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -43,6 +49,12 @@ console = Console()
 APPLICATION = "ubuntu-pro"
 APP_TIMEOUT = 180  # 3 minutes, managing the application should be fast
 UNIT_TIMEOUT = 1200  # 15 minutes, adding / removing units can take a long time
+
+
+class ProFeatureConfig(FeatureConfig):
+    token: str = pydantic.Field(
+        description="Token to attach the Ubuntu Pro subscription."
+    )
 
 
 class EnableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
@@ -167,12 +179,12 @@ class DisableUbuntuProApplicationStep(BaseStep, JujuStepHelper):
 
 class ProFeature(EnableDisableFeature):
     _manifest: Manifest | None
-    token: str | None
     version = Version("0.0.1")
 
-    def __init__(self, deployment: Deployment) -> None:
-        super().__init__("pro", deployment)
-        self.token = None
+    name = "pro"
+
+    def __init__(self) -> None:
+        super().__init__()
         self.snap = Snap()
         self.tfplan = "ubuntu-pro-plan"
         self.tfplan_dir = f"deploy-{self.name}"
@@ -184,10 +196,12 @@ class ProFeature(EnableDisableFeature):
         if self._manifest:
             return self._manifest
 
-        self._manifest = self.deployment.get_manifest()
-        return self._manifest
+        manifest = click.get_current_context().obj.get_manifest(self.user_manifest)
+        self._manifest = manifest
 
-    def manifest_defaults(self) -> SoftwareConfig:
+        return manifest
+
+    def default_software_overrides(self) -> SoftwareConfig:
         """Feature software configuration."""
         return SoftwareConfig(
             terraform={
@@ -197,21 +211,19 @@ class ProFeature(EnableDisableFeature):
             }
         )
 
-    def run_enable_plans(self):
+    def run_enable_plans(self, deployment: Deployment, config: ProFeatureConfig):
         """Run the enablement plans."""
-        if self.token is None:
-            raise ValueError("Token is required to enable Ubuntu Pro")
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        tfhelper = deployment.get_tfhelper(self.tfplan)
+        jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
             TerraformInitStep(tfhelper),
             EnableUbuntuProApplicationStep(
-                self.deployment.get_client(),
+                deployment.get_client(),
                 tfhelper,
                 jhelper,
                 self.manifest,
-                self.token,
-                self.deployment.openstack_machines_model,
+                config.token,
+                deployment.openstack_machines_model,
             ),
         ]
 
@@ -223,13 +235,13 @@ class ProFeature(EnableDisableFeature):
         )
         click.echo("Ubuntu Pro enabled.")
 
-    def run_disable_plans(self):
+    def run_disable_plans(self, deployment: Deployment):
         """Run the disablement plans."""
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
+        tfhelper = deployment.get_tfhelper(self.tfplan)
         plan = [
             TerraformInitStep(tfhelper),
             DisableUbuntuProApplicationStep(
-                self.deployment.get_client(),
+                deployment.get_client(),
                 tfhelper,
                 self.manifest,
             ),
@@ -239,20 +251,21 @@ class ProFeature(EnableDisableFeature):
         click.echo("Ubuntu Pro disabled.")
 
     @click.command()
+    @pass_method_obj
     @argument_with_deprecated_option(
         "token", type=str, short_form="t", help="Ubuntu Pro token"
     )
-    def enable_feature(self, token: str) -> None:
+    def enable_cmd(self, deployment: Deployment, token: str) -> None:
         """Enable Ubuntu Pro across deployment.
 
         Minimum hardware requirements for support:
 
         https://microstack.run/docs/enterprise-reqs
         """
-        self.token = token
-        super().enable_feature()
+        self.enable_feature(deployment, ProFeatureConfig(token=token))
 
     @click.command()
-    def disable_feature(self) -> None:
+    @pass_method_obj
+    def disable_cmd(self, deployment: Deployment) -> None:
         """Disable Ubuntu Pro across deployment."""
-        super().disable_feature()
+        self.disable_feature(deployment)

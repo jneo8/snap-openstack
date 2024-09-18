@@ -252,7 +252,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
         name: str,
         jhelper: JujuHelper,
         model: str,
-        deployment_preseed: dict | None = None,
+        manifest: Manifest | None = None,
         accept_defaults: bool = False,
     ):
         super().__init__("Configure MicroCeph storage", "Configuring MicroCeph storage")
@@ -260,7 +260,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
         self.node_name = name
         self.jhelper = jhelper
         self.model = model
-        self.preseed = deployment_preseed or {}
+        self.manifest = manifest
         self.accept_defaults = accept_defaults
         self.variables: dict = {}
         self.machine_id = ""
@@ -318,27 +318,24 @@ class ConfigureMicrocephOSDStep(BaseStep):
         )
 
         # Set defaults
-        self.preseed.setdefault("microceph_config", {})
-        self.preseed["microceph_config"].setdefault(
-            self.node_name, {"osd_devices": None}
-        )
+        if self.manifest and self.manifest.core.config.microceph_config:
+            microceph_config = self.manifest.core.config.model_dump()[
+                "microceph_config"
+            ]
+        else:
+            microceph_config = {}
+        microceph_config.setdefault(self.node_name, {"osd_devices": None})
 
         # Preseed can have osd_devices as list. If so, change to comma separated str
-        osd_devices = (
-            self.preseed.get("microceph_config", {})
-            .get(self.node_name, {})
-            .get("osd_devices")
-        )
+        osd_devices = microceph_config.get(self.node_name, {}).get("osd_devices")
         if isinstance(osd_devices, list):
             osd_devices_str = ",".join(osd_devices)
-            self.preseed["microceph_config"][self.node_name]["osd_devices"] = (
-                osd_devices_str
-            )
+            microceph_config[self.node_name]["osd_devices"] = osd_devices_str
 
         microceph_config_bank = questions.QuestionBank(
             questions=self.microceph_config_questions(),
             console=console,  # type: ignore
-            preseed=self.preseed.get("microceph_config", {}).get(self.node_name),
+            preseed=microceph_config.get(self.node_name),
             previous_answers=self.variables.get("microceph_config", {}).get(
                 self.node_name
             ),

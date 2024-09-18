@@ -1709,7 +1709,6 @@ class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
         jhelper: JujuHelper,
         manifest: Manifest,
         model: str,
-        deployment_preseed: dict | None = None,
         accept_defaults: bool = False,
     ):
         super().__init__(
@@ -1719,7 +1718,6 @@ class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
             jhelper,
             manifest,
             model,
-            deployment_preseed,
             accept_defaults,
         )
         self.maas_client = maas_client
@@ -1836,7 +1834,6 @@ class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
         jhelper: JujuHelper,
         manifest: Manifest,
         model: str,
-        deployment_preseed: dict | None = None,
         accept_defaults: bool = False,
     ):
         super().__init__(
@@ -1846,7 +1843,6 @@ class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
             jhelper,
             manifest,
             model,
-            deployment_preseed,
             accept_defaults,
         )
         self.maas_client = maas_client
@@ -2009,14 +2005,14 @@ class MaasSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         names: list[str],
         jhelper: JujuHelper,
         model: str,
-        deployment_preseed: dict | None = None,
+        manifest: Manifest | None = None,
     ):
         super().__init__(
             client,
             names,
             jhelper,
             model,
-            deployment_preseed or {},
+            manifest,
             "Apply hypervisor settings",
             "Applying hypervisor settings",
         )
@@ -2075,7 +2071,7 @@ class MaasUserQuestions(BaseStep):
         self,
         client: Client,
         maas_client: maas_client.MaasClient,
-        deployment_preseed: dict | None = None,
+        manifest: Manifest | None = None,
         accept_defaults: bool = False,
     ):
         super().__init__(
@@ -2084,7 +2080,7 @@ class MaasUserQuestions(BaseStep):
         self.client = client
         self.maas_client = maas_client
         self.accept_defaults = accept_defaults
-        self.preseed = deployment_preseed or {}
+        self.manifest = manifest
 
     def has_prompts(self) -> bool:
         """Returns true if the step has prompts that it can ask the user."""
@@ -2104,20 +2100,27 @@ class MaasUserQuestions(BaseStep):
         for section in ["user", "external_network"]:
             if not self.variables.get(section):
                 self.variables[section] = {}
-
+        preseed = {}
+        if self.manifest and (user := self.manifest.core.config.user):
+            preseed = user.model_dump()
         user_bank = sunbeam.core.questions.QuestionBank(
             questions=maas_deployment.maas_user_questions(self.maas_client),
             console=console,
-            preseed=self.preseed.get("user"),
+            preseed=preseed,
             previous_answers=self.variables.get("user"),
             accept_defaults=self.accept_defaults,
         )
         self.variables["user"]["remote_access_location"] = sunbeam_utils.REMOTE_ACCESS
         # External Network Configuration
+        preseed = {}
+        if self.manifest and (
+            ext_network := self.manifest.core.config.external_network
+        ):
+            preseed = ext_network.model_dump()
         ext_net_bank = sunbeam.core.questions.QuestionBank(
             questions=ext_net_questions(),
             console=console,
-            preseed=self.preseed.get("external_network"),
+            preseed=preseed,
             previous_answers=self.variables.get("external_network"),
             accept_defaults=self.accept_defaults,
         )

@@ -33,7 +33,6 @@ from sunbeam.commands import prepare_node as prepare_node_cmds
 from sunbeam.commands import proxy as proxy_cmds
 from sunbeam.commands import utils as utils_cmds
 from sunbeam.core import deployments as deployments_jobs
-from sunbeam.core.feature import FeatureManager
 from sunbeam.provider import commands as provider_cmds
 from sunbeam.utils import CatchGroup
 
@@ -121,7 +120,7 @@ def main():
 
     # Manifest management
     cli.add_command(manifest)
-    manifest.add_command(manifest_cmds.list)
+    manifest.add_command(manifest_cmds.list_manifests)
     manifest.add_command(manifest_cmds.show)
     manifest.add_command(manifest_cmds.generate)
 
@@ -142,7 +141,7 @@ def main():
     juju.add_command(juju_cmds.unregister_controller)
 
     # Register the features after all groups,commands are registered
-    FeatureManager.register(deployment, cli)
+    deployment.get_feature_manager().register(cli)
 
     cli(obj=deployment)
 

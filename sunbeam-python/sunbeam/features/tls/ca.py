@@ -18,6 +18,7 @@ import logging
 from pathlib import Path
 
 import click
+import pydantic
 import yaml
 from packaging.version import Version
 from rich.console import Console
@@ -26,7 +27,6 @@ from rich.table import Table
 
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import (
-    ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
 )
 from sunbeam.core import questions
@@ -47,7 +47,12 @@ from sunbeam.core.juju import (
     LeaderNotFoundException,
     run_sync,
 )
-from sunbeam.core.manifest import AddManifestStep, CharmManifest, SoftwareConfig
+from sunbeam.core.manifest import (
+    AddManifestStep,
+    CharmManifest,
+    FeatureConfig,
+    SoftwareConfig,
+)
 from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.features.interface.utils import (
     encode_base64_as_string,
@@ -60,15 +65,25 @@ from sunbeam.features.interface.v1.openstack import (
     TerraformPlanLocation,
     WaitForApplicationsStep,
 )
-from sunbeam.features.interface.v1.tls import (
+from sunbeam.features.tls.common import (
     INGRESS_CHANGE_APPLICATION_TIMEOUT,
-    TlsFeatureGroup,
+    TlsFeature,
+    TlsFeatureConfig,
 )
+from sunbeam.utils import pass_method_obj
 
 CERTIFICATE_FEATURE_KEY = "TlsProvider"
 CA_APP_NAME = "manual-tls-certificates"
 LOG = logging.getLogger(__name__)
 console = Console()
+
+
+class _Certificate(pydantic.BaseModel):
+    certificate: str
+
+
+class CaTlsFeatureConfig(TlsFeatureConfig):
+    certificates: dict[str, _Certificate] = {}
 
 
 def certificate_questions(unit: str, subject: str):
@@ -235,18 +250,17 @@ class ConfigureCAStep(BaseStep):
         return Result(ResultType.COMPLETED)
 
 
-class CaTlsFeature(TlsFeatureGroup):
+class CaTlsFeature(TlsFeature):
     version = Version("0.0.1")
 
-    def __init__(self, deployment: Deployment) -> None:
-        super().__init__(
-            "ca",
-            deployment,
-            tf_plan_location=TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO,
-        )
-        self.endpoints: list = []
+    name = "tls.ca"
+    tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
 
-    def manifest_defaults(self) -> SoftwareConfig:
+    def config_type(self) -> type | None:
+        """Return the config type for the feature."""
+        return CaTlsFeatureConfig
+
+    def default_software_overrides(self) -> SoftwareConfig:
         """Feature software configuration."""
         return SoftwareConfig(
             charms={"manual-tls-certificates": CharmManifest(channel="latest/stable")}
@@ -305,48 +319,58 @@ class CaTlsFeature(TlsFeatureGroup):
         callback=validate_ca_certificate,
         help="Base64 encoded CA certificate",
     )
-    def enable_feature(self, ca: str, ca_chain: str, endpoints: list[str]):
+    @pass_method_obj
+    def enable_cmd(
+        self, deployment: Deployment, ca: str, ca_chain: str, endpoints: list[str]
+    ):
         """Enable CA feature."""
-        self.ca = ca
-        self.ca_chain = ca_chain
-        self.endpoints = endpoints
-        super().enable_feature()
+        self.enable_feature(
+            deployment,
+            CaTlsFeatureConfig(ca=ca, ca_chain=ca_chain, endpoints=endpoints),
+        )
 
     @click.command()
-    def disable_feature(self):
+    @pass_method_obj
+    def disable_cmd(self, deployment: Deployment):
         """Disable CA feature."""
-        super().disable_feature()
+        self.disable_feature(deployment)
         console.print("CA feature disabled")
 
-    def set_application_names(self) -> list:
+    def set_application_names(self, deployment: Deployment) -> list:
         """Application names handled by the terraform plan."""
         return ["manual-tls-certificates"]
 
-    def set_tfvars_on_enable(self) -> dict:
+    def set_tfvars_on_enable(
+        self, deployment: Deployment, config: CaTlsFeatureConfig
+    ) -> dict:
         """Set terraform variables to enable the application."""
         tfvars: dict[str, str | bool] = {"traefik-to-tls-provider": CA_APP_NAME}
-        if "public" in self.endpoints:
+        if "public" in config.endpoints:
             tfvars.update({"enable-tls-for-public-endpoint": True})
-        if "internal" in self.endpoints:
+        if "internal" in config.endpoints:
             tfvars.update({"enable-tls-for-internal-endpoint": True})
-        if "rgw" in self.endpoints:
+        if "rgw" in config.endpoints:
             tfvars.update({"enable-tls-for-rgw-endpoint": True})
 
         return tfvars
 
-    def set_tfvars_on_disable(self) -> dict:
+    def set_tfvars_on_disable(self, deployment: Deployment) -> dict:
         """Set terraform variables to disable the application."""
         tfvars: dict[str, None | str | bool] = {"traefik-to-tls-provider": None}
-        if "public" in self.endpoints:
+        provider_config = self.provider_config(deployment)
+        endpoints = provider_config.get("endpoints", [])
+        if "public" in endpoints:
             tfvars.update({"enable-tls-for-public-endpoint": False})
-        if "internal" in self.endpoints:
+        if "internal" in endpoints:
             tfvars.update({"enable-tls-for-internal-endpoint": False})
-        if "rgw" in self.endpoints:
+        if "rgw" in endpoints:
             tfvars.update({"enable-tls-for-rgw-endpoint": False})
 
         return tfvars
 
-    def set_tfvars_on_resize(self) -> dict:
+    def set_tfvars_on_resize(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to resize the application."""
         return {}
 
@@ -365,12 +389,13 @@ class CaTlsFeature(TlsFeatureGroup):
         default=FORMAT_TABLE,
         help="Output format",
     )
-    def list_outstanding_csrs(self, format: str) -> None:
+    @pass_method_obj
+    def list_outstanding_csrs(self, deployment: Deployment, format: str) -> None:
         """List outstanding CSRs."""
         app = CA_APP_NAME
         model = OPENSTACK_MODEL
         action_cmd = "get-outstanding-certificate-requests"
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
         try:
             action_result = get_outstanding_certificate_requests(app, model, jhelper)
         except LeaderNotFoundException as e:
@@ -412,14 +437,16 @@ class CaTlsFeature(TlsFeatureGroup):
         help="Manifest file.",
         type=click.Path(exists=True, dir_okay=False, path_type=Path),
     )
+    @pass_method_obj
     def configure(
         self,
+        deployment: Deployment,
         manifest_path: Path | None = None,
     ) -> None:
         """Configure Unit certs."""
-        client = self.deployment.get_client()
-        manifest = self.deployment.get_manifest(manifest_path)
-        preseed = manifest.deployment
+        client = deployment.get_client()
+        manifest = deployment.get_manifest(manifest_path)
+        preseed = manifest.core.config
         model = OPENSTACK_MODEL
         apps_to_monitor = ["traefik", "traefik-public", "keystone"]
         if client.cluster.list_nodes_by_role("storage"):
@@ -429,21 +456,21 @@ class CaTlsFeature(TlsFeatureGroup):
             config = read_config(client, CERTIFICATE_FEATURE_KEY)
         except ConfigItemNotFoundException:
             config = {}
-        self.ca = config.get("ca")
-        self.ca_chain = config.get("chain")
+        ca = config.get("ca")
+        ca_chain = config.get("chain")
 
-        if self.ca is None or self.ca_chain is None:
+        if ca is None or ca_chain is None:
             raise click.ClickException("CA and CA Chain not configured")
 
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
             AddManifestStep(client, manifest_path),
             ConfigureCAStep(
                 client,
                 jhelper,
-                self.ca,
-                self.ca_chain,
-                deployment_preseed=preseed,
+                ca,
+                ca_chain,
+                deployment_preseed=preseed.model_dump() if preseed else {},
             ),
             # On ingress change, the keystone takes time to update the service
             # endpoint, update the identity-service relation data on every
@@ -455,37 +482,19 @@ class CaTlsFeature(TlsFeatureGroup):
         run_plan(plan, console)
         click.echo("CA certs configured")
 
-    def commands(self) -> dict:
-        """Return the commands for the feature."""
-        try:
-            enabled = self.enabled
-        except ClusterServiceUnavailableException:
-            LOG.debug(
-                "Failed to query for feature status, is cloud bootstrapped ?",
-                exc_info=True,
-            )
-            enabled = False
+    def enabled_commands(self) -> dict[str, list[dict]]:
+        """Dict of clickgroup along with commands.
 
-        commands = super().commands()
-        commands.update(
-            {
-                "enable.tls": [{"name": self.name, "command": self.enable_feature}],
-                "disable.tls": [{"name": self.name, "command": self.disable_feature}],
-            }
-        )
-        if enabled:
-            commands.update(
+        Return the commands available once the feature is enabled.
+        """
+        return {
+            "init": [{"name": self.group, "command": self.tls_group}],
+            "init.tls": [{"name": self.name, "command": self.ca_group}],
+            "init.tls.ca": [
+                {"name": "unit_certs", "command": self.configure},
                 {
-                    "init": [{"name": self.group, "command": self.tls_group}],
-                    "init.tls": [{"name": self.name, "command": self.ca_group}],
-                    "init.tls.ca": [
-                        {"name": "unit_certs", "command": self.configure},
-                        {
-                            "name": "list_outstanding_csrs",
-                            "command": self.list_outstanding_csrs,
-                        },
-                    ],
-                }
-            )
-
-        return commands
+                    "name": "list_outstanding_csrs",
+                    "command": self.list_outstanding_csrs,
+                },
+            ],
+        }

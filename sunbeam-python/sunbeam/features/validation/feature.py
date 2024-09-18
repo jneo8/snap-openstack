@@ -29,10 +29,8 @@ from rich.status import Status
 from rich.table import Column, Table
 
 from sunbeam.clusterd.client import Client
-from sunbeam.clusterd.service import ClusterServiceUnavailableException
 from sunbeam.core.common import BaseStep, Result, ResultType, run_plan
 from sunbeam.core.deployment import Deployment
-from sunbeam.core.feature import FeatureManager
 from sunbeam.core.juju import (
     ActionFailedException,
     ApplicationNotFoundException,
@@ -41,18 +39,20 @@ from sunbeam.core.juju import (
     UnitNotFoundException,
     run_sync,
 )
-from sunbeam.core.manifest import CharmManifest, Manifest, SoftwareConfig
+from sunbeam.core.manifest import CharmManifest, FeatureConfig, Manifest, SoftwareConfig
 from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.core.terraform import (
     TerraformException,
     TerraformHelper,
     TerraformInitStep,
 )
+from sunbeam.feature_manager import FeatureManager
 from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
 from sunbeam.steps.juju import JujuLoginStep
+from sunbeam.utils import pass_method_obj
 from sunbeam.versions import TEMPEST_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -242,15 +242,10 @@ class ValidationFeature(OpenStackControlPlaneFeature):
 
     version = Version(FEATURE_VERSION)
 
-    def __init__(self, deployment: Deployment) -> None:
-        """Initialize the feature class."""
-        super().__init__(
-            "validation",
-            deployment,
-            tf_plan_location=TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO,
-        )
+    name = "validation"
+    tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
 
-    def manifest_defaults(self) -> SoftwareConfig:
+    def default_software_overrides(self) -> SoftwareConfig:
         """Feature software configuration."""
         return SoftwareConfig(
             charms={"tempest-k8s": CharmManifest(channel=TEMPEST_CHANNEL)}
@@ -270,15 +265,17 @@ class ValidationFeature(OpenStackControlPlaneFeature):
             },
         }
 
-    def set_application_names(self) -> list:
+    def set_application_names(self, deployment: Deployment) -> list:
         """Application names handled by the terraform plan."""
         return [TEMPEST_APP_NAME]
 
-    def set_tfvars_on_enable(self) -> dict:
+    def set_tfvars_on_enable(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to enable the application."""
         return {"enable-validation": True}
 
-    def set_tfvars_on_disable(self) -> dict:
+    def set_tfvars_on_disable(self, deployment: Deployment) -> dict:
         """Set terraform variables to disable the application."""
         return {"enable-validation": False}
 
@@ -298,13 +295,15 @@ class ValidationFeature(OpenStackControlPlaneFeature):
         """
         return VALIDATION_FEATURE_DEPLOY_TIMEOUT
 
-    def set_tfvars_on_resize(self) -> dict:
+    def set_tfvars_on_resize(
+        self, deployment: Deployment, config: FeatureConfig
+    ) -> dict:
         """Set terraform variables to resize the application."""
         return {}
 
-    def _get_tempest_leader_unit(self) -> str:
+    def _get_tempest_leader_unit(self, deployment: Deployment) -> str:
         """Return the leader unit of tempest application."""
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
         with console.status(f"Retrieving {TEMPEST_APP_NAME}'s unit name."):
             app = TEMPEST_APP_NAME
             model = OPENSTACK_MODEL
@@ -314,9 +313,9 @@ class ValidationFeature(OpenStackControlPlaneFeature):
                 raise click.ClickException(str(e))
             return unit
 
-    def _get_tempest_absolute_model_name(self) -> str:
+    def _get_tempest_absolute_model_name(self, deployment: Deployment) -> str:
         """Return the absolute model name where the tempest unit resides."""
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
         with console.status(
             f"Retrieving the absolute model name for {TEMPEST_APP_NAME}'s unit."
         ):
@@ -326,17 +325,18 @@ class ValidationFeature(OpenStackControlPlaneFeature):
                 )
             except (ApplicationNotFoundException, LeaderNotFoundException) as e:
                 raise click.ClickException(str(e))
-            return f"{self.deployment.controller}:{model_name}"
+            return f"{deployment.controller}:{model_name}"
 
     def _run_action_on_tempest_unit(
         self,
+        deployment: Deployment,
         action_name: str,
         action_params: dict | None = None,
         progress_message: str = "",
     ) -> dict[str, Any]:
         """Run the charm's action."""
-        unit = self._get_tempest_leader_unit()
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        unit = self._get_tempest_leader_unit(deployment)
+        jhelper = JujuHelper(deployment.get_connected_controller())
         with console.status(progress_message):
             try:
                 action_result = run_sync(
@@ -356,10 +356,12 @@ class ValidationFeature(OpenStackControlPlaneFeature):
 
             return action_result
 
-    def _check_file_exist_in_tempest_container(self, filename: str) -> bool:
+    def _check_file_exist_in_tempest_container(
+        self, deployment: Deployment, filename: str
+    ) -> bool:
         """Check if file exist in tempest container."""
-        unit = self._get_tempest_leader_unit()
-        model_name = self._get_tempest_absolute_model_name()
+        unit = self._get_tempest_leader_unit(deployment)
+        model_name = self._get_tempest_absolute_model_name(deployment)
         # Note: this is a workaround to run command to payload container
         # since python-libjuju does not support such feature. See related
         # bug: https://github.com/juju/python-libjuju/issues/1029
@@ -386,10 +388,12 @@ class ValidationFeature(OpenStackControlPlaneFeature):
             raise click.ClickException(f"Timed out checking {filename}")
         return True
 
-    def _copy_file_from_tempest_container(self, source: str, destination: str) -> None:
+    def _copy_file_from_tempest_container(
+        self, deployment: Deployment, source: str, destination: str
+    ) -> None:
         """Copy file from tempest container."""
-        unit = self._get_tempest_leader_unit()
-        model_name = self._get_tempest_absolute_model_name()
+        unit = self._get_tempest_leader_unit(deployment)
+        model_name = self._get_tempest_absolute_model_name(deployment)
         progress_message = (
             f"Copying {source} from "
             f"{TEMPEST_APP_NAME} ({TEMPEST_CONTAINER_NAME}) "
@@ -420,26 +424,31 @@ class ValidationFeature(OpenStackControlPlaneFeature):
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
                 raise click.ClickException(str(e))
 
-    def _configure_preflight_check(self) -> bool:
+    def _configure_preflight_check(self, deployment: Deployment) -> bool:
         """Preflight check for configure command."""
-        enabled_features = FeatureManager.enabled_features(self.deployment)
+        enabled_features = FeatureManager().enabled_features(deployment)
         if "observability" not in enabled_features:
             return False
         return True
 
     @click.command()
-    def enable_feature(self) -> None:
+    @pass_method_obj
+    def enable_cmd(self, deployment: Deployment, config: FeatureConfig) -> None:
         """Enable OpenStack Integration Test Suite (tempest)."""
-        super().enable_feature()
+        self.enable_feature(deployment, config)
 
     @click.command()
-    def disable_feature(self) -> None:
+    @pass_method_obj
+    def disable_cmd(self, deployment: Deployment) -> None:
         """Disable OpenStack Integration Test Suite (tempest)."""
-        super().disable_feature()
+        self.disable_feature(deployment)
 
     @click.command()
     @click.argument("options", nargs=-1)
-    def configure_validation(self, options: list[str] | None = None) -> None:
+    @pass_method_obj
+    def configure_validation(
+        self, deployment: Deployment, options: list[str] | None = None
+    ) -> None:
         """Configure validation feature.
 
         Run without arguments to view available configuration options.
@@ -447,7 +456,7 @@ class ValidationFeature(OpenStackControlPlaneFeature):
         Run with key=value args to set configuration values.
         For example: sunbeam configure validation schedule="*/30 * * * *"
         """
-        if not self._configure_preflight_check():
+        if not self._configure_preflight_check(deployment):
             raise click.ClickException(
                 "'observability' feature is required for configuring validation"
                 " feature."
@@ -465,13 +474,13 @@ class ValidationFeature(OpenStackControlPlaneFeature):
 
         config_changes = validated_config_args(parse_config_args(options))
 
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
+        tfhelper = deployment.get_tfhelper(self.tfplan)
         run_plan(
             [
                 TerraformInitStep(tfhelper),
                 ConfigureValidationStep(
                     config_changes,
-                    self.deployment.get_client(),
+                    deployment.get_client(),
                     tfhelper,
                     self.manifest,
                     self.get_tfvar_config_key(),
@@ -498,8 +507,10 @@ class ValidationFeature(OpenStackControlPlaneFeature):
             "by running `sunbeam validation get-last-result`."
         ),
     )
+    @pass_method_obj
     def run_validate_action(
         self,
+        deployment: Deployment,
         profile: str,
         output: str | None,
     ) -> None:
@@ -512,6 +523,7 @@ class ValidationFeature(OpenStackControlPlaneFeature):
         action_params = PROFILES[profile].params
         progress_message = "Running tempest to validate the sunbeam deployment ..."
         action_result = self._run_action_on_tempest_unit(
+            deployment,
             action_name,
             action_params=action_params,
             progress_message=progress_message,
@@ -522,9 +534,11 @@ class ValidationFeature(OpenStackControlPlaneFeature):
         if output:
             # Due to shelling out to the juju cli (rather than using libjuju),
             # we need to ensure the juju cli is logged in.
-            run_plan([JujuLoginStep(self.deployment.juju_account)], console)
+            run_plan([JujuLoginStep(deployment.juju_account)], console)
 
-            self._copy_file_from_tempest_container(TEMPEST_VALIDATION_RESULT, output)
+            self._copy_file_from_tempest_container(
+                deployment, TEMPEST_VALIDATION_RESULT, output
+            )
 
     @click.command()
     def list_profiles(self) -> None:
@@ -547,57 +561,49 @@ class ValidationFeature(OpenStackControlPlaneFeature):
         required=True,
         help="Download the last validation check result to output file.",
     )
-    def run_get_last_result(self, output: str) -> None:
+    @pass_method_obj
+    def run_get_last_result(self, deployment: Deployment, output: str) -> None:
         """Get last validation result."""
         # Due to shelling out to the juju cli (rather than using libjuju),
         # we need to ensure the juju cli is logged in.
-        run_plan([JujuLoginStep(self.deployment.juju_account)], console)
+        run_plan([JujuLoginStep(deployment.juju_account)], console)
 
-        if not self._check_file_exist_in_tempest_container(TEMPEST_VALIDATION_RESULT):
+        if not self._check_file_exist_in_tempest_container(
+            deployment, TEMPEST_VALIDATION_RESULT
+        ):
             raise click.ClickException(
                 (
                     f"Cannot find '{TEMPEST_VALIDATION_RESULT}'. "
                     "Have you run `sunbeam validation run` at least once?"
                 )
             )
-        self._copy_file_from_tempest_container(TEMPEST_VALIDATION_RESULT, output)
+        self._copy_file_from_tempest_container(
+            deployment, TEMPEST_VALIDATION_RESULT, output
+        )
 
     @click.group()
     def validation_group(self):
         """Manage cloud validation functionality."""
 
-    def commands(self) -> dict:
-        """Dict of clickgroup along with commands."""
-        commands = super().commands()
-        try:
-            enabled = self.enabled
-        except ClusterServiceUnavailableException:
-            LOG.debug(
-                "Failed to query for feature status, is cloud bootstrapped ?",
-                exc_info=True,
-            )
-            enabled = False
+    def enabled_commands(self) -> dict[str, list[dict]]:
+        """Dict of clickgroup along with commands.
 
-        if enabled:
-            commands.update(
+        Return the commands available once the feature is enabled.
+        """
+        return {
+            # sunbeam configure validation ...
+            "configure": [{"name": "validation", "command": self.configure_validation}],
+            # add the validation subcommand group to the root group:
+            # sunbeam validation ...
+            "init": [{"name": "validation", "command": self.validation_group}],
+            # add the subcommands:
+            # sunbeam validation run ... etc.
+            "init.validation": [
+                {"name": "run", "command": self.run_validate_action},
+                {"name": "profiles", "command": self.list_profiles},
                 {
-                    # sunbeam configure validation ...
-                    "configure": [
-                        {"name": "validation", "command": self.configure_validation}
-                    ],
-                    # add the validation subcommand group to the root group:
-                    # sunbeam validation ...
-                    "init": [{"name": "validation", "command": self.validation_group}],
-                    # add the subcommands:
-                    # sunbeam validation run ... etc.
-                    "init.validation": [
-                        {"name": "run", "command": self.run_validate_action},
-                        {"name": "profiles", "command": self.list_profiles},
-                        {
-                            "name": "get-last-result",
-                            "command": self.run_get_last_result,
-                        },
-                    ],
-                }
-            )
-        return commands
+                    "name": "get-last-result",
+                    "command": self.run_get_last_result,
+                },
+            ],
+        }

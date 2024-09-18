@@ -644,7 +644,7 @@ class TestDeploySunbeamClusterdApplicationStep:
         jhelper = AsyncMock()
         jhelper.get_application.return_value = AsyncMock()
         jhelper.get_machines.return_value = {"1": "m1", "2": "m2", "3": "m3"}
-        manifest.software.charms = {"sunbeam-clusterd": Mock(config={})}
+        manifest.core.software.charms = {"sunbeam-clusterd": Mock(config={})}
         step = DeploySunbeamClusterdApplicationStep(jhelper, manifest, model)
         result = step.run()
         assert result.result_type == ResultType.COMPLETED

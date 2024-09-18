@@ -27,7 +27,6 @@ from sunbeam.commands.configure import (
 )
 from sunbeam.commands.proxy import proxy_questions
 from sunbeam.core.deployment import PROXY_CONFIG_KEY, Deployment, Networks
-from sunbeam.core.feature import FeatureManager
 from sunbeam.core.questions import Question, QuestionBank, load_answers, show_questions
 from sunbeam.steps.openstack import REGION_CONFIG_KEY, region_questions
 
@@ -181,7 +180,7 @@ class MaasDeployment(Deployment):
             raise ValueError("Clusterd address not set.")
         return self.clusterd_address
 
-    def generate_preseed(self, console) -> str:
+    def generate_core_config(self, console) -> str:
         """Generate preseed for deployment."""
         try:
             client = self.get_client()
@@ -260,7 +259,9 @@ class MaasDeployment(Deployment):
             )
         )
 
-        preseed_content.extend(FeatureManager().get_preseed_questions_content(self))
+        preseed_content.extend(
+            self.get_feature_manager().get_preseed_questions_content()
+        )
 
         preseed_content_final = "\n".join(preseed_content)
         return preseed_content_final

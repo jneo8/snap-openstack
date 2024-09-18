@@ -49,6 +49,11 @@ def jhelper():
 
 
 @pytest.fixture()
+def deployment():
+    yield Mock()
+
+
+@pytest.fixture()
 def observabilityfeature():
     with patch("sunbeam.features.observability.feature.ObservabilityFeature") as p:
         yield p
@@ -67,11 +72,11 @@ def update_config():
 
 
 class TestDeployObservabilityStackStep:
-    def test_run(self, tfhelper, jhelper, observabilityfeature, ssnap):
+    def test_run(self, deployment, tfhelper, jhelper, observabilityfeature, ssnap):
         ssnap().config.get.return_value = "k8s"
         observabilityfeature.deployment.proxy_settings.return_value = {}
         step = observability_feature.DeployObservabilityStackStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -79,7 +84,9 @@ class TestDeployObservabilityStackStep:
         jhelper.wait_until_active.assert_called_once()
         assert result.result_type == ResultType.COMPLETED
 
-    def test_run_tf_apply_failed(self, tfhelper, jhelper, observabilityfeature, ssnap):
+    def test_run_tf_apply_failed(
+        self, deployment, tfhelper, jhelper, observabilityfeature, ssnap
+    ):
         ssnap().config.get.return_value = "k8s"
         observabilityfeature.deployment.proxy_settings.return_value = {}
         tfhelper.update_tfvars_and_apply_tf.side_effect = TerraformException(
@@ -87,7 +94,7 @@ class TestDeployObservabilityStackStep:
         )
 
         step = observability_feature.DeployObservabilityStackStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -97,14 +104,14 @@ class TestDeployObservabilityStackStep:
         assert result.message == "apply failed..."
 
     def test_run_waiting_timed_out(
-        self, tfhelper, jhelper, observabilityfeature, ssnap
+        self, deployment, tfhelper, jhelper, observabilityfeature, ssnap
     ):
         ssnap().config.get.return_value = "k8s"
         observabilityfeature.deployment.proxy_settings.return_value = {}
         jhelper.wait_until_active.side_effect = TimeoutException("timed out")
 
         step = observability_feature.DeployObservabilityStackStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -115,10 +122,10 @@ class TestDeployObservabilityStackStep:
 
 
 class TestRemoveObservabilityStackStep:
-    def test_run(self, tfhelper, jhelper, observabilityfeature, ssnap):
+    def test_run(self, deployment, tfhelper, jhelper, observabilityfeature, ssnap):
         ssnap().config.get.return_value = "k8s"
         step = observability_feature.RemoveObservabilityStackStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -127,13 +134,13 @@ class TestRemoveObservabilityStackStep:
         assert result.result_type == ResultType.COMPLETED
 
     def test_run_tf_destroy_failed(
-        self, tfhelper, jhelper, observabilityfeature, ssnap
+        self, deployment, tfhelper, jhelper, observabilityfeature, ssnap
     ):
         ssnap().config.get.return_value = "k8s"
         tfhelper.destroy.side_effect = TerraformException("destroy failed...")
 
         step = observability_feature.RemoveObservabilityStackStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -143,13 +150,13 @@ class TestRemoveObservabilityStackStep:
         assert result.message == "destroy failed..."
 
     def test_run_waiting_timed_out(
-        self, tfhelper, jhelper, observabilityfeature, ssnap
+        self, deployment, tfhelper, jhelper, observabilityfeature, ssnap
     ):
         ssnap().config.get.return_value = "k8s"
         jhelper.wait_model_gone.side_effect = TimeoutException("timed out")
 
         step = observability_feature.RemoveObservabilityStackStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -160,9 +167,9 @@ class TestRemoveObservabilityStackStep:
 
 
 class TestDeployGrafanaAgentStep:
-    def test_run(self, tfhelper, jhelper, observabilityfeature):
+    def test_run(self, deployment, tfhelper, jhelper, observabilityfeature):
         step = observability_feature.DeployGrafanaAgentStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, Mock(), observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -170,13 +177,15 @@ class TestDeployGrafanaAgentStep:
         jhelper.wait_application_ready.assert_called_once()
         assert result.result_type == ResultType.COMPLETED
 
-    def test_run_tf_apply_failed(self, tfhelper, jhelper, observabilityfeature):
+    def test_run_tf_apply_failed(
+        self, deployment, tfhelper, jhelper, observabilityfeature
+    ):
         tfhelper.update_tfvars_and_apply_tf.side_effect = TerraformException(
             "apply failed..."
         )
 
         step = observability_feature.DeployGrafanaAgentStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, Mock(), observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -185,11 +194,13 @@ class TestDeployGrafanaAgentStep:
         assert result.result_type == ResultType.FAILED
         assert result.message == "apply failed..."
 
-    def test_run_waiting_timed_out(self, tfhelper, jhelper, observabilityfeature):
+    def test_run_waiting_timed_out(
+        self, deployment, tfhelper, jhelper, observabilityfeature
+    ):
         jhelper.wait_application_ready.side_effect = TimeoutException("timed out")
 
         step = observability_feature.DeployGrafanaAgentStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, Mock(), observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -200,9 +211,11 @@ class TestDeployGrafanaAgentStep:
 
 
 class TestRemoveGrafanaAgentStep:
-    def test_run(self, tfhelper, jhelper, observabilityfeature, update_config):
+    def test_run(
+        self, deployment, tfhelper, jhelper, observabilityfeature, update_config
+    ):
         step = observability_feature.RemoveGrafanaAgentStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -210,11 +223,13 @@ class TestRemoveGrafanaAgentStep:
         jhelper.wait_application_gone.assert_called_once()
         assert result.result_type == ResultType.COMPLETED
 
-    def test_run_tf_destroy_failed(self, tfhelper, jhelper, observabilityfeature):
+    def test_run_tf_destroy_failed(
+        self, deployment, tfhelper, jhelper, observabilityfeature
+    ):
         tfhelper.destroy.side_effect = TerraformException("destroy failed...")
 
         step = observability_feature.RemoveGrafanaAgentStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -223,11 +238,13 @@ class TestRemoveGrafanaAgentStep:
         assert result.result_type == ResultType.FAILED
         assert result.message == "destroy failed..."
 
-    def test_run_waiting_timed_out(self, tfhelper, jhelper, observabilityfeature):
+    def test_run_waiting_timed_out(
+        self, deployment, tfhelper, jhelper, observabilityfeature
+    ):
         jhelper.wait_application_gone.side_effect = TimeoutException("timed out")
 
         step = observability_feature.RemoveGrafanaAgentStep(
-            observabilityfeature, tfhelper, jhelper
+            deployment, observabilityfeature, tfhelper, jhelper
         )
         result = step.run()
 
@@ -296,28 +313,30 @@ class TestRemoveSaasApplicationsStep:
 
 
 class TestIntegrateRemoteCosOffersStep:
-    def test_run(self, jhelper, observabilityfeature, snap, run):
+    def test_run(self, deployment, jhelper, observabilityfeature, snap, run):
         observabilityfeature.grafana_offer_url = "remotecos:admin/grafana"
         observabilityfeature.prometheus_offer_url = "remotecos:admin/prometheus"
         observabilityfeature.loki_offer_url = "remotecos:admin/loki"
-        observabilityfeature.deployment.openstack_machines_model = "test-model"
+        deployment.openstack_machines_model = "test-model"
         step = observability_feature.IntegrateRemoteCosOffersStep(
-            observabilityfeature, jhelper
+            deployment, observabilityfeature, jhelper
         )
 
         result = step.run()
         jhelper.wait_application_ready.assert_called()
         assert result.result_type == ResultType.COMPLETED
 
-    def test_run_waiting_timedout(self, jhelper, observabilityfeature, snap, run):
+    def test_run_waiting_timedout(
+        self, deployment, jhelper, observabilityfeature, snap, run
+    ):
         jhelper.wait_application_ready.side_effect = TimeoutException("timed out")
 
         observabilityfeature.grafana_offer_url = "remotecos:admin/grafana"
         observabilityfeature.prometheus_offer_url = "remotecos:admin/prometheus"
         observabilityfeature.loki_offer_url = "remotecos:admin/loki"
-        observabilityfeature.deployment.openstack_machines_model = "test-model"
+        deployment.openstack_machines_model = "test-model"
         step = observability_feature.IntegrateRemoteCosOffersStep(
-            observabilityfeature, jhelper
+            deployment, observabilityfeature, jhelper
         )
 
         result = step.run()
@@ -327,7 +346,7 @@ class TestIntegrateRemoteCosOffersStep:
 
 
 class TestRemoveRemoteCosOffersStep:
-    def test_run(self, jhelper, observabilityfeature, snap, run):
+    def test_run(self, deployment, jhelper, observabilityfeature, snap, run):
         observabilityfeature.deployment.openstack_machines_model = "test-model"
         jhelper.get_model_status.side_effect = [
             {
@@ -344,7 +363,7 @@ class TestRemoveRemoteCosOffersStep:
             },
         ]
         step = observability_feature.RemoveRemoteCosOffersStep(
-            observabilityfeature, jhelper
+            deployment, observabilityfeature, jhelper
         )
 
         result = step.run()
@@ -352,11 +371,13 @@ class TestRemoveRemoteCosOffersStep:
         jhelper.wait_application_ready.assert_called()
         assert result.result_type == ResultType.COMPLETED
 
-    def test_run_no_remote_offers(self, jhelper, observabilityfeature, snap, run):
+    def test_run_no_remote_offers(
+        self, deployment, jhelper, observabilityfeature, snap, run
+    ):
         observabilityfeature.deployment.openstack_machines_model = "test-model"
         jhelper.get_model_status.side_effect = [{}, {}]
         step = observability_feature.RemoveRemoteCosOffersStep(
-            observabilityfeature, jhelper
+            deployment, observabilityfeature, jhelper
         )
 
         result = step.run()
@@ -364,7 +385,9 @@ class TestRemoveRemoteCosOffersStep:
         jhelper.wait_application_ready.assert_called()
         assert result.result_type == ResultType.COMPLETED
 
-    def test_run_waiting_timedout(self, jhelper, observabilityfeature, snap, run):
+    def test_run_waiting_timedout(
+        self, deployment, jhelper, observabilityfeature, snap, run
+    ):
         observabilityfeature.deployment.openstack_machines_model = "test-model"
         jhelper.get_model_status.side_effect = [
             {
@@ -382,7 +405,7 @@ class TestRemoveRemoteCosOffersStep:
         ]
         jhelper.wait_application_ready.side_effect = TimeoutException("timed out")
         step = observability_feature.RemoveRemoteCosOffersStep(
-            observabilityfeature, jhelper
+            deployment, observabilityfeature, jhelper
         )
 
         result = step.run()

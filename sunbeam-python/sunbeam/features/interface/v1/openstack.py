@@ -16,10 +16,10 @@
 
 import asyncio
 import logging
+import typing
 from abc import abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import TypedDict
 
 import click
 from packaging.version import Version
@@ -54,7 +54,7 @@ from sunbeam.core.terraform import (
     TerraformHelper,
     TerraformInitStep,
 )
-from sunbeam.features.interface.v1.base import EnableDisableFeature
+from sunbeam.features.interface.v1.base import ConfigType, EnableDisableFeature
 from sunbeam.steps.openstack import TOPOLOGY_KEY
 
 LOG = logging.getLogger(__name__)
@@ -63,17 +63,6 @@ console = Console()
 APPLICATION_DEPLOY_TIMEOUT = 900  # 15 minutes
 OPENSTACK_TERRAFORM_VARS = "TerraformVarsOpenstack"
 OPENSTACK_TERRAFORM_PLAN = "openstack"
-
-
-class ApplicationChannelData(TypedDict):
-    """Application channel data.
-
-    channel is the charm channel that is inline with this snap
-    tfvars_channel_var is the terraform variable used to store the channel.
-    """
-
-    channel: str
-    tfvars_channel_var: str | None
 
 
 class TerraformPlanLocation(Enum):
@@ -87,7 +76,7 @@ class TerraformPlanLocation(Enum):
     FEATURE_REPO = 2
 
 
-class OpenStackControlPlaneFeature(EnableDisableFeature):
+class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigType]):
     """Interface for features to manage OpenStack Control plane components.
 
     Features that manages OpenStack control plane components using terraform
@@ -99,18 +88,15 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
 
     _manifest: Manifest | None
     interface_version = Version("0.0.1")
+    tf_plan_location: TerraformPlanLocation
 
-    def __init__(
-        self, name: str, deployment: Deployment, tf_plan_location: TerraformPlanLocation
-    ) -> None:
+    def __init__(self) -> None:
         """Constructor for feature interface.
 
-        :param name: Name of the feature
         :param tf_plan_location: Location where terraform plans are placed
         """
-        super().__init__(name, deployment)
+        super().__init__()
         self.app_name = self.name.capitalize()
-        self.tf_plan_location = tf_plan_location
 
         # Based on terraform plan location, tfplan will be either
         # openstack or feature name
@@ -130,9 +116,10 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
         if self._manifest:
             return self._manifest
 
-        self._manifest = self.deployment.get_manifest(self.user_manifest)
+        manifest = click.get_current_context().obj.get_manifest(self.user_manifest)
+        self._manifest = manifest
 
-        return self._manifest
+        return manifest
 
     def is_openstack_control_plane(self) -> bool:
         """Is feature deploys openstack control plane.
@@ -145,56 +132,56 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
         """Return Terraform OpenStack plan location."""
         return self.get_terraform_plans_base_path() / "etc" / "deploy-openstack"
 
-    def pre_checks(self) -> None:
+    def pre_checks(self, deployment: Deployment) -> None:
         """Perform preflight checks before enabling the feature.
 
         Also copies terraform plans to required locations.
         """
         preflight_checks = []
-        preflight_checks.append(VerifyBootstrappedCheck(self.deployment.get_client()))
+        preflight_checks.append(VerifyBootstrappedCheck(deployment.get_client()))
         run_preflight_checks(preflight_checks, console)
 
-    def pre_enable(self) -> None:
+    def pre_enable(self, deployment: Deployment, config: ConfigType) -> None:
         """Handler to perform tasks before enabling the feature."""
-        self.pre_checks()
-        super().pre_enable()
+        self.pre_checks(deployment)
+        super().pre_enable(deployment, config)
 
-    def run_enable_plans(self) -> None:
+    def run_enable_plans(self, deployment: Deployment, config: ConfigType) -> None:
         """Run plans to enable feature."""
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        tfhelper = deployment.get_tfhelper(self.tfplan)
+        jhelper = JujuHelper(deployment.get_connected_controller())
 
         plan: list[BaseStep] = []
         if self.user_manifest:
-            plan.append(
-                AddManifestStep(self.deployment.get_client(), self.user_manifest)
-            )
+            plan.append(AddManifestStep(deployment.get_client(), self.user_manifest))
         plan.extend(
             [
-                TerraformInitStep(self.deployment.get_tfhelper(self.tfplan)),
-                EnableOpenStackApplicationStep(tfhelper, jhelper, self),
+                TerraformInitStep(deployment.get_tfhelper(self.tfplan)),
+                EnableOpenStackApplicationStep(
+                    deployment, config, tfhelper, jhelper, self
+                ),
             ]
         )
 
         run_plan(plan, console)
-        click.echo(f"OpenStack {self.name} application enabled.")
+        click.echo(f"OpenStack {self.display_name} application enabled.")
 
-    def pre_disable(self) -> None:
+    def pre_disable(self, deployment: Deployment) -> None:
         """Handler to perform tasks before disabling the feature."""
-        self.pre_checks()
-        super().pre_disable()
+        self.pre_checks(deployment)
+        super().pre_disable(deployment)
 
-    def run_disable_plans(self) -> None:
+    def run_disable_plans(self, deployment: Deployment) -> None:
         """Run plans to disable the feature."""
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        tfhelper = deployment.get_tfhelper(self.tfplan)
+        jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
             TerraformInitStep(tfhelper),
-            DisableOpenStackApplicationStep(tfhelper, jhelper, self),
+            DisableOpenStackApplicationStep(deployment, tfhelper, jhelper, self),
         ]
 
         run_plan(plan, console)
-        click.echo(f"OpenStack {self.name} application disabled.")
+        click.echo(f"OpenStack {self.display_name} application disabled.")
 
     def get_tfvar_config_key(self) -> str:
         """Returns Config key to save terraform vars.
@@ -210,10 +197,10 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
         else:
             return f"TerraformVars{self.app_name}"
 
-    def get_database_topology(self) -> str:
+    def get_database_topology(self, deployment: Deployment) -> str:
         """Returns the database topology of the cluster."""
         # Database topology can be set only during bootstrap and cannot be changed.
-        client = self.deployment.get_client()
+        client = deployment.get_client()
         topology = read_config(client, TOPOLOGY_KEY)
         return topology["database"]
 
@@ -234,7 +221,7 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
         return APPLICATION_DEPLOY_TIMEOUT
 
     @abstractmethod
-    def set_application_names(self) -> list:
+    def set_application_names(self, deployment: Deployment) -> list:
         """Application names handled by the terraform plan.
 
         Returns list of applications that are deployed by the
@@ -243,35 +230,27 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
         """
 
     @abstractmethod
-    def set_tfvars_on_enable(self) -> dict:
+    def set_tfvars_on_enable(self, deployment: Deployment, config: ConfigType) -> dict:
         """Set terraform variables to enable the application."""
 
     @abstractmethod
-    def set_tfvars_on_disable(self) -> dict:
+    def set_tfvars_on_disable(self, deployment: Deployment) -> dict:
         """Set terraform variables to disable the application."""
 
     @abstractmethod
-    def set_tfvars_on_resize(self) -> dict:
+    def set_tfvars_on_resize(self, deployment: Deployment, config: ConfigType) -> dict:
         """Set terraform variables to resize the application."""
 
-    @abstractmethod
-    def enable_feature(self) -> None:
-        """Enable feature command."""
-        super().enable_feature()
-
-    @abstractmethod
-    def disable_feature(self) -> None:
-        """Disable feature command."""
-        super().disable_feature()
-
-    def add_horizon_plugin_to_tfvars(self, plugin: str) -> dict[str, list[str]]:
+    def add_horizon_plugin_to_tfvars(
+        self, deployment: Deployment, plugin: str
+    ) -> dict[str, list[str]]:
         """Tf vars to have the given plugin enabled.
 
         Return of the function is expected to be passed to set_tfvars_on_enable.
         """
         try:
             tfvars = read_config(
-                self.deployment.get_client(),
+                deployment.get_client(),
                 self.get_tfvar_config_key(),
             )
         except ConfigItemNotFoundException:
@@ -283,14 +262,16 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
 
         return {"horizon-plugins": sorted(horizon_plugins)}
 
-    def remove_horizon_plugin_from_tfvars(self, plugin: str) -> dict[str, list[str]]:
+    def remove_horizon_plugin_from_tfvars(
+        self, deployment: Deployment, plugin: str
+    ) -> dict[str, list[str]]:
         """TF vars to have the given plugin disabled.
 
         Return of the function is expected to be passed to set_tfvars_on_disable.
         """
         try:
             tfvars = read_config(
-                self.deployment.get_client(),
+                deployment.get_client(),
                 self.get_tfvar_config_key(),
             )
         except ConfigItemNotFoundException:
@@ -302,17 +283,7 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
 
         return {"horizon-plugins": sorted(horizon_plugins)}
 
-    @property
-    def k8s_application_data(self) -> dict[str, ApplicationChannelData]:
-        """Mapping of k8s applications to their required channels."""
-        return {}
-
-    @property
-    def machine_application_data(self) -> dict[str, ApplicationChannelData]:
-        """Mapping of machine applications to their required channels."""
-        return {}
-
-    def upgrade_hook(self, upgrade_release: bool = False):
+    def upgrade_hook(self, deployment: Deployment, upgrade_release: bool = False):
         """Run upgrade.
 
         :param upgrade_release: Whether to upgrade release
@@ -330,10 +301,12 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
             )
             return
 
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        tfhelper = deployment.get_tfhelper(self.tfplan)
+        jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
-            UpgradeOpenStackApplicationStep(tfhelper, jhelper, self, upgrade_release),
+            UpgradeOpenStackApplicationStep(
+                deployment, tfhelper, jhelper, self, upgrade_release
+            ),
         ]
 
         run_plan(plan, console)
@@ -342,6 +315,7 @@ class OpenStackControlPlaneFeature(EnableDisableFeature):
 class UpgradeOpenStackApplicationStep(BaseStep, JujuStepHelper):
     def __init__(
         self,
+        deployment: Deployment,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
         feature: OpenStackControlPlaneFeature,
@@ -357,6 +331,7 @@ class UpgradeOpenStackApplicationStep(BaseStep, JujuStepHelper):
             f"Refresh OpenStack {feature.name}",
             f"Refresh OpenStack {feature.name} application",
         )
+        self.deployment = deployment
         self.tfhelper = tfhelper
         self.jhelper = jhelper
         self.feature = feature
@@ -375,7 +350,7 @@ class UpgradeOpenStackApplicationStep(BaseStep, JujuStepHelper):
 
         try:
             self.tfhelper.update_partial_tfvars_and_apply_tf(
-                self.feature.deployment.get_client(),
+                self.deployment.get_client(),
                 self.feature.manifest,
                 charms,
                 config,
@@ -405,11 +380,15 @@ class UpgradeOpenStackApplicationStep(BaseStep, JujuStepHelper):
         return Result(ResultType.COMPLETED)
 
 
-class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
+class EnableOpenStackApplicationStep(
+    BaseStep, JujuStepHelper, typing.Generic[ConfigType]
+):
     """Generic step to enable OpenStack application using Terraform."""
 
     def __init__(
         self,
+        deployment: Deployment,
+        config: ConfigType,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
         feature: OpenStackControlPlaneFeature,
@@ -422,9 +401,11 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
                        feature.
         """
         super().__init__(
-            f"Enable OpenStack {feature.name}",
-            f"Enabling OpenStack {feature.name} application",
+            f"Enable OpenStack {feature.display_name}",
+            f"Enabling OpenStack {feature.display_name} application",
         )
+        self.deployment = deployment
+        self.config = config
         self.tfhelper = tfhelper
         self.jhelper = jhelper
         self.feature = feature
@@ -434,11 +415,11 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
     def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy openstack application."""
         config_key = self.feature.get_tfvar_config_key()
-        extra_tfvars = self.feature.set_tfvars_on_enable()
+        extra_tfvars = self.feature.set_tfvars_on_enable(self.deployment, self.config)
 
         try:
             self.tfhelper.update_tfvars_and_apply_tf(
-                self.feature.deployment.get_client(),
+                self.deployment.get_client(),
                 self.feature.manifest,
                 tfvar_config=config_key,
                 override_tfvars=extra_tfvars,
@@ -446,7 +427,7 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
         except TerraformException as e:
             return Result(ResultType.FAILED, str(e))
 
-        apps = self.feature.set_application_names()
+        apps = self.feature.set_application_names(self.deployment)
         LOG.debug(f"Application monitored for readiness: {apps}")
         queue: asyncio.queues.Queue[str] = asyncio.queues.Queue(maxsize=len(apps))
         task = run_sync(update_status_background(self, apps, queue, status))
@@ -470,11 +451,14 @@ class EnableOpenStackApplicationStep(BaseStep, JujuStepHelper):
         return Result(ResultType.COMPLETED)
 
 
-class DisableOpenStackApplicationStep(BaseStep, JujuStepHelper):
+class DisableOpenStackApplicationStep(
+    BaseStep, JujuStepHelper, typing.Generic[ConfigType]
+):
     """Generic step to disable OpenStack application using Terraform."""
 
     def __init__(
         self,
+        deployment: Deployment,
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
         feature: OpenStackControlPlaneFeature,
@@ -489,6 +473,7 @@ class DisableOpenStackApplicationStep(BaseStep, JujuStepHelper):
             f"Disable OpenStack {feature.name}",
             f"Disabling OpenStack {feature.name} application",
         )
+        self.deployment = deployment
         self.tfhelper = tfhelper
         self.jhelper = jhelper
         self.feature = feature
@@ -502,12 +487,12 @@ class DisableOpenStackApplicationStep(BaseStep, JujuStepHelper):
             if self.feature.tf_plan_location == TerraformPlanLocation.FEATURE_REPO:
                 # Just destroy the terraform plan
                 self.tfhelper.destroy()
-                delete_config(self.feature.deployment.get_client(), config_key)
+                delete_config(self.deployment.get_client(), config_key)
             else:
                 # Update terraform variables to disable the application
-                extra_tfvars = self.feature.set_tfvars_on_disable()
+                extra_tfvars = self.feature.set_tfvars_on_disable(self.deployment)
                 self.tfhelper.update_tfvars_and_apply_tf(
-                    self.feature.deployment.get_client(),
+                    self.deployment.get_client(),
                     self.feature.manifest,
                     tfvar_config=config_key,
                     override_tfvars=extra_tfvars,
@@ -515,7 +500,7 @@ class DisableOpenStackApplicationStep(BaseStep, JujuStepHelper):
         except TerraformException as e:
             return Result(ResultType.FAILED, str(e))
 
-        apps = self.feature.set_application_names()
+        apps = self.feature.set_application_names(self.deployment)
         LOG.debug(f"Application monitored for removal: {apps}")
         try:
             run_sync(

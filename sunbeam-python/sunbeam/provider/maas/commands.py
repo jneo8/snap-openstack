@@ -262,9 +262,8 @@ def bootstrap(
     # Validate manifest file
     manifest = deployment.get_manifest(manifest_path)
 
-    LOG.debug(f"Manifest used for deployment - preseed: {manifest.deployment}")
-    LOG.debug(f"Manifest used for deployment - software: {manifest.software}")
-    preseed = manifest.deployment
+    LOG.debug(f"Manifest used for deployment - core: {manifest.core}")
+    LOG.debug(f"Manifest used for deployment - features: {manifest.features}")
 
     deployments = DeploymentsConfig.load(deployment_path(Snap()))
 
@@ -306,7 +305,7 @@ def bootstrap(
     )
     plan.append(
         PromptForProxyStep(
-            deployment, accept_defaults=accept_defaults, deployment_preseed=preseed
+            deployment, accept_defaults=accept_defaults, manifest=manifest
         )
     )
     plan_results = run_plan(plan, console)
@@ -352,7 +351,7 @@ def bootstrap(
                 cloud_definition["clouds"][deployment.name]["type"],
                 deployment.controller,
                 deployment.juju_account.password,  # type: ignore
-                manifest.software.juju.bootstrap_args,
+                manifest.core.software.juju.bootstrap_args,
                 proxy_settings=proxy_settings,
             )
         )
@@ -360,7 +359,7 @@ def bootstrap(
             MaasScaleJujuStep(
                 maas_client,
                 deployment.controller,
-                manifest.software.juju.scale_args,
+                manifest.core.software.juju.scale_args,
             )
         )
         plan.append(
@@ -522,9 +521,8 @@ def deploy(
 
     manifest = deployment.get_manifest(manifest_path)
 
-    LOG.debug(f"Manifest used for deployment - preseed: {manifest.deployment}")
-    LOG.debug(f"Manifest used for deployment - software: {manifest.software}")
-    preseed = manifest.deployment
+    LOG.debug(f"Manifest used for deployment - core: {manifest.core}")
+    LOG.debug(f"Manifest used for deployment - features: {manifest.features}")
     proxy_settings = deployment.get_proxy_settings()
 
     tfhelper_sunbeam_machine = deployment.get_tfhelper("sunbeam-machine-plan")
@@ -578,7 +576,7 @@ def deploy(
 
     plan2: list[BaseStep] = []
 
-    plan2.append(PromptRegionStep(client, preseed, accept_defaults))
+    plan2.append(PromptRegionStep(client, manifest, accept_defaults))
     plan2.append(TerraformInitStep(tfhelper_sunbeam_machine))
     plan2.append(
         DeploySunbeamMachineApplicationStep(
@@ -608,7 +606,6 @@ def deploy(
                 jhelper,
                 manifest,
                 deployment.openstack_machines_model,
-                preseed,
                 accept_defaults,
             )
         )
@@ -641,7 +638,6 @@ def deploy(
                 jhelper,
                 manifest,
                 deployment.openstack_machines_model,
-                preseed,
                 accept_defaults,
             )
         )
@@ -771,9 +767,8 @@ def configure_cmd(
     # Validate manifest file
     manifest = deployment.get_manifest(manifest_path)
 
-    LOG.debug(f"Manifest used for deployment - preseed: {manifest.deployment}")
-    LOG.debug(f"Manifest used for deployment - software: {manifest.software}")
-    preseed = manifest.deployment
+    LOG.debug(f"Manifest used for deployment - core: {manifest.core}")
+    LOG.debug(f"Manifest used for deployment - features: {manifest.features}")
 
     jhelper = JujuHelper(deployment.get_connected_controller())
     try:
@@ -798,7 +793,7 @@ def configure_cmd(
         MaasUserQuestions(
             client,
             maas_client,
-            deployment_preseed=preseed,
+            manifest=manifest,
             accept_defaults=accept_defaults,
         ),
         TerraformDemoInitStep(client, tfhelper),
@@ -827,7 +822,7 @@ def configure_cmd(
             compute,
             jhelper,
             deployment.openstack_machines_model,
-            preseed,
+            manifest,
         ),
     ]
 

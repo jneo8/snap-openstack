@@ -16,28 +16,47 @@
 import logging
 
 import click
+import pydantic
 from packaging.version import Version
 from rich.console import Console
 
-from sunbeam.clusterd.service import ClusterServiceUnavailableException
 from sunbeam.core.common import BaseStep, run_plan
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper, run_sync
-from sunbeam.core.manifest import AddManifestStep, CharmManifest, SoftwareConfig
+from sunbeam.core.manifest import (
+    AddManifestStep,
+    CharmManifest,
+    FeatureConfig,
+    SoftwareConfig,
+)
 from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.core.steps import PatchLoadBalancerServicesStep
 from sunbeam.core.terraform import TerraformInitStep
 from sunbeam.features.interface.v1.openstack import (
-    ApplicationChannelData,
     EnableOpenStackApplicationStep,
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.utils import argument_with_deprecated_option
+from sunbeam.utils import argument_with_deprecated_option, pass_method_obj
 from sunbeam.versions import BIND_CHANNEL, OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
 console = Console()
+
+
+class DnsFeatureConfig(FeatureConfig):
+    nameservers: str = pydantic.Field(examples=["ns1.example.com.,ns2.example.com."])
+
+    @pydantic.field_validator("nameservers")
+    @classmethod
+    def validate_nameservers(cls, v: str):
+        """Validate nameservers."""
+        if not v:
+            raise ValueError("Nameservers must be provided")
+        for ns in v.split(","):
+            if not ns.endswith("."):
+                raise ValueError(f"Nameserver {ns} must end with a period")
+        return v
 
 
 class PatchBindLoadBalancerStep(PatchLoadBalancerServicesStep):
@@ -52,17 +71,14 @@ class PatchBindLoadBalancerStep(PatchLoadBalancerServicesStep):
 
 class DnsFeature(OpenStackControlPlaneFeature):
     version = Version("0.0.1")
-    nameservers: str | None
 
-    def __init__(self, deployment: Deployment) -> None:
-        super().__init__(
-            "dns",
-            deployment,
-            tf_plan_location=TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO,
-        )
-        self.nameservers = None
+    name = "dns"
+    tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
 
-    def manifest_defaults(self) -> SoftwareConfig:
+    def __init__(self) -> None:
+        super().__init__()
+
+    def default_software_overrides(self) -> SoftwareConfig:
         """Feature software configuration."""
         return SoftwareConfig(
             charms={
@@ -90,30 +106,30 @@ class DnsFeature(OpenStackControlPlaneFeature):
             }
         }
 
-    def run_enable_plans(self) -> None:
+    def run_enable_plans(self, deployment: Deployment, config: DnsFeatureConfig):
         """Run plans to enable feature."""
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
 
         plan: list[BaseStep] = []
         if self.user_manifest:
-            plan.append(
-                AddManifestStep(self.deployment.get_client(), self.user_manifest)
-            )
-        tfhelper = self.deployment.get_tfhelper(self.tfplan)
+            plan.append(AddManifestStep(deployment.get_client(), self.user_manifest))
+        tfhelper = deployment.get_tfhelper(self.tfplan)
         plan.extend(
             [
                 TerraformInitStep(tfhelper),
-                EnableOpenStackApplicationStep(tfhelper, jhelper, self),
-                PatchBindLoadBalancerStep(self.deployment.get_client()),
+                EnableOpenStackApplicationStep(
+                    deployment, config, tfhelper, jhelper, self
+                ),
+                PatchBindLoadBalancerStep(deployment.get_client()),
             ]
         )
 
         run_plan(plan, console)
-        click.echo(f"OpenStack {self.name!r} application enabled.")
+        click.echo(f"OpenStack {self.display_name} application enabled.")
 
-    def set_application_names(self) -> list:
+    def set_application_names(self, deployment: Deployment) -> list:
         """Application names handled by the terraform plan."""
-        database_topology = self.get_database_topology()
+        database_topology = self.get_database_topology(deployment)
 
         apps = ["bind", "designate", "designate-mysql-router"]
         if database_topology == "multi":
@@ -121,18 +137,22 @@ class DnsFeature(OpenStackControlPlaneFeature):
 
         return apps
 
-    def set_tfvars_on_enable(self) -> dict:
+    def set_tfvars_on_enable(
+        self, deployment: Deployment, config: DnsFeatureConfig
+    ) -> dict:
         """Set terraform variables to enable the application."""
         return {
             "enable-designate": True,
-            "nameservers": self.nameservers,
+            "nameservers": config.nameservers,
         }
 
-    def set_tfvars_on_disable(self) -> dict:
+    def set_tfvars_on_disable(self, deployment: Deployment) -> dict:
         """Set terraform variables to disable the application."""
         return {"enable-designate": False}
 
-    def set_tfvars_on_resize(self) -> dict:
+    def set_tfvars_on_resize(
+        self, deployment: Deployment, config: DnsFeatureConfig
+    ) -> dict:
         """Set terraform variables to resize the application."""
         return {}
 
@@ -146,37 +166,31 @@ class DnsFeature(OpenStackControlPlaneFeature):
         the domain to DNS service. e.g. "ns1.example.com. ns2.example.com."
         """,
     )
-    def enable_feature(self, nameservers: str) -> None:
+    @pass_method_obj
+    def enable_cmd(self, deployment: Deployment, nameservers: str) -> None:
         """Enable dns service.
 
         NAMESERVERS: Space delimited list of nameservers. These are the nameservers that
         have been provided to the domain registrar in order to delegate
         the domain to DNS service. e.g. "ns1.example.com. ns2.example.com."
         """
-        nameservers_split = nameservers.split()
-        for nameserver in nameservers_split:
-            if nameserver[-1] != ".":
-                raise click.ClickException(
-                    "Nameservers must be fully qualified domain names ending with a dot"
-                    f". {nameserver!r} is not valid."
-                )
-        self.nameservers = nameservers
-        super().enable_feature()
+        self.enable_feature(deployment, DnsFeatureConfig(nameservers=nameservers))
 
     @click.command()
-    def disable_feature(self) -> None:
+    @pass_method_obj
+    def disable_cmd(self, deployment: Deployment) -> None:
         """Disable dns service."""
-        super().disable_feature()
+        self.disable_feature(deployment)
 
     @click.group()
     def dns_groups(self):
         """Manage dns."""
 
-    async def bind_address(self) -> str | None:
+    async def bind_address(self, deployment: Deployment) -> str | None:
         """Fetch bind address from juju."""
         model = OPENSTACK_MODEL
         application = "bind"
-        jhelper = JujuHelper(self.deployment.get_connected_controller())
+        jhelper = JujuHelper(deployment.get_connected_controller())
         model_impl = await jhelper.get_model(model)
         status = await model_impl.get_status([application])
         if application not in status["applications"]:
@@ -184,10 +198,11 @@ class DnsFeature(OpenStackControlPlaneFeature):
         return status["applications"][application].public_address
 
     @click.command()
-    def dns_address(self) -> None:
+    @pass_method_obj
+    def dns_address(self, deployment: Deployment) -> None:
         """Retrieve DNS service address."""
         with console.status("Retrieving IP address from DNS service ... "):
-            bind_address = run_sync(self.bind_address())
+            bind_address = run_sync(self.bind_address(deployment))
 
             if bind_address:
                 console.print(bind_address)
@@ -195,42 +210,12 @@ class DnsFeature(OpenStackControlPlaneFeature):
                 _message = "No address found for DNS service."
                 raise click.ClickException(_message)
 
-    def commands(self) -> dict:
-        """Dict of clickgroup along with commands."""
-        commands = super().commands()
-        try:
-            enabled = self.enabled
-        except ClusterServiceUnavailableException:
-            LOG.debug(
-                "Failed to query for feature status, is cloud bootstrapped ?",
-                exc_info=True,
-            )
-            enabled = False
+    def enabled_commands(self) -> dict[str, list[dict]]:
+        """Dict of clickgroup along with commands.
 
-        if enabled:
-            commands.update(
-                {
-                    "init": [{"name": "dns", "command": self.dns_groups}],
-                    "init.dns": [{"name": "address", "command": self.dns_address}],
-                }
-            )
-        return commands
-
-    @property
-    def k8s_application_data(self):
-        """K8s application data."""
+        Return the commands available once the feature is enabled.
+        """
         return {
-            "designate": ApplicationChannelData(
-                channel=OPENSTACK_CHANNEL,
-                tfvars_channel_var=None,
-            ),
-            "bind": ApplicationChannelData(
-                channel=BIND_CHANNEL,
-                tfvars_channel_var=None,
-            ),
+            "init": [{"name": "dns", "command": self.dns_groups}],
+            "init.dns": [{"name": "address", "command": self.dns_address}],
         }
-
-    @property
-    def tfvars_channel_var(self):
-        """Terrform variable channel var."""
-        return "designate-channel"
