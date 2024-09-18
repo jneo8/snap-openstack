@@ -198,7 +198,14 @@ class CoreConfig(pydantic.BaseModel):
         segmentation_id: int | None = None
 
     class _HostMicroCephConfig(pydantic.BaseModel):
-        osd_devices: str | None = None
+        osd_devices: list[str] | None = None
+
+        @pydantic.field_validator("osd_devices", mode="before")
+        @classmethod
+        def _validate_osd_devices(cls, v):
+            if isinstance(v, str):
+                return v.split(",")
+            return v
 
     proxy: _ProxyConfig | None = None
     bootstrap: _BootstrapConfig | None = None
