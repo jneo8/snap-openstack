@@ -31,7 +31,7 @@ CERT_AUTH_CHANNEL = "latest/beta"
 BIND_CHANNEL = "9/stable"
 VAULT_CHANNEL = "latest/edge"  # Pinned to a specific revision in TF plans
 TEMPEST_CHANNEL = "2024.1/stable"
-K8S_CHANNEL = "latest/edge"
+K8S_CHANNEL = "1.30/beta"
 
 # List of charms with default channels
 OPENSTACK_CHARMS_K8S = {
