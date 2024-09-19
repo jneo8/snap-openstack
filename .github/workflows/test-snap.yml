@@ -51,6 +51,14 @@ on:
         options:
           - single
           - multi
+      k8s-provider:
+        description: Select k8s provider
+        required: true
+        default: microk8s
+        type: choice
+        options:
+          - microk8s
+          - k8s
 
 jobs:
   functional-test:
@@ -64,6 +72,7 @@ jobs:
           export COLUMNS=256
           set +x
           sudo snap install openstack --channel ${{ inputs.snap-channel }}
+          sudo snap set openstack k8s.provider=${{ inputs.k8s-provider }}
           cp .github/assets/testing/manifest.yml .
           sed -i 's|OS_CHARM|${{ inputs.os-charm-channel }}|' manifest.yml
           sed -i 's|OVN_CHARM|${{ inputs.ovn-charm-channel }}|' manifest.yml
@@ -113,7 +122,7 @@ jobs:
         if: always()
         run: |
           mkdir -p logs
-          kubectl="microk8s.kubectl"
+          if [ ${{ inputs.k8s-provider }} == "k8s" ]; then kubectl="k8s kubectl"; else kubectl="microk8s.kubectl"; fi
           cp -rf $HOME/snap/openstack/common/logs/*.log logs/
           models=$(juju models --format json | jq -r .models[].name)
           for model in $models;
