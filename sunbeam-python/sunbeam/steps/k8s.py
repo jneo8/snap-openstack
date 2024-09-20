@@ -253,7 +253,7 @@ class EnableK8SFeatures(BaseStep):
             return Result(ResultType.FAILED, str(e))
 
         try:
-            cmd = "sudo k8s status"
+            cmd = "sudo k8s status --output-format yaml"
             cmd_result = run_sync(
                 self.jhelper.run_cmd_on_machine_unit(
                     leader,
