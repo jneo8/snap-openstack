@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import asyncio
+import copy
 import logging
 import math
 
@@ -60,6 +61,7 @@ OPENSTACK_DEPLOY_TIMEOUT = 5400  # 90 minutes
 CONFIG_KEY = "TerraformVarsOpenstack"
 TOPOLOGY_KEY = "Topology"
 DATABASE_MEMORY_KEY = "DatabaseMemory"
+DATABASE_STORAGE_KEY = "DatabaseStorage"
 REGION_CONFIG_KEY = "Region"
 DEFAULT_REGION = "RegionOne"
 
@@ -85,6 +87,11 @@ CONNECTIONS = {
     "nova": {"nova-k8s": 8 * 3},
     "placement": {"placement-k8s": 4},
 }
+
+DEFAULT_STORAGE_SINGLE_DATABASE = "20G"
+# This dict holds default storage values for multi mysql mode
+# If a service not specified, defaults to 1G
+DEFAULT_STORAGE_MULTI_DATABASE = {"nova": "10G"}
 
 
 def determine_target_topology(client: Client) -> str:
@@ -170,7 +177,7 @@ def write_database_resource_dict(
     update_config(client, DATABASE_MEMORY_KEY, resource_dict)
 
 
-def get_database_tfvars(
+def get_database_resource_tfvars(
     many_mysql: bool, resource_dict: dict[str, tuple[int, int]], service_scale: int
 ) -> dict[str, bool | dict]:
     """Create terraform variables related to database."""
@@ -203,6 +210,117 @@ def get_database_tfvars(
         }
 
     return tfvars
+
+
+def get_database_storage_from_manifest(
+    manifest: Manifest, many_mysql: bool
+) -> dict[str, str]:
+    """Get mysql-k8s storage from manifest file.
+
+    For single mysql, return {"mysql": <size>}
+    For multi mysql, return {"nova": <size>, "neutron": <size>,...}
+
+    Raises ValueError if storage or storage-map are not in dict format.
+    """
+    mysql_k8s_from_manifest = manifest.core.software.charms.get("mysql-k8s")
+    if not mysql_k8s_from_manifest:
+        return {}
+
+    # mysql-k8s storage/storage-map are extra fields not defined in
+    # Manifest pydantic model.
+    if not mysql_k8s_from_manifest.model_extra:
+        return {}
+
+    # Key will be storage for single mysql and storage-map for multi-mysql
+    if not many_mysql and "storage" in mysql_k8s_from_manifest.model_extra:
+        storage = mysql_k8s_from_manifest.model_extra.get("storage")
+        if not isinstance(storage, dict):
+            raise ValueError(
+                "Incorrect mysql-k8s storage field in manifest, expected dict"
+            )
+
+        if storage_ := storage.get("database"):
+            return {"mysql": storage_}
+
+    elif many_mysql and "storage-map" in mysql_k8s_from_manifest.model_extra:
+        storage_map = mysql_k8s_from_manifest.model_extra.get("storage-map")
+        if not isinstance(storage_map, dict):
+            raise ValueError(
+                "Incorrect mysql-k8s storage-map field in manifest, expected dict"
+            )
+
+        storages = {
+            service: storage_
+            for service, storage in storage_map.items()
+            if (storage_ := storage.get("database"))
+        }
+        return storages
+
+    return {}
+
+
+def get_database_default_storage_dict(many_mysql: bool) -> dict:
+    """Get default storage values based on database topology."""
+    if many_mysql:
+        return DEFAULT_STORAGE_MULTI_DATABASE
+    else:
+        return {"mysql": DEFAULT_STORAGE_SINGLE_DATABASE}
+
+
+def get_database_storage_dict(
+    client: Client, many_mysql: bool, manifest: Manifest, default_storages: dict
+) -> dict[str, str]:
+    """Returns a dict containing the database storage.
+
+    In single database, storage is retrieved for mysql.
+    In multi-mysql, storage is retrieved for each service.
+    """
+    try:
+        storage_dict_from_db = read_config(client, DATABASE_STORAGE_KEY)
+    except ConfigItemNotFoundException:
+        storage_dict_from_db = {}
+
+    storage_from_manifest = get_database_storage_from_manifest(manifest, many_mysql)
+
+    storage_dict = copy.deepcopy(default_storages)
+    storage_dict.update(storage_dict_from_db)
+    storage_dict.update(storage_from_manifest)
+
+    return storage_dict
+
+
+def write_database_storage_dict(client: Client, storage_dict: dict[str, str]):
+    """Write the storage dict for each database."""
+    update_config(client, DATABASE_STORAGE_KEY, storage_dict)
+
+
+def check_database_size_modifications_in_manifest(
+    client: Client, manifest: Manifest, many_mysql: bool
+) -> bool:
+    """Database sizes are immutable in manifest and cannot be updated.
+
+    Check for modifications in database storage sizes in manifest.
+    Return True if there are modifications.
+
+    Raises ValueError if the storage sizes are not in proper format.
+    """
+    storage_dict_from_manifest = get_database_storage_from_manifest(
+        manifest, many_mysql
+    )
+
+    try:
+        storage_dict_from_db = read_config(client, DATABASE_STORAGE_KEY)
+    except ConfigItemNotFoundException:
+        storage_dict_from_db = {}
+
+    # User can update manifest to add storage for features at later point
+    # of time during enablement of feature.
+    # So compare for storages if service exists in both the dicts.
+    for service, storage in storage_dict_from_manifest.items():
+        if (storage_ := storage_dict_from_db.get(service)) and storage != storage_:
+            return True
+
+    return False
 
 
 class DeployControlPlaneStep(BaseStep, JujuStepHelper):
@@ -253,12 +371,36 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
 
         return tfvars
 
-    def get_database_tfvars(self, service_scale: int) -> dict:
-        """Create terraform variables related to database."""
+    def _get_database_resource_tfvars(self, service_scale: int) -> dict:
+        """Create terraform variables related to database resources."""
         many_mysql = self.database == "multi"
         resource_dict = get_database_resource_dict(self.client)
         write_database_resource_dict(self.client, resource_dict)
-        return get_database_tfvars(many_mysql, resource_dict, service_scale)
+        return get_database_resource_tfvars(many_mysql, resource_dict, service_scale)
+
+    def _get_database_storage_map_tfvars(self) -> dict:
+        """Create terraform variables related to database storage."""
+        many_mysql = self.database == "multi"
+        storage_defaults = get_database_default_storage_dict(many_mysql)
+        storage_dict = get_database_storage_dict(
+            self.client, many_mysql, self.manifest, storage_defaults
+        )
+        write_database_storage_dict(self.client, storage_dict)
+
+        if many_mysql:
+            storage_map = {
+                service: {"database": storage}
+                for service, storage in storage_dict.items()
+            }
+            return {"mysql-storage-map": storage_map}
+        else:
+            return {"mysql-storage": {"database": storage_dict.get("mysql")}}
+
+    def get_database_tfvars(self, service_scale: int) -> dict:
+        """Create terraform variables related to database."""
+        database_tfvars = self._get_database_resource_tfvars(service_scale)
+        database_tfvars.update(self._get_database_storage_map_tfvars())
+        return database_tfvars
 
     def get_region_tfvars(self) -> dict:
         """Create terraform variables related to region."""
@@ -304,6 +446,22 @@ class DeployControlPlaneStep(BaseStep, JujuStepHelper):
                     " use -f/--force to override"
                 ),
             )
+
+        # Check for database size modifications in manifest
+        # TODO: Force flag to update storage sizes once resize database on k8s
+        # is figured out
+        try:
+            many_mysql = self.database == "multi"
+            database_size_changed = check_database_size_modifications_in_manifest(
+                self.client, self.manifest, many_mysql
+            )
+            if database_size_changed:
+                return Result(
+                    ResultType.FAILED,
+                    "Storage sizes are immutable and cannot be modified in manifest",
+                )
+        except ValueError as e:
+            return Result(ResultType.FAILED, str(e))
 
         return Result(ResultType.COMPLETED)
 

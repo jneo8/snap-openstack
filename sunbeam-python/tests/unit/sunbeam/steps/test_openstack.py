@@ -15,7 +15,7 @@
 import asyncio
 import json
 import unittest
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -27,9 +27,12 @@ from sunbeam.core.juju import (
     TimeoutException,
 )
 from sunbeam.core.k8s import SERVICE_LB_ANNOTATION
+from sunbeam.core.manifest import Manifest
 from sunbeam.core.terraform import TerraformException
 from sunbeam.steps.openstack import (
     DATABASE_MEMORY_KEY,
+    DEFAULT_STORAGE_MULTI_DATABASE,
+    DEFAULT_STORAGE_SINGLE_DATABASE,
     REGION_CONFIG_KEY,
     DeployControlPlaneStep,
     OpenStackPatchLoadBalancerServicesStep,
@@ -37,6 +40,8 @@ from sunbeam.steps.openstack import (
     compute_ha_scale,
     compute_ingress_scale,
     compute_os_api_scale,
+    get_database_default_storage_dict,
+    get_database_storage_dict,
 )
 
 TOPOLOGY = "single"
@@ -69,7 +74,7 @@ class TestDeployControlPlaneStep(unittest.TestCase):
         self.jhelper = AsyncMock()
         self.jhelper.run_action.return_value = {}
         self.tfhelper = Mock()
-        self.manifest = Mock()
+        self.manifest = MagicMock()
         self.client = Mock()
         self.deployment = Mock()
         self.deployment.get_client.return_value = self.client
@@ -504,3 +509,76 @@ class TestReapplyOpenStackTerraformPlanStep(unittest.TestCase):
         self.jhelper.wait_until_active.assert_called_once()
         assert result.result_type == ResultType.FAILED
         assert result.message == "Unit in error: placement/0"
+
+
+@pytest.fixture()
+def read_config():
+    with patch("sunbeam.steps.openstack.read_config") as p:
+        yield p
+
+
+@pytest.mark.parametrize(
+    "many_mysql,clusterdb_configs,manifest,expected_storage",
+    [
+        # Defaults with no clusterdb and manifest
+        (False, {}, {}, {"mysql": DEFAULT_STORAGE_SINGLE_DATABASE}),
+        (True, {}, {}, DEFAULT_STORAGE_MULTI_DATABASE),
+        # Values from clusterdb takes precedence when manifest is empty
+        (False, {"mysql": "1G"}, {}, {"mysql": "1G"}),
+        (True, {"nova": "10G"}, {}, {"nova": "10G"}),
+        (True, {"neutron": "10G"}, {}, {"nova": "10G", "neutron": "10G"}),
+        # Values from manifest as manifest takes precedence
+        (
+            False,
+            {"mysql": "1G"},
+            {"core": {"software": {"charms": {"mysql-k8s": {}}}}},
+            {"mysql": "1G"},
+        ),
+        (
+            False,
+            {"mysql": "1G"},
+            {
+                "core": {
+                    "software": {
+                        "charms": {"mysql-k8s": {"storage": {"database": "20G"}}}
+                    }
+                }
+            },
+            {"mysql": "20G"},
+        ),
+        (
+            True,
+            {"nova": "1G"},
+            {"core": {"software": {"charms": {"mysql-k8s": {}}}}},
+            {"nova": "1G"},
+        ),
+        (
+            True,
+            {"nova": "1G"},
+            {
+                "core": {
+                    "software": {
+                        "charms": {
+                            "mysql-k8s": {
+                                "storage-map": {
+                                    "nova": {"database": "20G"},
+                                    "keystone": {"database": "10G"},
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            {"nova": "20G", "keystone": "10G"},
+        ),
+    ],
+)
+def test_get_database_storage_dict(
+    read_config, snap, many_mysql, clusterdb_configs, manifest, expected_storage
+):
+    client = Mock()
+    read_config.return_value = clusterdb_configs
+    manifest = Manifest(**manifest)
+    default_storages = get_database_default_storage_dict(many_mysql)
+    storages = get_database_storage_dict(client, many_mysql, manifest, default_storages)
+    assert storages == expected_storage

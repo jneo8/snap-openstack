@@ -154,6 +154,10 @@ class TelemetryFeature(OpenStackControlPlaneFeature):
 
         return apps
 
+    def get_database_default_charm_storage(self) -> dict[str, str]:
+        """Returns the database storage defaults for this service."""
+        return {"gnocchi": "10G"}
+
     def set_tfvars_on_enable(
         self, deployment: Deployment, config: FeatureConfig
     ) -> dict:
