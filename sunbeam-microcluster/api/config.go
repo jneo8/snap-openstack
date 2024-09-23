@@ -7,8 +7,8 @@ import (
 
 	"github.com/canonical/lxd/lxd/response"
 	"github.com/canonical/lxd/shared/api"
-	"github.com/canonical/microcluster/rest"
-	"github.com/canonical/microcluster/state"
+	"github.com/canonical/microcluster/v2/rest"
+	"github.com/canonical/microcluster/v2/state"
 	"github.com/gorilla/mux"
 
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/access"
@@ -24,13 +24,13 @@ var configCmd = rest.Endpoint{
 	Delete: access.ClusterCATrustedEndpoint(cmdConfigDelete, true),
 }
 
-func cmdConfigGet(s *state.State, r *http.Request) response.Response {
+func cmdConfigGet(s state.State, r *http.Request) response.Response {
 	var key string
 	key, err := url.PathUnescape(mux.Vars(r)["key"])
 	if err != nil {
 		return response.InternalError(err)
 	}
-	config, err := sunbeam.GetConfig(s, key)
+	config, err := sunbeam.GetConfig(r.Context(), s, key)
 	if err != nil {
 		if err, ok := err.(api.StatusError); ok {
 			if err.Status() == http.StatusNotFound {
@@ -43,7 +43,7 @@ func cmdConfigGet(s *state.State, r *http.Request) response.Response {
 	return response.SyncResponse(true, config)
 }
 
-func cmdConfigPut(s *state.State, r *http.Request) response.Response {
+func cmdConfigPut(s state.State, r *http.Request) response.Response {
 	key, err := url.PathUnescape(mux.Vars(r)["key"])
 	if err != nil {
 		return response.InternalError(err)
@@ -55,7 +55,7 @@ func cmdConfigPut(s *state.State, r *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	err = sunbeam.UpdateConfig(s, key, body.String())
+	err = sunbeam.UpdateConfig(r.Context(), s, key, body.String())
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -63,13 +63,13 @@ func cmdConfigPut(s *state.State, r *http.Request) response.Response {
 	return response.EmptySyncResponse
 }
 
-func cmdConfigDelete(s *state.State, r *http.Request) response.Response {
+func cmdConfigDelete(s state.State, r *http.Request) response.Response {
 	key, err := url.PathUnescape(mux.Vars(r)["key"])
 	if err != nil {
 		return response.InternalError(err)
 	}
 
-	err = sunbeam.DeleteConfig(s, key)
+	err = sunbeam.DeleteConfig(r.Context(), s, key)
 	if err != nil {
 		if err, ok := err.(api.StatusError); ok {
 			if err.Status() == http.StatusNotFound {

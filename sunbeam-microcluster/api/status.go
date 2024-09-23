@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/canonical/lxd/lxd/response"
-	"github.com/canonical/microcluster/rest"
-	"github.com/canonical/microcluster/state"
+	"github.com/canonical/microcluster/v2/rest"
+	"github.com/canonical/microcluster/v2/state"
 
 	"github.com/canonical/lxd/shared/api"
 	"github.com/canonical/lxd/shared/logger"
@@ -22,7 +22,7 @@ var statusCmd = rest.Endpoint{
 	Get: access.ClusterCATrustedEndpoint(cmdGetStatus, false),
 }
 
-func cmdGetStatus(s *state.State, _ *http.Request) response.Response {
+func cmdGetStatus(s state.State, r *http.Request) response.Response {
 	leader, err := s.Leader()
 
 	if err != nil {
@@ -30,11 +30,11 @@ func cmdGetStatus(s *state.State, _ *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	queryCtx, cancel := context.WithTimeout(s.Context, time.Second*30)
+	queryCtx, cancel := context.WithTimeout(r.Context(), time.Second*30)
 	defer cancel()
 
 	var data []map[string]interface{}
-	err = leader.Query(queryCtx, "GET", "cluster/1.0", api.NewURL().Path("cluster"), nil, &data)
+	err = leader.Query(queryCtx, "GET", "core/1.0", api.NewURL().Path("cluster"), nil, &data)
 	if err != nil {
 		logger.Errorf("Failed to get cluster status: %v", err)
 		return response.InternalError(err)

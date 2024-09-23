@@ -338,7 +338,7 @@ class TestClusterService:
             "status_code": 0,
             "operation": "",
             "error_code": 500,
-            "error": "Daemon not yet initialized",
+            "error": "Database is not yet initialized",
             "metadata": None,
         }
         mock_response = self._mock_response(

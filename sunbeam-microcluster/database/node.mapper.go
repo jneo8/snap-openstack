@@ -12,46 +12,46 @@ import (
 
 	"github.com/canonical/lxd/lxd/db/query"
 	"github.com/canonical/lxd/shared/api"
-	"github.com/canonical/microcluster/cluster"
+	"github.com/canonical/microcluster/v2/cluster"
 )
 
 var _ = api.ServerEnvironment{}
 
 var nodeObjects = cluster.RegisterStmt(`
-SELECT nodes.id, internal_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id
+SELECT nodes.id, core_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id
   FROM nodes
-  JOIN internal_cluster_members ON nodes.member_id = internal_cluster_members.id
+  JOIN core_cluster_members ON nodes.member_id = core_cluster_members.id
   ORDER BY nodes.name
 `)
 
 var nodeObjectsByMember = cluster.RegisterStmt(`
-SELECT nodes.id, internal_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id
+SELECT nodes.id, core_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id
   FROM nodes
-  JOIN internal_cluster_members ON nodes.member_id = internal_cluster_members.id
+  JOIN core_cluster_members ON nodes.member_id = core_cluster_members.id
   WHERE ( member = ? )
   ORDER BY nodes.name
 `)
 
 var nodeObjectsByName = cluster.RegisterStmt(`
-SELECT nodes.id, internal_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id
+SELECT nodes.id, core_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id
   FROM nodes
-  JOIN internal_cluster_members ON nodes.member_id = internal_cluster_members.id
+  JOIN core_cluster_members ON nodes.member_id = core_cluster_members.id
   WHERE ( nodes.name = ? )
   ORDER BY nodes.name
 `)
 
 var nodeObjectsByRole = cluster.RegisterStmt(`
-SELECT nodes.id, internal_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id
+SELECT nodes.id, core_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id
   FROM nodes
-  JOIN internal_cluster_members ON nodes.member_id = internal_cluster_members.id
+  JOIN core_cluster_members ON nodes.member_id = core_cluster_members.id
   WHERE ( nodes.role = ? )
   ORDER BY nodes.name
 `)
 
 var nodeObjectsByMachineID = cluster.RegisterStmt(`
-SELECT nodes.id, internal_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id
+SELECT nodes.id, core_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id
   FROM nodes
-  JOIN internal_cluster_members ON nodes.member_id = internal_cluster_members.id
+  JOIN core_cluster_members ON nodes.member_id = core_cluster_members.id
   WHERE ( nodes.machine_id = ? )
   ORDER BY nodes.name
 `)
@@ -63,7 +63,7 @@ SELECT nodes.id FROM nodes
 
 var nodeCreate = cluster.RegisterStmt(`
 INSERT INTO nodes (member_id, name, role, machine_id, system_id)
-  VALUES ((SELECT internal_cluster_members.id FROM internal_cluster_members WHERE internal_cluster_members.name = ?), ?, ?, ?, ?)
+  VALUES ((SELECT core_cluster_members.id FROM core_cluster_members WHERE core_cluster_members.name = ?), ?, ?, ?, ?)
 `)
 
 var nodeDeleteByName = cluster.RegisterStmt(`
@@ -72,14 +72,14 @@ DELETE FROM nodes WHERE name = ?
 
 var nodeUpdate = cluster.RegisterStmt(`
 UPDATE nodes
-  SET member_id = (SELECT internal_cluster_members.id FROM internal_cluster_members WHERE internal_cluster_members.name = ?), name = ?, role = ?, machine_id = ?, system_id = ?
+  SET member_id = (SELECT core_cluster_members.id FROM core_cluster_members WHERE core_cluster_members.name = ?), name = ?, role = ?, machine_id = ?, system_id = ?
  WHERE id = ?
 `)
 
 // nodeColumns returns a string of column names to be used with a SELECT statement for the entity.
 // Use this function when building statements to retrieve database entries matching the Node entity.
 func nodeColumns() string {
-	return "nodes.id, internal_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id"
+	return "nodes.id, core_cluster_members.name AS member, nodes.name, nodes.role, nodes.machine_id, nodes.system_id"
 }
 
 // getNodes can be used to run handwritten sql.Stmts to return a slice of objects.
