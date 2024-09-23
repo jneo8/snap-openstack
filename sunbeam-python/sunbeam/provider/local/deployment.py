@@ -25,6 +25,7 @@ from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import (
     ClusterServiceUnavailableException,
     ConfigItemNotFoundException,
+    URLNotFoundException,
 )
 from sunbeam.commands.configure import (
     CLOUD_CONFIG_SECTION,
@@ -88,6 +89,9 @@ class LocalDeployment(Deployment):
     def _load_juju_controller(self) -> JujuController | None:
         try:
             return JujuController.load(self.get_client())
+        except URLNotFoundException:
+            LOG.debug("Url not found, is microcluster bootstrapped?", exc_info=True)
+            return None
         except ConfigItemNotFoundException:
             LOG.debug("No juju controller found", exc_info=True)
             return None
@@ -101,6 +105,9 @@ class LocalDeployment(Deployment):
     def _load_cert_pair(self) -> CertPair | None:
         try:
             return CertPair(**self.get_client().cluster.get_server_certpair())
+        except URLNotFoundException:
+            LOG.debug("Url not found, is microcluster bootstrapped?", exc_info=True)
+            return None
         except ClusterServiceUnavailableException:
             LOG.debug("Clusterd service unavailable", exc_info=True)
             return None

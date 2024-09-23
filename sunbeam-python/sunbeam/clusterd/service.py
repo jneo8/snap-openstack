@@ -94,6 +94,16 @@ class JujuUserNotFoundException(RemoteException):
     pass
 
 
+class URLNotFoundException(RemoteException):
+    """Raise when URL is not found.
+
+    Happens when the URL is not found in the remote or
+    microcluster is not bootstrapped.
+    """
+
+    pass
+
+
 class BaseService(ABC):
     """BaseService is the base service class for sunbeam clusterd services."""
 
@@ -144,6 +154,8 @@ class BaseService(ABC):
                 raise NodeAlreadyExistsException(
                     "Already node exists in the sunbeam cluster"
                 )
+            elif "not found" == error:
+                raise URLNotFoundException("URL not found")
             elif "No remote exists with the given name" in error:
                 raise NodeNotExistInClusterException(
                     "Node does not exist in the sunbeam cluster"
@@ -160,7 +172,7 @@ class BaseService(ABC):
                 raise TokenAlreadyGeneratedException(
                     "Token already generated for the node"
                 )
-            elif "Daemon not yet initialized" in error:
+            elif "Database is not yet initialized" in error:
                 raise ClusterServiceUnavailableException(
                     "Sunbeam Cluster not initialized"
                 )

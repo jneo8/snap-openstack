@@ -7,8 +7,8 @@ import (
 
 	"github.com/canonical/lxd/lxd/response"
 	"github.com/canonical/lxd/shared/api"
-	"github.com/canonical/microcluster/rest"
-	"github.com/canonical/microcluster/state"
+	"github.com/canonical/microcluster/v2/rest"
+	"github.com/canonical/microcluster/v2/state"
 	"github.com/gorilla/mux"
 
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/access"
@@ -33,10 +33,10 @@ var nodeCmd = rest.Endpoint{
 	Delete: access.ClusterCATrustedEndpoint(cmdNodesDelete, true),
 }
 
-func cmdNodesGetAll(s *state.State, r *http.Request) response.Response {
+func cmdNodesGetAll(s state.State, r *http.Request) response.Response {
 	roles := r.URL.Query()["role"]
 
-	nodes, err := sunbeam.ListNodes(s, roles)
+	nodes, err := sunbeam.ListNodes(r.Context(), s, roles)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -44,13 +44,13 @@ func cmdNodesGetAll(s *state.State, r *http.Request) response.Response {
 	return response.SyncResponse(true, nodes)
 }
 
-func cmdNodesGet(s *state.State, r *http.Request) response.Response {
+func cmdNodesGet(s state.State, r *http.Request) response.Response {
 	var name string
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
 	if err != nil {
 		return response.InternalError(err)
 	}
-	node, err := sunbeam.GetNode(s, name)
+	node, err := sunbeam.GetNode(r.Context(), s, name)
 	if err != nil {
 		if err, ok := err.(api.StatusError); ok {
 			if err.Status() == http.StatusNotFound {
@@ -63,7 +63,7 @@ func cmdNodesGet(s *state.State, r *http.Request) response.Response {
 	return response.SyncResponse(true, node)
 }
 
-func cmdNodesPost(s *state.State, r *http.Request) response.Response {
+func cmdNodesPost(s state.State, r *http.Request) response.Response {
 	req := types.Node{MachineID: -1}
 
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -71,7 +71,7 @@ func cmdNodesPost(s *state.State, r *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	err = sunbeam.AddNode(s, req.Name, req.Role, req.MachineID, req.SystemID)
+	err = sunbeam.AddNode(r.Context(), s, req.Name, req.Role, req.MachineID, req.SystemID)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -79,7 +79,7 @@ func cmdNodesPost(s *state.State, r *http.Request) response.Response {
 	return response.EmptySyncResponse
 }
 
-func cmdNodesPut(s *state.State, r *http.Request) response.Response {
+func cmdNodesPut(s state.State, r *http.Request) response.Response {
 	req := types.Node{MachineID: -1}
 
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
@@ -92,7 +92,7 @@ func cmdNodesPut(s *state.State, r *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	err = sunbeam.UpdateNode(s, name, req.Role, req.MachineID, req.SystemID)
+	err = sunbeam.UpdateNode(r.Context(), s, name, req.Role, req.MachineID, req.SystemID)
 	if err != nil {
 		return response.InternalError(err)
 	}
@@ -100,12 +100,12 @@ func cmdNodesPut(s *state.State, r *http.Request) response.Response {
 	return response.EmptySyncResponse
 }
 
-func cmdNodesDelete(s *state.State, r *http.Request) response.Response {
+func cmdNodesDelete(s state.State, r *http.Request) response.Response {
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
 	if err != nil {
 		return response.SmartError(err)
 	}
-	err = sunbeam.DeleteNode(s, name)
+	err = sunbeam.DeleteNode(r.Context(), s, name)
 	if err != nil {
 		return response.InternalError(err)
 	}

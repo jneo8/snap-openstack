@@ -5,8 +5,8 @@ import (
 
 	"github.com/canonical/lxd/lxd/response"
 	"github.com/canonical/lxd/shared/logger"
-	"github.com/canonical/microcluster/rest"
-	"github.com/canonical/microcluster/state"
+	"github.com/canonical/microcluster/v2/rest"
+	"github.com/canonical/microcluster/v2/state"
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/access"
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/api/types"
 )
@@ -22,7 +22,7 @@ var certPair = rest.Endpoint{
 }
 
 // Return the member server certpair, should only be allowed over the Unix socket.
-func cmdGetMemberServerCertPair(s *state.State, _ *http.Request) response.Response {
+func cmdGetMemberServerCertPair(s state.State, _ *http.Request) response.Response {
 	certs := s.ServerCert()
 
 	if certs == nil {

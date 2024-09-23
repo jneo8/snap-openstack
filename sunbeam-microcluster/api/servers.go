@@ -2,15 +2,16 @@
 package api
 
 import (
-	"github.com/canonical/microcluster/rest"
+	"github.com/canonical/microcluster/v2/rest"
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/api/types"
 )
 
 // Servers is a global list of all API servers on the /1.0 endpoint of
 // microcluster.
-var Servers = []rest.Server{
-	{
-		CoreAPI: true,
+var Servers = map[string]rest.Server{
+	"sunbeam": {
+		CoreAPI:   true,
+		ServeUnix: true,
 		Resources: []rest.Resources{
 			{
 				PathPrefix: types.ExtendedPathPrefix,

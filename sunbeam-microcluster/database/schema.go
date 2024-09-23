@@ -27,7 +27,7 @@ CREATE TABLE nodes (
   name                          TEXT     NOT  NULL,
   role                          TEXT,
   machine_id                    INTEGER,
-  FOREIGN KEY (member_id) REFERENCES "internal_cluster_members" (id)
+  FOREIGN KEY (member_id) REFERENCES "core_cluster_members" (id)
   UNIQUE(name)
 );
   `

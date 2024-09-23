@@ -9,8 +9,8 @@ import (
 	"github.com/canonical/lxd/lxd/response"
 	"github.com/canonical/lxd/lxd/util"
 	"github.com/canonical/lxd/shared/api"
-	"github.com/canonical/microcluster/rest"
-	"github.com/canonical/microcluster/state"
+	"github.com/canonical/microcluster/v2/rest"
+	"github.com/canonical/microcluster/v2/state"
 	"github.com/gorilla/mux"
 
 	"github.com/canonical/snap-openstack/sunbeam-microcluster/access"
@@ -64,8 +64,8 @@ var terraformUnlockCmd = rest.Endpoint{
 	Put: access.ClusterCATrustedEndpoint(cmdUnlockPut, false),
 }
 
-func cmdStateList(s *state.State, _ *http.Request) response.Response {
-	plans, err := sunbeam.GetTerraformStates(s)
+func cmdStateList(s state.State, r *http.Request) response.Response {
+	plans, err := sunbeam.GetTerraformStates(r.Context(), s)
 
 	if err != nil {
 		return response.InternalError(err)
@@ -74,7 +74,7 @@ func cmdStateList(s *state.State, _ *http.Request) response.Response {
 	return response.SyncResponse(true, plans)
 }
 
-func cmdStateGet(s *state.State, r *http.Request) response.Response {
+func cmdStateGet(s state.State, r *http.Request) response.Response {
 	var name string
 
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
@@ -82,7 +82,7 @@ func cmdStateGet(s *state.State, r *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	state, err := sunbeam.GetTerraformState(s, name)
+	state, err := sunbeam.GetTerraformState(r.Context(), s, name)
 	if err != nil {
 		if err, ok := err.(api.StatusError); ok {
 			if err.Status() == http.StatusNotFound {
@@ -105,7 +105,7 @@ func cmdStateGet(s *state.State, r *http.Request) response.Response {
 	})
 }
 
-func cmdStatePut(s *state.State, r *http.Request) response.Response {
+func cmdStatePut(s state.State, r *http.Request) response.Response {
 	var name string
 
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
@@ -121,7 +121,7 @@ func cmdStatePut(s *state.State, r *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	dbLock, err := sunbeam.UpdateTerraformState(s, name, lockID, body.String())
+	dbLock, err := sunbeam.UpdateTerraformState(r.Context(), s, name, lockID, body.String())
 	if err != nil {
 		if err, ok := err.(api.StatusError); ok {
 			if err.Status() == http.StatusConflict {
@@ -142,7 +142,7 @@ func cmdStatePut(s *state.State, r *http.Request) response.Response {
 	return response.EmptySyncResponse
 }
 
-func cmdStateDelete(s *state.State, r *http.Request) response.Response {
+func cmdStateDelete(s state.State, r *http.Request) response.Response {
 	var name string
 
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
@@ -150,7 +150,7 @@ func cmdStateDelete(s *state.State, r *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	err = sunbeam.DeleteTerraformState(s, name)
+	err = sunbeam.DeleteTerraformState(r.Context(), s, name)
 	if err != nil {
 		if err, ok := err.(api.StatusError); ok {
 			if err.Status() == http.StatusNotFound {
@@ -163,8 +163,8 @@ func cmdStateDelete(s *state.State, r *http.Request) response.Response {
 	return response.EmptySyncResponse
 }
 
-func cmdLockList(s *state.State, _ *http.Request) response.Response {
-	plans, err := sunbeam.GetTerraformLocks(s)
+func cmdLockList(s state.State, r *http.Request) response.Response {
+	plans, err := sunbeam.GetTerraformLocks(r.Context(), s)
 
 	if err != nil {
 		return response.InternalError(err)
@@ -173,7 +173,7 @@ func cmdLockList(s *state.State, _ *http.Request) response.Response {
 	return response.SyncResponse(true, plans)
 }
 
-func cmdLockGet(s *state.State, r *http.Request) response.Response {
+func cmdLockGet(s state.State, r *http.Request) response.Response {
 	var name string
 
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
@@ -181,7 +181,7 @@ func cmdLockGet(s *state.State, r *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	lock, err := sunbeam.GetTerraformLock(s, name)
+	lock, err := sunbeam.GetTerraformLock(r.Context(), s, name)
 	if err != nil {
 		if err, ok := err.(api.StatusError); ok {
 			if err.Status() == http.StatusNotFound {
@@ -198,7 +198,7 @@ func cmdLockGet(s *state.State, r *http.Request) response.Response {
 	})
 }
 
-func cmdLockPut(s *state.State, r *http.Request) response.Response {
+func cmdLockPut(s state.State, r *http.Request) response.Response {
 	var name string
 
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
@@ -212,7 +212,7 @@ func cmdLockPut(s *state.State, r *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	dbLock, err := sunbeam.UpdateTerraformLock(s, name, body.String())
+	dbLock, err := sunbeam.UpdateTerraformLock(r.Context(), s, name, body.String())
 	if err != nil {
 		if err, ok := err.(api.StatusError); ok {
 			jsonDBLock, err1 := json.Marshal(dbLock)
@@ -237,7 +237,7 @@ func cmdLockPut(s *state.State, r *http.Request) response.Response {
 	return response.EmptySyncResponse
 }
 
-func cmdUnlockPut(s *state.State, r *http.Request) response.Response {
+func cmdUnlockPut(s state.State, r *http.Request) response.Response {
 	var name string
 
 	name, err := url.PathUnescape(mux.Vars(r)["name"])
@@ -251,7 +251,7 @@ func cmdUnlockPut(s *state.State, r *http.Request) response.Response {
 		return response.InternalError(err)
 	}
 
-	dbLock, err := sunbeam.DeleteTerraformLock(s, name, body.String())
+	dbLock, err := sunbeam.DeleteTerraformLock(r.Context(), s, name, body.String())
 	if err != nil {
 		if err, ok := err.(api.StatusError); ok {
 			jsonDBLock, err1 := json.Marshal(dbLock)

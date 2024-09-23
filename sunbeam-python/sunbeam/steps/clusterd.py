@@ -33,6 +33,7 @@ from sunbeam.clusterd.service import (
     NodeNotExistInClusterException,
     TokenAlreadyGeneratedException,
     TokenNotFoundException,
+    URLNotFoundException,
 )
 from sunbeam.core import questions
 from sunbeam.core.common import BaseStep, Result, ResultType, Status
@@ -155,7 +156,7 @@ class AskManagementCidrStep(BaseStep):
                 # And it *might* be called afterwards
                 # We don't allow updating it
                 return
-        except ClusterServiceUnavailableException:
+        except (ClusterServiceUnavailableException, URLNotFoundException):
             self.variables = {}
         self.variables.setdefault("bootstrap", {})
         preseed = {}

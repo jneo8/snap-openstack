@@ -41,7 +41,7 @@ class MicroClusterService(service.BaseService):
         invoked on already existing node in cluster.
         """
         data = {"bootstrap": True, "address": address, "name": name}
-        self._post("cluster/control", data=json.dumps(data))
+        self._post("/core/control", data=json.dumps(data))
 
     def join(self, name: str, address: str, token: str) -> None:
         """Join node to the micro cluster.
@@ -55,7 +55,7 @@ class MicroClusterService(service.BaseService):
         part of the generated tokens list.
         """
         data = {"join_token": token, "address": address, "name": name}
-        self._post("cluster/control", data=json.dumps(data))
+        self._post("/core/control", data=json.dumps(data))
 
     def get_cluster_members(self) -> list:
         """List members in the cluster.
@@ -63,7 +63,7 @@ class MicroClusterService(service.BaseService):
         Returns a list of all members in the cluster.
         """
         result = []
-        cluster = self._get("/cluster/1.0/cluster")
+        cluster = self._get("/core/1.0/cluster")
         members = cluster.get("metadata", {})
         keys = ["name", "address", "status"]
         for member in members:
@@ -78,7 +78,7 @@ class MicroClusterService(service.BaseService):
         Raises NodeRemoveFromClusterException if the node is last
         member of the cluster.
         """
-        self._delete(f"/cluster/1.0/cluster/{name}")
+        self._delete(f"/core/1.0/cluster/{name}")
 
     def generate_token(self, name: str) -> str:
         """Generate token for the node.
@@ -89,12 +89,12 @@ class MicroClusterService(service.BaseService):
         generated.
         """
         data = {"name": name}
-        result = self._post("/cluster/1.0/tokens", data=json.dumps(data))
+        result = self._post("/core/control/tokens", data=json.dumps(data))
         return result.get("metadata")
 
     def list_tokens(self) -> list:
         """List all generated tokens."""
-        tokens = self._get("/cluster/1.0/tokens")
+        tokens = self._get("/core/control/tokens")
         return tokens.get("metadata")
 
     def delete_token(self, name: str) -> None:
@@ -102,7 +102,7 @@ class MicroClusterService(service.BaseService):
 
         Raises TokenNotFoundException if token does not exist.
         """
-        self._delete(f"/cluster/internal/tokens/{name}")
+        self._delete(f"/core/1.0/tokens/{name}")
 
 
 class ExtendedAPIService(service.BaseService):
