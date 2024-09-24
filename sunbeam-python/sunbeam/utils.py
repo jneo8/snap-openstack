@@ -464,3 +464,43 @@ def pass_method_obj(f):
         return f(self, click.get_current_context().obj, *args, **kwargs)
 
     return update_wrapper(new_func, f)
+
+
+class DefaultableMappingParameter(click.ParamType):
+    name = "defaultable_mapping"
+
+    def __init__(self, key: str, value: str, separator: str = ":"):
+        self.key_name = key
+        self.value_name = value
+        self.sep = separator
+
+    def to_info_dict(self) -> dict:
+        """Return a dictionary containing the parameter's information."""
+        info_dict = super().to_info_dict()
+        info_dict["key_name"] = self.key_name
+        info_dict["value_name"] = self.value_name
+        info_dict["separator"] = self.sep
+        return info_dict
+
+    def convert(self, value: str, param, ctx) -> tuple[str, str]:
+        """Convert the value to a tuple.
+
+        First member of the tuple is the key and the second member is the value.
+        """
+        split = value.split(self.sep)
+        if len(split) == 1:
+            return (split[0], "default")
+        elif len(split) == 2:
+            return (split[0], split[1])
+        self.fail(f"Invalid mapping '{value}'.", param, ctx)
+
+    def get_metavar(self, param: click.Parameter) -> str:
+        """Define metavar representation for the parameter."""
+        repr_str = f"{self.key_name}|{self.key_name}{self.sep}{self.value_name}"
+
+        # Use curly braces to indicate a required argument.
+        if param.required and param.param_type_name == "argument":
+            return f"{{{repr_str}}}"
+
+        # Use square braces to indicate an option or optional argument.
+        return f"[{repr_str}]"
