@@ -19,10 +19,11 @@ import pathlib
 import typing
 
 import click
+from snaphelpers import Snap
 
 import sunbeam.features
 from sunbeam import utils
-from sunbeam.core.common import SunbeamException
+from sunbeam.core.common import SunbeamException, infer_risk
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.manifest import FeatureGroupManifest, FeatureManifest
 from sunbeam.features.interface.v1.base import (
@@ -172,10 +173,19 @@ class FeatureManager:
         :param cli: Main click group for sunbeam cli.
         """
         LOG.debug("Registering features")
+        installation_risk = infer_risk(Snap())
+
         for group in self.groups().values():
             group.register(cli)
 
         for feature in self.features().values():
+            if feature.risk_availability > installation_risk:
+                LOG.debug(
+                    "Not registering feature %r,"
+                    " it is available at a higher risk level",
+                    feature.name,
+                )
+                continue
             try:
                 feature.register(cli)
             except (ValueError, SunbeamException) as e:

@@ -26,7 +26,7 @@ from snaphelpers import Snap
 
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import ConfigItemNotFoundException
-from sunbeam.core.common import SunbeamException, read_config, update_config
+from sunbeam.core.common import RiskLevel, SunbeamException, read_config, update_config
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.manifest import FeatureConfig, Manifest, SoftwareConfig
 
@@ -301,6 +301,9 @@ class BaseFeature(BaseRegisterable, Generic[ConfigType]):
     # Name of feature
     name: str
     group: type[BaseFeatureGroup] | None = None
+
+    # Risk level of the feature
+    risk_availability: RiskLevel = RiskLevel.STABLE
 
     def __init_subclass__(cls, **kwargs):
         """Register inherited features classes."""

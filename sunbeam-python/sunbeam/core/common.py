@@ -439,6 +439,35 @@ class RiskLevel(str, enum.Enum):
     BETA = "beta"
     EDGE = "edge"
 
+    __ordering__ = (STABLE, CANDIDATE, BETA, EDGE)
+
+    def __str__(self) -> str:
+        """Return the string representation of the risk level."""
+        return self.value
+
+    def __lt__(self, other: str) -> bool:
+        """Implement less than comparison."""
+        if self == other:
+            return False
+        str_self = str(self)
+        str_other = str(other)
+        for elem in self.__ordering__:
+            if str_self == elem:
+                return True
+            elif str_other == elem:
+                return False
+        return False
+
+    def __gt__(self, other: str) -> bool:
+        """Implement greater than comparison."""
+        return not (self < other)
+
+    def __ge__(self, other: str) -> bool:
+        """Implement greater than or equal comparison."""
+        if self == other:
+            return True
+        return not (self < other)
+
 
 def infer_risk(snap: Snap) -> RiskLevel:
     """Compute risk level from environment."""
