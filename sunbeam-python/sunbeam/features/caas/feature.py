@@ -25,7 +25,7 @@ from rich.status import Status
 
 from sunbeam.clusterd.client import Client
 from sunbeam.commands.configure import retrieve_admin_credentials
-from sunbeam.core.common import BaseStep, Result, ResultType, run_plan
+from sunbeam.core.common import BaseStep, Result, ResultType, RiskLevel, run_plan
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper
 from sunbeam.core.manifest import (
@@ -129,6 +129,8 @@ class CaasFeature(OpenStackControlPlaneFeature):
     }
 
     name = "caas"
+    risk_availability = RiskLevel.BETA
+
     tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
     configure_plan = "caas-setup"
 
