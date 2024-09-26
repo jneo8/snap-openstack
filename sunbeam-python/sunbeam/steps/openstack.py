@@ -55,7 +55,7 @@ from sunbeam.core.steps import PatchLoadBalancerServicesStep
 from sunbeam.core.terraform import TerraformException, TerraformHelper
 
 LOG = logging.getLogger(__name__)
-OPENSTACK_DEPLOY_TIMEOUT = 5400  # 90 minutes
+OPENSTACK_DEPLOY_TIMEOUT = 3600  # 60 minutes
 
 CONFIG_KEY = "TerraformVarsOpenstack"
 TOPOLOGY_KEY = "Topology"
