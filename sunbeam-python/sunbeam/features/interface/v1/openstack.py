@@ -58,11 +58,16 @@ from sunbeam.core.terraform import (
 from sunbeam.features.interface.v1.base import ConfigType, EnableDisableFeature
 from sunbeam.steps.openstack import (
     DATABASE_MAX_POOL_SIZE,
+    DATABASE_STORAGE_KEY,
     TOPOLOGY_KEY,
+    check_database_size_modifications_in_manifest,
     compute_resources_for_service,
+    get_database_default_storage_dict,
     get_database_resource_dict,
-    get_database_tfvars,
+    get_database_resource_tfvars,
+    get_database_storage_dict,
     write_database_resource_dict,
+    write_database_storage_dict,
 )
 
 LOG = logging.getLogger(__name__)
@@ -225,7 +230,21 @@ class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigTy
         """
         return {}
 
-    def get_database_resource_tfvars(self, client: Client, *, enable: bool) -> dict:
+    def get_database_default_charm_storage(self) -> dict[str, str]:
+        """Returns the database storage defaults for this service.
+
+        The default storage is required at feature level only for
+        multi-mysql deployments.
+
+        Example:
+        {
+            "gnocchi": "10G",
+            "ceilometer": "5G",
+        }
+        """
+        return {}
+
+    def _get_database_resource_tfvars(self, client: Client, *, enable: bool) -> dict:
         """Return tfvars for configuring memory for database."""
         try:
             config = read_config(client, self.get_tfvar_config_key())
@@ -246,11 +265,59 @@ class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigTy
             for service in database_processes:
                 resource_dict.pop(service, None)
         write_database_resource_dict(client, resource_dict)
-        return get_database_tfvars(
+        return get_database_resource_tfvars(
             config.get("many-mysql", False),
             resource_dict,
             config.get("os-api-scale", 1),
         )
+
+    def _get_database_storage_map_tfvars(
+        self, deployment: Deployment, *, enable: bool
+    ) -> dict:
+        """Return tfvars for storage required for database."""
+        many_mysql = self.get_database_topology(deployment) == "multi"
+        client = deployment.get_client()
+
+        # Nothing to do at feature level for single database
+        # Just return the value from cluster database
+        if not many_mysql:
+            try:
+                storage_dict = read_config(client, DATABASE_STORAGE_KEY)
+            except ConfigItemNotFoundException:
+                storage_dict = {}
+
+            return {"mysql-storage": {"database": storage_dict.get("mysql")}}
+
+        # Get default storage values from core and this feature
+        storage_defaults = get_database_default_storage_dict(many_mysql)
+        storage_defaults_for_charm = self.get_database_default_charm_storage()
+        storage_defaults.update(storage_defaults_for_charm)
+
+        # Get storage dict to apply
+        storage_dict = get_database_storage_dict(
+            client, many_mysql, self.manifest, storage_defaults
+        )
+
+        # Remove service from storage dict if feature is disabled
+        if not enable:
+            for service in storage_defaults_for_charm:
+                storage_dict.pop(service, None)
+
+        write_database_storage_dict(client, storage_dict)
+
+        storage_map = {
+            service: {"database": storage} for service, storage in storage_dict.items()
+        }
+        return {"mysql-storage-map": storage_map}
+
+    def get_database_tfvars(self, deployment: Deployment, *, enable: bool) -> dict:
+        """Return tfvars for database."""
+        client = deployment.get_client()
+        database_tfvars = self._get_database_resource_tfvars(client, enable=enable)
+        database_tfvars.update(
+            self._get_database_storage_map_tfvars(deployment, enable=enable)
+        )
+        return database_tfvars
 
     def set_application_timeout_on_enable(self) -> int:
         """Set Application Timeout on enabling the feature.
@@ -460,14 +527,35 @@ class EnableOpenStackApplicationStep(
         self.app_desired_status = app_desired_status
         self.model = OPENSTACK_MODEL
 
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        # Check for database size modifications in manifest
+        try:
+            many_mysql = self.feature.get_database_topology(self.deployment) == "multi"
+            client = self.deployment.get_client()
+            database_size_changed = check_database_size_modifications_in_manifest(
+                client, self.feature.manifest, many_mysql
+            )
+            if database_size_changed:
+                return Result(
+                    ResultType.FAILED,
+                    "Storage sizes are immutable and cannot be modified in manifest",
+                )
+        except ValueError as e:
+            return Result(ResultType.FAILED, str(e))
+
+        return Result(ResultType.COMPLETED)
+
     def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy openstack application."""
         config_key = self.feature.get_tfvar_config_key()
         extra_tfvars = self.feature.set_tfvars_on_enable(self.deployment, self.config)
         extra_tfvars.update(
-            self.feature.get_database_resource_tfvars(
-                self.deployment.get_client(), enable=True
-            )
+            self.feature.get_database_tfvars(self.deployment, enable=True)
         )
 
         try:
@@ -532,6 +620,29 @@ class DisableOpenStackApplicationStep(
         self.feature = feature
         self.model = OPENSTACK_MODEL
 
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        # Check for database size modifications in manifest
+        try:
+            many_mysql = self.feature.get_database_topology(self.deployment) == "multi"
+            client = self.deployment.get_client()
+            database_size_changed = check_database_size_modifications_in_manifest(
+                client, self.feature.manifest, many_mysql
+            )
+            if database_size_changed:
+                return Result(
+                    ResultType.FAILED,
+                    "Storage sizes are immutable and cannot be modified in manifest",
+                )
+        except ValueError as e:
+            return Result(ResultType.FAILED, str(e))
+
+        return Result(ResultType.COMPLETED)
+
     def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to remove openstack application."""
         config_key = self.feature.get_tfvar_config_key()
@@ -545,9 +656,7 @@ class DisableOpenStackApplicationStep(
                 # Update terraform variables to disable the application
                 extra_tfvars = self.feature.set_tfvars_on_disable(self.deployment)
                 extra_tfvars.update(
-                    self.feature.get_database_resource_tfvars(
-                        self.deployment.get_client(), enable=False
-                    )
+                    self.feature.get_database_tfvars(self.deployment, enable=False)
                 )
                 self.tfhelper.update_tfvars_and_apply_tf(
                     self.deployment.get_client(),
