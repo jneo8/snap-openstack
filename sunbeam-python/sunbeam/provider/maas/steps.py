@@ -2102,7 +2102,7 @@ class MaasUserQuestions(BaseStep):
                 self.variables[section] = {}
         preseed = {}
         if self.manifest and (user := self.manifest.core.config.user):
-            preseed = user.model_dump()
+            preseed = user.model_dump(by_alias=True)
         user_bank = sunbeam.core.questions.QuestionBank(
             questions=maas_deployment.maas_user_questions(self.maas_client),
             console=console,
@@ -2116,7 +2116,7 @@ class MaasUserQuestions(BaseStep):
         if self.manifest and (
             ext_network := self.manifest.core.config.external_network
         ):
-            preseed = ext_network.model_dump()
+            preseed = ext_network.model_dump(by_alias=True)
         ext_net_bank = sunbeam.core.questions.QuestionBank(
             questions=ext_net_questions(),
             console=console,

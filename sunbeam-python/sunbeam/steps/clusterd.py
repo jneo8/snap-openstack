@@ -161,7 +161,7 @@ class AskManagementCidrStep(BaseStep):
         self.variables.setdefault("bootstrap", {})
         preseed = {}
         if self.manifest and (bootstrap := self.manifest.core.config.bootstrap):
-            preseed = bootstrap.model_dump()
+            preseed = bootstrap.model_dump(by_alias=True)
 
         bootstrap_bank = questions.QuestionBank(
             questions=bootstrap_questions(),

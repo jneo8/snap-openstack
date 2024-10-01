@@ -188,7 +188,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         if self.manifest and (
             ext_network := self.manifest.core.config.external_network
         ):
-            preseed = ext_network.model_dump()
+            preseed = ext_network.model_dump(by_alias=True)
 
         if self.join_mode or remote_access_location == utils.REMOTE_ACCESS:
             # If nic is in the preseed assume the user knows what they are doing and

@@ -98,7 +98,9 @@ class CaasConfigureStep(BaseStep):
                 manifest_caas_config = feature_manifest.config
                 if not manifest_caas_config:
                     raise ValueError("No caas configuration found in manifest")
-                manifest_caas_config_dict = manifest_caas_config.model_dump()
+                manifest_caas_config_dict = manifest_caas_config.model_dump(
+                    by_alias=True
+                )
                 for caas_config_attribute, tfvar_name in self.tfhelper.tfvar_map.get(
                     "caas_config", {}
                 ).items():

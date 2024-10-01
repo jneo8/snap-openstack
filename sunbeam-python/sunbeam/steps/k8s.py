@@ -131,7 +131,7 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
 
         preseed = {}
         if k8s_addons := self.manifest.core.config.k8s_addons:
-            preseed = k8s_addons.model_dump()
+            preseed = k8s_addons.model_dump(by_alias=True)
 
         k8s_addons_bank = QuestionBank(
             questions=k8s_addons_questions(),

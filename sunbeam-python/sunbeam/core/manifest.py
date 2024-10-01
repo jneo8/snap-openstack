@@ -125,8 +125,11 @@ class SoftwareConfig(pydantic.BaseModel):
 
     def merge(self, other: "SoftwareConfig") -> "SoftwareConfig":
         """Return a merged version of the software config."""
-        juju = JujuManifest(
-            **utils.merge_dict(self.juju.model_dump(), other.juju.model_dump())
+        juju = JujuManifest.model_validate(
+            utils.merge_dict(
+                self.juju.model_dump(by_alias=True),
+                other.juju.model_dump(by_alias=True),
+            )
         )
         charms: dict[str, CharmManifest] = utils.merge_dict(
             copy.deepcopy(self.charms), copy.deepcopy(other.charms)
@@ -177,7 +180,7 @@ class CoreConfig(pydantic.BaseModel):
         metallb: str | None = None
 
     class _K8sAddons(pydantic.BaseModel):
-        loadbalancers: str | None = None
+        loadbalancer: str | None = None
 
     class _User(pydantic.BaseModel):
         run_demo_setup: bool | None = None
@@ -223,8 +226,11 @@ class CoreManifest(pydantic.BaseModel):
 
     def merge(self, other: "CoreManifest") -> "CoreManifest":
         """Merge the core manifest with the provided manifest."""
-        config = CoreConfig(
-            **utils.merge_dict(self.config.model_dump(), other.config.model_dump())
+        config = CoreConfig.model_validate(
+            utils.merge_dict(
+                self.config.model_dump(by_alias=True),
+                other.config.model_dump(by_alias=True),
+            )
         )
         software = self.software.merge(other.software)
         return type(self)(config=config, software=software)
@@ -239,8 +245,11 @@ class FeatureManifest(pydantic.BaseModel):
         if self.config and other.config:
             if type(self.config) is not type(other.config):
                 raise ValueError("Feature config types do not match")
-            config = type(self.config)(
-                **utils.merge_dict(self.config.model_dump(), other.config.model_dump())
+            config = type(self.config).model_validate(
+                utils.merge_dict(
+                    self.config.model_dump(by_alias=True),
+                    other.config.model_dump(by_alias=True),
+                )
             )
         elif other.config:
             config = other.config

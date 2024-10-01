@@ -178,7 +178,7 @@ class JujuAccount(pydantic.BaseModel):
 
     def to_dict(self):
         """Return self as dict."""
-        return self.model_dump()
+        return self.model_dump(by_alias=True)
 
     @classmethod
     def load(
@@ -213,7 +213,7 @@ class JujuController(pydantic.BaseModel):
 
     def to_dict(self):
         """Return self as dict."""
-        return self.model_dump()
+        return self.model_dump(by_alias=True)
 
     @classmethod
     def load(cls, client: Client) -> "JujuController":

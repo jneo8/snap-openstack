@@ -470,7 +470,7 @@ class CaTlsFeature(TlsFeature):
                 jhelper,
                 ca,
                 ca_chain,
-                deployment_preseed=preseed.model_dump() if preseed else {},
+                deployment_preseed=preseed.model_dump(by_alias=True) if preseed else {},
             ),
             # On ingress change, the keystone takes time to update the service
             # endpoint, update the identity-service relation data on every

@@ -438,7 +438,7 @@ class TerraformHelper:
                     if charm_manifest:
                         break
             if charm_manifest:
-                manifest_charm = charm_manifest.model_dump()
+                manifest_charm = charm_manifest.model_dump(by_alias=True)
                 for charm_attribute_name, tfvar_name in per_charm_tfvar_map.items():
                     charm_attribute_value = manifest_charm.get(charm_attribute_name)
                     if charm_attribute_value:
