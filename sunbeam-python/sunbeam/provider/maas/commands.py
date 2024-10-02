@@ -20,7 +20,7 @@ import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple, Type
+from typing import Sequence, Tuple, Type
 
 import click
 import yaml
@@ -83,8 +83,8 @@ from sunbeam.provider.maas.client import (
     list_machines,
     list_machines_by_zone,
     list_spaces,
-    map_space,
-    unmap_space,
+    map_spaces,
+    unmap_spaces,
 )
 from sunbeam.provider.maas.deployment import MAAS_TYPE
 from sunbeam.provider.maas.steps import (
@@ -153,7 +153,11 @@ from sunbeam.steps.sunbeam_machine import (
     AddSunbeamMachineUnitsStep,
     DeploySunbeamMachineApplicationStep,
 )
-from sunbeam.utils import CatchGroup, argument_with_deprecated_option
+from sunbeam.utils import (
+    CatchGroup,
+    DefaultableMappingParameter,
+    argument_with_deprecated_option,
+)
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -219,8 +223,8 @@ class MaasProvider(ProviderBase):
         zone.add_command(list_zones_cmd)
         deployment.add_command(space)
         space.add_command(list_spaces_cmd)
-        space.add_command(map_space_cmd)
-        space.add_command(unmap_space_cmd)
+        space.add_command(map_spaces_cmd)
+        space.add_command(unmap_spaces_cmd)
         deployment.add_command(network)
         network.add_command(list_networks_cmd)
         deployment.add_command(validate_deployment_cmd)
@@ -1063,12 +1067,44 @@ def list_spaces_cmd(ctx: click.Context, format: str) -> None:
         console.print(yaml.dump(spaces), end="")
 
 
+def _validate_mapping(
+    ctx: click.Context, param: click.Parameter, value: Sequence[tuple[str, str]]
+) -> dict[Networks, str]:
+    mapping: dict[Networks, str] = {}
+    default_space = None
+    for space, network in value:
+        if network in mapping:
+            raise click.BadParameter(f"Duplicate network '{network}' found.")
+        if network != "default" and network not in Networks.values():
+            raise click.BadParameter(f"Network '{network}' is not a valid network.")
+        if network == "default":
+            default_space = space
+            continue
+        mapping[Networks(network)] = space
+
+    if default_space is not None:
+        for network_member in Networks:
+            if network_member not in mapping:
+                mapping[network_member] = default_space
+
+    return mapping
+
+
 @click.command("map")
-@click.argument("space")
-@click.argument("network", type=click.Choice(Networks.values()))
+@click.argument(
+    "mapping",
+    nargs=-1,
+    type=DefaultableMappingParameter("space", "network"),
+    required=True,
+    callback=_validate_mapping,
+)
 @click.pass_context
-def map_space_cmd(ctx: click.Context, space: str, network: str) -> None:
-    """Map space to network."""
+def map_spaces_cmd(ctx: click.Context, mapping: dict[Networks, str]):
+    """Map space to network.
+
+    Takes a list of mapping of space to network in the form of 'space:network'.
+    If a space is given alone, it will be considered as the default space.
+    """
     preflight_checks = [
         LocalShareCheck(),
     ]
@@ -1079,14 +1115,16 @@ def map_space_cmd(ctx: click.Context, space: str, network: str) -> None:
     deployments_config = DeploymentsConfig.load(deployment_location)
     deployment: MaasDeployment = ctx.obj
     client = MaasClient.from_deployment(deployment)
-    map_space(deployments_config, deployment, client, space, Networks(network))
-    console.print(f"Space {space} mapped to network {network}.")
+    map_spaces(deployments_config, deployment, client, mapping)
+    console.print("Space network mapping updated.")
 
 
 @click.command("unmap")
-@click.argument("network", type=click.Choice(Networks.values()))
+@click.argument(
+    "networks", type=click.Choice(Networks.values()), required=True, nargs=-1
+)
 @click.pass_context
-def unmap_space_cmd(ctx: click.Context, network: str) -> None:
+def unmap_spaces_cmd(ctx: click.Context, networks: Sequence[str]) -> None:
     """Unmap space from network."""
     preflight_checks = [
         LocalShareCheck(),
@@ -1097,8 +1135,10 @@ def unmap_space_cmd(ctx: click.Context, network: str) -> None:
     deployment_location = deployment_path(snap)
     deployments_config = DeploymentsConfig.load(deployment_location)
     deployment: MaasDeployment = ctx.obj
-    unmap_space(deployments_config, deployment, Networks(network))
-    console.print(f"Space unmapped from network {network}.")
+    unmap_spaces(
+        deployments_config, deployment, [Networks(network) for network in networks]
+    )
+    console.print("Space(s) unmapped from network.")
 
 
 @click.command("list")

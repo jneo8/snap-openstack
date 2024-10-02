@@ -17,7 +17,7 @@
 
 import collections
 import logging
-from typing import overload
+from typing import Sequence, overload
 
 from maas.client import bones, connect  # type: ignore [import-untyped]
 from rich.console import Console
@@ -347,25 +347,31 @@ def list_spaces(client: MaasClient) -> list[dict]:
     return spaces
 
 
-def map_space(
+def map_spaces(
     deployments_config: DeploymentsConfig,
     deployment: MaasDeployment,
     client: MaasClient,
-    space: str,
-    network: Networks,
+    mapping: dict[Networks, str],
 ):
     """Map space to network."""
-    space_raw = client.get_space(space)
-    deployment.network_mapping[network.value] = space_raw["name"]
+    fetched_spaces = {}
+    for network, space in mapping.items():
+        if space not in fetched_spaces:
+            fetched_spaces[space] = client.get_space(space)
+        space_raw = fetched_spaces[space]
+        deployment.network_mapping[network.value] = space_raw["name"]
     deployments_config.update_deployment(deployment)
     deployments_config.write()
 
 
-def unmap_space(
-    deployments_config: DeploymentsConfig, deployment: MaasDeployment, network: Networks
+def unmap_spaces(
+    deployments_config: DeploymentsConfig,
+    deployment: MaasDeployment,
+    networks: Sequence[Networks],
 ):
-    """Unmap network."""
-    deployment.network_mapping.pop(network.value, None)
+    """Unmap networks."""
+    for network in networks:
+        deployment.network_mapping.pop(network.value, None)
     deployments_config.update_deployment(deployment)
     deployments_config.write()
 
