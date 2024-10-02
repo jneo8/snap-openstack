@@ -69,10 +69,10 @@ class DeploymentsConfig(pydantic.BaseModel):
         Writing to temporary file first in case there's an error during write.
         Not to lose the original file.
         """
-        self_dict = self.model_dump()
+        self_dict = self.model_dump(by_alias=True)
         # self_dict has deployments with Deployment dict but not of provider
         # so workaround to add each deployment based on provider
-        deployments = [d.model_dump() for d in self.deployments]
+        deployments = [d.model_dump(by_alias=True) for d in self.deployments]
         self_dict["deployments"] = deployments
         LOG.debug(f"Writing deployment configuration to {str(self.path)!r}")
         yaml.SafeDumper.add_representer(str, str_presenter)
@@ -158,7 +158,7 @@ class DeploymentsConfig(pydantic.BaseModel):
 
     def get_minimal_info(self) -> dict:
         """Get deployments config with minimal information."""
-        self_dict = self.model_dump()
+        self_dict = self.model_dump(by_alias=True)
         # self_dict has deployments with Deployment dict but not of provider
         # so workaround to add each deployment based on provider
         deployments = [d.model_dump(include={"name", "type"}) for d in self.deployments]

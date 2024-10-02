@@ -48,7 +48,7 @@ def generate_software_manifest(
     comment = "# "
 
     try:
-        software_dict = software_config.model_dump()
+        software_dict = software_config.model_dump(by_alias=True)
         LOG.debug(f"Manifest software dict with extra fields: {software_dict}")
 
         # Remove terraform default sources

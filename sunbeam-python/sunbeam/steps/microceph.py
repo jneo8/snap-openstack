@@ -319,7 +319,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
 
         # Set defaults
         if self.manifest and self.manifest.core.config.microceph_config:
-            microceph_config = self.manifest.core.config.model_dump()[
+            microceph_config = self.manifest.core.config.model_dump(by_alias=True)[
                 "microceph_config"
             ]
         else:

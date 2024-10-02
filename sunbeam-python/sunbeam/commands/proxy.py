@@ -280,7 +280,7 @@ class PromptForProxyStep(BaseStep):
 
         preseed = {}
         if self.manifest and (proxy := self.manifest.core.config.proxy):
-            preseed = proxy.model_dump()
+            preseed = proxy.model_dump(by_alias=True)
 
         proxy_bank = QuestionBank(
             questions=proxy_questions(),

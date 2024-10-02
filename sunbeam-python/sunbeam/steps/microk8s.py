@@ -116,7 +116,7 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
 
         preseed = {}
         if addons := self.manifest.core.config.addons:
-            preseed = addons.model_dump()
+            preseed = addons.model_dump(by_alias=True)
 
         microk8s_addons_bank = questions.QuestionBank(
             questions=microk8s_addons_questions(),
