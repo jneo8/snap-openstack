@@ -96,6 +96,10 @@ class DeployHypervisorApplicationStep(DeployMachineApplicationStep):
                     "space": self.deployment.get_space(Networks.DATA),
                 },
                 {
+                    "endpoint": "data",
+                    "space": self.deployment.get_space(Networks.DATA),
+                },
+                {
                     "endpoint": "amqp",
                     "space": self.deployment.get_space(Networks.INTERNAL),
                 },
