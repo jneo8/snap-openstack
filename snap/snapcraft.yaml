@@ -61,45 +61,27 @@ apps:
 
 parts:
   dqlite:
-    after:
-      - raft
     source: https://github.com/canonical/dqlite
     source-type: git
     source-depth: 1
     plugin: autotools
     autotools-configure-parameters:
       - --prefix=
+      - --enable-build-raft
     stage-packages:
       - libuv1
+      - liblz4-1
       - libsqlite3-0
     build-packages:
-      - libuv1-dev
+      - liblz4-dev
       - libsqlite3-dev
+      - libuv1-dev
       - pkg-config
     organize:
       usr/lib/: lib/
     prime:
       - lib/libdqlite*so*
-      - lib/*/libuv*
-
-  raft:
-    source: https://github.com/canonical/raft
-    source-type: git
-    source-depth: 1
-    plugin: autotools
-    autotools-configure-parameters:
-      - --prefix=
-    stage-packages:
-      - libuv1
-      - liblz4-1
-    build-packages:
-      - libuv1-dev
-      - liblz4-dev
-      - pkg-config
-    organize:
-      usr/lib/: lib/
-    prime:
-      - lib/libraft*so*
+      - lib/*/liblz4.so*
       - lib/*/libuv.so*
 
   sunbeam-cluster:
