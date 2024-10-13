@@ -1003,8 +1003,15 @@ class JujuHelper:
                 if app not in status.applications:
                     raise ValueError(f"Application {app} not found in status")
                 application = status.applications[app]
+
                 units = application.units
-                status = {unit.workload_status.status for unit in units.values()}
+                # Application is a subordinate, collect status from app instead of units
+                # as units is empty dictionary.
+                if application.subordinate_to:
+                    status = {application.status.status}
+                else:
+                    status = {unit.workload_status.status for unit in units.values()}
+
                 # int_ is None on machine models
                 unit_count: int | None = application.int_
                 unit_count_cond = unit_count is None or len(units) == unit_count
