@@ -219,12 +219,19 @@ class TestUtils:
         assert not utils.is_configured("bond1")
         assert utils.is_configured("eth1")
 
+    def test_is_vlan(self, mocker):
+        mocker.patch("builtins.open", mock_open(read_data=""))
+        assert not utils.is_vlan("eth1")
+        mocker.patch("builtins.open", mock_open(read_data="DEVTYPE=vlan"))
+        assert utils.is_vlan("bond1.100")
+
     def test_get_free_nics(self, mocker):
-        glob = mocker.patch("sunbeam.utils.glob.glob")
+        glob = mocker.patch("sunbeam.utils.glob.iglob")
         glob.side_effect = lambda x: {
             "/sys/devices/virtual/net/*": [
                 "/sys/devices/virtual/net/lo",
                 "/sys/devices/virtual/net/vxlan.calico",
+                "/sys/devices/virtual/net/bond1.100",
             ],
             "/sys/devices/virtual/net/*/bonding": [
                 "/sys/devices/virtual/net/bond0/bonding",
@@ -244,6 +251,7 @@ class TestUtils:
             "vxlan.calico": ["vcmac1"],
             "bond0": ["mac1", "mac2"],
             "bond1": ["mac3", "mac4"],
+            "bond1.100": ["mac3"],
         }[x]
         is_configured = mocker.patch("sunbeam.utils.is_configured")
         is_configured.side_effect = lambda x: {
@@ -251,17 +259,21 @@ class TestUtils:
             "eth0": False,
             "bond0": True,
             "bond1": False,
-        }[x]
+            "bond1.100": False,
+        }.get(x, True)
         interfaces = mocker.patch("sunbeam.utils.netifaces.interfaces")
         interfaces.return_value = [
             "lo",
             "vxlan.calico",
             "bond0",
             "bond1",
+            "bond1.100",
             "eth0",
             "eth1",
         ]
-        assert utils.get_free_nics() == ["bond1", "eth0"]
+        is_vlan = mocker.patch("sunbeam.utils.is_vlan")
+        is_vlan.side_effect = lambda x: x == "bond1.100"
+        assert utils.get_free_nics() == ["bond1", "bond1.100", "eth0"]
 
     def test_get_free_nic(self, mocker):
         get_free_nics = mocker.patch("sunbeam.utils.get_free_nics")
