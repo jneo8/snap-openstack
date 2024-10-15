@@ -62,7 +62,7 @@ class TestAddMaasDeployment:
         return AddMaasDeployment(
             Mock(),
             MaasDeployment(
-                name="test_deployment",
+                name="test-deployment",
                 token="test_token",
                 url="test_url",
             ),
@@ -70,10 +70,10 @@ class TestAddMaasDeployment:
 
     def test_is_skip_with_existing_deployment(self, add_maas_deployment):
         deployments_config = DeploymentsConfig(
-            active="test_deployment",
+            active="test-deployment",
             deployments=[
                 MaasDeployment(
-                    name="test_deployment",
+                    name="test-deployment",
                     url="test_url2",
                     token="test_token",
                 )
