@@ -245,39 +245,27 @@ def is_configured(nic: str) -> bool:
     )
 
 
-def is_vlan(nic: str) -> bool:
-    """Whether interface is a vlan."""
-    with open(f"/sys/devices/virtual/net/{nic}/uevent", "r") as f:
-        return "DEVTYPE=vlan" in f.read()
-
-
 def get_free_nics(include_configured=False) -> list:
     """Return a list of nics which doe not have a v4 or v6 address."""
     virtual_nic_dir = "/sys/devices/virtual/net/*"
-    virtual_nics = [Path(p).name for p in glob.iglob(virtual_nic_dir)]
-    bonds = [
-        Path(p).parent.name for p in glob.iglob("/sys/devices/virtual/net/*/bonding")
-    ]
-    bond_macs = set()
+    virtual_nics = [Path(p).name for p in glob.glob(virtual_nic_dir)]
+    bond_nic_dir = "/sys/devices/virtual/net/*/bonding"
+    bonds = [Path(p).parent.name for p in glob.glob(bond_nic_dir)]
+    bond_macs = []
     for bond_iface in bonds:
-        bond_macs.update(get_nic_macs(bond_iface))
+        bond_macs.extend(get_nic_macs(bond_iface))
     candidate_nics = []
     for nic in netifaces.interfaces():
-        if nic in bonds:
-            if is_configured(nic):
-                LOG.debug(f"Skipping bond {nic} it is configured")
-            else:
-                LOG.debug(f"Found bond {nic}")
-                candidate_nics.append(nic)
-            continue
-        # note(gboutry): skip virtual nics except vlan nics
-        if nic in virtual_nics and not is_vlan(nic):
-            LOG.debug(f"Skipping {nic} it is virtual")
+        if nic in bonds and not is_configured(nic):
+            LOG.debug(f"Found bond {nic}")
+            candidate_nics.append(nic)
             continue
         macs = get_nic_macs(nic)
-        # note(gboutry): if the nic is a vlan on top of the bond, we should not skip it
-        if set(macs) & bond_macs and not is_vlan(nic):
+        if list(set(macs) & set(bond_macs)):
             LOG.debug(f"Skipping {nic} it is part of a bond")
+            continue
+        if nic in virtual_nics:
+            LOG.debug(f"Skipping {nic} it is virtual")
             continue
         if is_configured(nic) and not include_configured:
             LOG.debug(f"Skipping {nic} it is configured")
