@@ -94,4 +94,11 @@ features:
       charms:
         tempest-k8s:
           channel: 2024.1/beta
+  consul:
+    software:
+      charms:
+        consul-k8s:
+          channel: 1.19/beta
+        consul-client:
+          channel: 1.19/beta
 
