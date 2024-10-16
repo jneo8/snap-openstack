@@ -152,7 +152,11 @@ class Question(typing.Generic[T]):
             default = self.default_value
         return default
 
-    def ask(self, new_default: T | None = None) -> T | None:
+    def ask(
+        self,
+        new_default: T | None = None,
+        new_choices: list[T] | None = None,
+    ) -> T | None:
         """Ask a question if needed.
 
         If a preseed has been supplied for this question then do not ask the
@@ -162,6 +166,7 @@ class Question(typing.Generic[T]):
                             that previous answers may impact the value of a
                             sensible default so the original default can be
                             overriden at the point of prompting the user.
+        :param new_choices: The new choices for the question.
         """
         if self.preseed is not None:
             self.answer = self.preseed
@@ -174,7 +179,7 @@ class Question(typing.Generic[T]):
                     self.question,
                     default=default,
                     console=self.console,
-                    choices=self.choices,
+                    choices=new_choices or self.choices,
                     password=self.password,
                     stream=STREAM,
                 )
@@ -186,7 +191,7 @@ class Question(typing.Generic[T]):
                 if self.preseed is not None:
                     LOG.error(message)
                     raise
-                LOG.warn(message)
+                LOG.warning(message)
                 self.ask(new_default=new_default)
 
         return self.answer

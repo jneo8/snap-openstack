@@ -14,7 +14,7 @@
 
 import textwrap
 from dataclasses import InitVar
-from unittest.mock import Mock, mock_open, patch
+from unittest.mock import mock_open, patch
 
 import pytest
 from pydantic import PrivateAttr
@@ -78,28 +78,6 @@ class A:
 
 
 class TestUtils:
-    def test_is_nic_connected(self, mocker):
-        context_manager = mocker.patch("sunbeam.utils.IPDB")
-        mock_eth3 = Mock()
-        mock_eth3.operstate = "DOWN"
-        mock_eth4 = Mock()
-        mock_eth4.operstate = "UP"
-        context_manager.return_value.__enter__.return_value.interfaces = {
-            "eth3": mock_eth3,
-            "eth4": mock_eth4,
-        }
-        assert utils.is_nic_connected("eth4")
-        assert not utils.is_nic_connected("eth3")
-
-    def test_is_nic_up(self, mocker):
-        context_manager = mocker.patch("sunbeam.utils.NDB")
-        context_manager.return_value.__enter__.return_value.interfaces = {
-            "eth3": {"state": "DOWN"},
-            "eth4": {"state": "UP"},
-        }
-        assert utils.is_nic_up("eth4")
-        assert not utils.is_nic_up("eth3")
-
     def test_get_fqdn(self, mocker):
         gethostname = mocker.patch("sunbeam.utils.socket.gethostname")
         gethostname.return_value = "myhost"
@@ -211,62 +189,6 @@ class TestUtils:
         )
         with patch("builtins.open", mock_open(read_data=proc_net_route)):
             assert utils._get_default_gw_iface_fallback() is None
-
-    def test_get_nic_macs(self, ifaddresses):
-        assert utils.get_nic_macs("eth1") == ["00:16:3e:07:ba:1e"]
-
-    def test_is_configured(self, ifaddresses):
-        assert not utils.is_configured("bond1")
-        assert utils.is_configured("eth1")
-
-    def test_get_free_nics(self, mocker):
-        glob = mocker.patch("sunbeam.utils.glob.glob")
-        glob.side_effect = lambda x: {
-            "/sys/devices/virtual/net/*": [
-                "/sys/devices/virtual/net/lo",
-                "/sys/devices/virtual/net/vxlan.calico",
-            ],
-            "/sys/devices/virtual/net/*/bonding": [
-                "/sys/devices/virtual/net/bond0/bonding",
-                "/sys/devices/virtual/net/bond1/bonding",
-            ],
-            "/proc/net/bonding/*": [
-                "/proc/net/bonding/bond0",
-                "/proc/net/bonding/bond1",
-            ],
-        }[x]
-        get_nic_macs = mocker.patch("sunbeam.utils.get_nic_macs")
-        get_nic_macs.side_effect = lambda x: {
-            "lo": ["lomac1"],
-            "eth0": ["mac0"],
-            "eth1": ["mac3"],
-            "eth2": ["mac4"],
-            "vxlan.calico": ["vcmac1"],
-            "bond0": ["mac1", "mac2"],
-            "bond1": ["mac3", "mac4"],
-        }[x]
-        is_configured = mocker.patch("sunbeam.utils.is_configured")
-        is_configured.side_effect = lambda x: {
-            "lo": True,
-            "eth0": False,
-            "bond0": True,
-            "bond1": False,
-        }[x]
-        interfaces = mocker.patch("sunbeam.utils.netifaces.interfaces")
-        interfaces.return_value = [
-            "lo",
-            "vxlan.calico",
-            "bond0",
-            "bond1",
-            "eth0",
-            "eth1",
-        ]
-        assert utils.get_free_nics() == ["bond1", "eth0"]
-
-    def test_get_free_nic(self, mocker):
-        get_free_nics = mocker.patch("sunbeam.utils.get_free_nics")
-        get_free_nics.return_value = ["eth0", "eth1", "eth2"]
-        assert utils.get_free_nic() == "eth0"
 
     def test_generate_password(self, mocker):
         generate_password = mocker.patch("sunbeam.utils.generate_password")
