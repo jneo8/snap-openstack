@@ -73,13 +73,6 @@ def tfhelper():
     yield Mock(path=Path())
 
 
-@pytest.fixture()
-def get_nic_macs():
-    with patch.object(sunbeam.utils, "get_nic_macs") as p:
-        p.return_value = ["00:16:3e:01:6e:75"]
-        yield p
-
-
 class SetHypervisorCharmConfigStep:
     def test_is_skip(self, cclient, jhelper):
         step = configure.SetHypervisorCharmConfigStep(
@@ -172,7 +165,7 @@ class TestUserQuestions:
         return user_bank_mock, net_bank_mock
 
     def test_prompt_remote_demo_setup(
-        self, cclient, load_answers, question_bank, jhelper, write_answers, get_nic_macs
+        self, cclient, load_answers, question_bank, jhelper, write_answers
     ):
         load_answers.return_value = {}
         user_bank_mock, net_bank_mock = self.configure_mocks(question_bank)
@@ -184,7 +177,7 @@ class TestUserQuestions:
         self.check_remote_questions(net_bank_mock)
 
     def test_prompt_remote_no_demo_setup(
-        self, cclient, load_answers, question_bank, jhelper, write_answers, get_nic_macs
+        self, cclient, load_answers, question_bank, jhelper, write_answers
     ):
         load_answers.return_value = {}
         user_bank_mock, net_bank_mock = self.configure_mocks(question_bank)

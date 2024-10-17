@@ -13,13 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
+import json
 import logging
-import typing
 from functools import cache
-from typing import Any, TextIO
+from typing import Any
 
 from rich.console import Console
-from rich.prompt import InvalidResponse, PromptBase
 
 import sunbeam.core.questions
 from sunbeam import utils
@@ -28,7 +28,8 @@ from sunbeam.commands.configure import (
     CLOUD_CONFIG_SECTION,
     SetHypervisorUnitsOptionsStep,
 )
-from sunbeam.core.juju import JujuHelper
+from sunbeam.core.common import SunbeamException
+from sunbeam.core.juju import JujuHelper, run_sync
 from sunbeam.core.manifest import Manifest
 from sunbeam.steps import hypervisor
 from sunbeam.steps.cluster_status import ClusterStatusStep
@@ -37,81 +38,9 @@ LOG = logging.getLogger(__name__)
 console = Console()
 
 
-class NicPrompt(PromptBase[str]):
-    """A prompt that asks for a NIC on the local machine and validates it.
-
-    Unlike other questions this prompt validates the users choice and if it
-    fails validation the user has an oppertunity to fix any issue in another
-    session and continue without exiting from the prompt.
-    """
-
-    response_type = str
-    validate_error_message = "[prompt.invalid]Please valid nic"
-
-    def check_choice(self, value: str) -> bool:
-        """Validate the choice of nic."""
-        nics = utils.get_free_nics(include_configured=True)
-        try:
-            value = value.strip().lower()
-        except AttributeError:
-            # Likely an empty string has been returned.
-            raise InvalidResponse(f"\n'{value}' not a valid nic name")
-        if value not in nics:
-            raise InvalidResponse(f"\n'{value}' not found")
-        return True
-
-    def __call__(self, *, default: Any = ..., stream: TextIO | None = None) -> Any:
-        """Run the prompt loop.
-
-        Args:
-            default (Any, optional): Optional default value.
-            stream (TextIO, optional): Optional stream to write to.
-
-        Returns:
-            PromptType: Processed value.
-        """
-        while True:
-            # Limit options displayed to user to unconfigured nics.
-            self.choices = utils.get_free_nics(include_configured=False)
-            # Assume that if a default has been passed in and it is configured it is
-            # probably the right one. The user will be prompted to confirm later.
-            if not default or default not in utils.get_free_nics(
-                include_configured=True
-            ):
-                if len(self.choices) > 0:
-                    default = self.choices[0]
-            self.pre_prompt()
-            prompt = self.make_prompt(default)
-            value = self.get_input(self.console, prompt, password=False, stream=stream)
-            if value == "":
-                if default:
-                    # Unlike super.__call__ do not return here as we still need to
-                    # validate the choice.
-                    value = default
-                else:
-                    self.console.print("\nInvalid nic")
-                    continue
-            try:
-                return_value = self.process_response(value)
-            except InvalidResponse as error:
-                self.on_validate_error(value, error)
-                continue
-            else:
-                return return_value
-
-
-class NicQuestion(sunbeam.core.questions.Question[str]):
-    """Ask the user a simple yes / no question."""
-
-    @property
-    def question_function(self):
-        """Override the question function to use the NicPrompt."""
-        return NicPrompt.ask
-
-
 def local_hypervisor_questions():
     return {
-        "nic": NicQuestion(
+        "nic": sunbeam.core.questions.PromptQuestion(
             "Free network interface that will be configured for external traffic"
         ),
     }
@@ -142,8 +71,45 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         """Returns true if the step has prompts that it can ask the user."""
         return True
 
-    def prompt_for_nic(self) -> str | None:
+    async def _fetch_nics(self) -> dict:
+        """Fetch nics from hypervisor."""
+        name = self.names[0]  # always only one name in local mode
+        node = self.client.cluster.get_node_info(name)
+        machine_id = str(node.get("machineid"))
+        unit = await self.jhelper.get_unit_from_machine(
+            "openstack-hypervisor", machine_id, self.model
+        )
+
+        action_result = await self.jhelper.run_action(
+            unit.entity_id, self.model, "list-nics"
+        )
+
+        if action_result.get("return-code", 0) > 1:
+            _message = f"Unable to fetch hypervisor {name!r} nics"
+            raise SunbeamException(_message)
+        return json.loads(action_result.get("result", "{}"))
+
+    def prompt_for_nic(self, console: Console | None = None) -> str | None:
         """Prompt user for nic to use and do some validation."""
+        if console:
+            context: Any = console.status("Fetching candidate nics from hypervisor")
+        else:
+            context = contextlib.nullcontext()
+
+        with context:
+            nics = run_sync(self._fetch_nics())
+
+        all_nics: list[dict] | None = nics.get("nics")
+        candidate_nics: list[str] | None = nics.get("candidates")
+
+        if not all_nics:
+            # all_nics should contain every nics of the hypervisor
+            # how did we get a response if there's no nics?
+            raise SunbeamException("No nics found on hyperisor")
+
+        if not candidate_nics:
+            raise SunbeamException("No candidate nics found")
+
         local_hypervisor_bank = sunbeam.core.questions.QuestionBank(
             questions=local_hypervisor_questions(),
             console=console,
@@ -151,10 +117,20 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
         )
         nic = None
         while True:
-            nic = typing.cast(NicQuestion, local_hypervisor_bank.nic).ask()
+            nic = local_hypervisor_bank.nic.ask(
+                new_default=candidate_nics[0], new_choices=candidate_nics
+            )
             if not nic:
                 continue
-            if utils.is_configured(nic):
+            nic_state = None
+            for interface in all_nics:
+                if interface["name"] == nic:
+                    nic_state = interface
+                    break
+            if not nic_state:
+                continue
+            LOG.debug("Selected nic %s, state: %r", nic, nic_state)
+            if nic_state["configured"]:
                 agree_nic_up = sunbeam.core.questions.ConfirmQuestion(
                     f"WARNING: Interface {nic} is configured. Any "
                     "configuration will be lost, are you sure you want to "
@@ -162,7 +138,7 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
                 ).ask()
                 if not agree_nic_up:
                     continue
-            if utils.is_nic_up(nic) and not utils.is_nic_connected(nic):
+            if nic_state["up"] and not nic_state["connected"]:
                 agree_nic_no_link = sunbeam.core.questions.ConfirmQuestion(
                     f"WARNING: Interface {nic} is not connected. Are "
                     "you sure you want to continue?"

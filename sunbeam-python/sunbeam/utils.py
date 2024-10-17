@@ -15,7 +15,6 @@
 
 import base64
 import collections.abc
-import glob
 import ipaddress
 import json
 import logging
@@ -30,29 +29,13 @@ from pathlib import Path
 
 import click
 import netifaces  # type: ignore [import-not-found]
-from pyroute2 import IPDB, NDB  # type: ignore [import-untyped]
+from pyroute2 import NDB  # type: ignore [import-untyped]
 
 from sunbeam.core.common import SunbeamException
 
 LOG = logging.getLogger(__name__)
 LOCAL_ACCESS = "local"
 REMOTE_ACCESS = "remote"
-
-
-def is_nic_connected(iface_name: str) -> bool:
-    """Check if nic is physically connected."""
-    with IPDB() as ipdb:
-        state = ipdb.interfaces[iface_name].operstate
-        # pyroute2 does not seem to expose the states as
-        # consumable constants
-        return state == "UP"
-
-
-def is_nic_up(iface_name: str) -> bool:
-    """Check if nic is up."""
-    with NDB() as ndb:
-        state = ndb.interfaces[iface_name]["state"]
-        return state.upper() == "UP"
 
 
 def get_hypervisor_hostname() -> str:
@@ -222,66 +205,6 @@ def get_local_cidr_by_default_route() -> str:
     netmask = conf["netmask"]
     network = ipaddress.ip_network(f"{ip}/{netmask}", strict=False)
     return str(network)
-
-
-def get_nic_macs(nic: str) -> list:
-    """Return list of mac addresses associates with nic."""
-    addrs = netifaces.ifaddresses(nic)
-    return sorted([a["addr"] for a in addrs[netifaces.AF_LINK]])
-
-
-def filter_link_local(addresses: list[dict] | None) -> list[dict]:
-    """Filter any IPv6 link local addresses from configured IPv6 addresses."""
-    if addresses is None:
-        return []
-    return [addr for addr in addresses if "fe80" not in addr.get("addr", ())]
-
-
-def is_configured(nic: str) -> bool:
-    """Whether interface is configured with IPv4 or IPv6 address."""
-    addrs = netifaces.ifaddresses(nic)
-    return bool(
-        addrs.get(netifaces.AF_INET) or filter_link_local(addrs.get(netifaces.AF_INET6))
-    )
-
-
-def get_free_nics(include_configured=False) -> list:
-    """Return a list of nics which doe not have a v4 or v6 address."""
-    virtual_nic_dir = "/sys/devices/virtual/net/*"
-    virtual_nics = [Path(p).name for p in glob.glob(virtual_nic_dir)]
-    bond_nic_dir = "/sys/devices/virtual/net/*/bonding"
-    bonds = [Path(p).parent.name for p in glob.glob(bond_nic_dir)]
-    bond_macs = []
-    for bond_iface in bonds:
-        bond_macs.extend(get_nic_macs(bond_iface))
-    candidate_nics = []
-    for nic in netifaces.interfaces():
-        if nic in bonds and not is_configured(nic):
-            LOG.debug(f"Found bond {nic}")
-            candidate_nics.append(nic)
-            continue
-        macs = get_nic_macs(nic)
-        if list(set(macs) & set(bond_macs)):
-            LOG.debug(f"Skipping {nic} it is part of a bond")
-            continue
-        if nic in virtual_nics:
-            LOG.debug(f"Skipping {nic} it is virtual")
-            continue
-        if is_configured(nic) and not include_configured:
-            LOG.debug(f"Skipping {nic} it is configured")
-        else:
-            LOG.debug(f"Found nic {nic}")
-            candidate_nics.append(nic)
-    return candidate_nics
-
-
-def get_free_nic() -> str:
-    """Return a single candidate nic."""
-    nics = get_free_nics()
-    nic = ""
-    if len(nics) > 0:
-        nic = nics[0]
-    return nic
 
 
 def get_nameservers(ipv4_only=True, max_count=5) -> list[str]:

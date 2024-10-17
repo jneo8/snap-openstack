@@ -13,11 +13,9 @@
 # limitations under the License.
 
 import asyncio
-import io
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from rich.console import Console
 
 import sunbeam.core.questions
 import sunbeam.provider.local.steps as local_steps
@@ -67,41 +65,6 @@ def jhelper():
     yield AsyncMock()
 
 
-@pytest.fixture()
-def get_nic_macs():
-    with patch.object(sunbeam.utils, "get_nic_macs") as p:
-        p.return_value = ["00:16:3e:01:6e:75"]
-        yield p
-
-
-@pytest.fixture()
-def get_free_nics():
-    with patch.object(sunbeam.utils, "get_free_nics") as p:
-        p.return_value = ["eth1", "eth2"]
-        yield p
-
-
-@pytest.fixture()
-def is_nic_up():
-    with patch.object(sunbeam.utils, "is_nic_up") as p:
-        p.side_effect = lambda x: {"eth1": True, "eth2": True}[x]
-        yield p
-
-
-@pytest.fixture()
-def is_configured():
-    with patch.object(sunbeam.utils, "is_configured") as p:
-        p.side_effect = lambda x: {"eth1": False, "eth2": False}[x]
-        yield p
-
-
-@pytest.fixture()
-def is_nic_connected():
-    with patch.object(sunbeam.utils, "is_nic_connected") as p:
-        p.side_effect = lambda x: {"eth1": True, "eth2": True}[x]
-        yield p
-
-
 class TestLocalSetHypervisorUnitsOptionsStep:
     def test_has_prompts(self, cclient, jhelper):
         step = local_steps.LocalSetHypervisorUnitsOptionsStep(
@@ -115,13 +78,7 @@ class TestLocalSetHypervisorUnitsOptionsStep:
         jhelper,
         load_answers,
         question_bank,
-        get_nic_macs,
-        get_free_nics,
-        is_configured,
-        is_nic_up,
-        is_nic_connected,
     ):
-        get_free_nics.return_value = ["eth2"]
         load_answers.return_value = {"user": {"remote_access_location": "remote"}}
         local_hypervisor_bank_mock = Mock()
         question_bank.return_value = local_hypervisor_bank_mock
@@ -129,6 +86,13 @@ class TestLocalSetHypervisorUnitsOptionsStep:
         step = local_steps.LocalSetHypervisorUnitsOptionsStep(
             cclient, "maas0.local", jhelper, "test-model"
         )
+        nics_result = {
+            "nics": [
+                {"name": "eth2", "up": True, "connected": True, "configured": False}
+            ],
+            "candidates": ["eth2"],
+        }
+        step._fetch_nics = AsyncMock(return_value=nics_result)
         step.prompt()
         assert step.nics["maas0.local"] == "eth2"
 
@@ -138,11 +102,6 @@ class TestLocalSetHypervisorUnitsOptionsStep:
         jhelper,
         load_answers,
         question_bank,
-        get_nic_macs,
-        get_free_nics,
-        is_configured,
-        is_nic_up,
-        is_nic_connected,
     ):
         load_answers.return_value = {"user": {"remote_access_location": "remote"}}
         local_hypervisor_bank_mock = Mock()
@@ -151,6 +110,13 @@ class TestLocalSetHypervisorUnitsOptionsStep:
         step = local_steps.LocalSetHypervisorUnitsOptionsStep(
             cclient, "maas0.local", jhelper, "test-model", join_mode=True
         )
+        nics_result = {
+            "nics": [
+                {"name": "eth2", "up": True, "connected": True, "configured": False}
+            ],
+            "candidates": ["eth2"],
+        }
+        step._fetch_nics = AsyncMock(return_value=nics_result)
         step.prompt()
         assert step.nics["maas0.local"] == "eth2"
 
@@ -171,11 +137,6 @@ class TestLocalSetHypervisorUnitsOptionsStep:
         jhelper,
         load_answers,
         question_bank,
-        get_nic_macs,
-        get_free_nics,
-        is_configured,
-        is_nic_up,
-        is_nic_connected,
     ):
         load_answers.return_value = {"user": {"remote_access_location": "local"}}
         local_hypervisor_bank_mock = Mock()
@@ -184,55 +145,12 @@ class TestLocalSetHypervisorUnitsOptionsStep:
         step = local_steps.LocalSetHypervisorUnitsOptionsStep(
             cclient, "maas0.local", jhelper, "test-model", join_mode=True
         )
+        nics_result = {
+            "nics": [
+                {"name": "eth2", "up": True, "connected": True, "configured": False}
+            ],
+            "candidates": ["eth2"],
+        }
+        step._fetch_nics = AsyncMock(return_value=nics_result)
         step.prompt()
         assert step.nics["maas0.local"] == "eth2"
-
-
-class TestNicPrompt:
-    short_question = "Short Question [eth1/eth2] (eth1): "
-
-    def test_good_choice(
-        self, get_free_nics, is_nic_up, is_configured, is_nic_connected
-    ):
-        console = Console(file=io.StringIO())
-        INPUT = "eth1\n"
-        name = local_steps.NicPrompt.ask(
-            "Short Question",
-            console=console,
-            stream=io.StringIO(INPUT),
-        )
-        assert name == "eth1"
-        output = console.file.getvalue()
-        assert output == self.short_question
-
-    def test_good_choice_default(
-        self, get_free_nics, is_nic_up, is_configured, is_nic_connected
-    ):
-        console = Console(file=io.StringIO())
-        INPUT = ""
-        name = local_steps.NicPrompt.ask(
-            "Short Question",
-            default="eth2",
-            console=console,
-            stream=io.StringIO(INPUT),
-        )
-        assert name == "eth2"
-        output = console.file.getvalue()
-        expected = "Short Question [eth1/eth2] (eth2): "
-        assert output == expected
-
-    def test_default_missing_from_machine(
-        self, get_free_nics, is_nic_up, is_configured, is_nic_connected
-    ):
-        console = Console(file=io.StringIO())
-        INPUT = ""
-        name = local_steps.NicPrompt.ask(
-            "Short Question",
-            default="eth3",
-            console=console,
-            stream=io.StringIO(INPUT),
-        )
-        # The default eth3 does not exist so it was discarded.
-        assert name == "eth1"
-        output = console.file.getvalue()
-        assert output == self.short_question
