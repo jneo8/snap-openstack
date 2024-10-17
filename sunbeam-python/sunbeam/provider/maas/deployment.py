@@ -97,7 +97,7 @@ class NicTags(enum.Enum):
 
 
 class MaasDeployment(Deployment):
-    name: str = pydantic.Field(pattern=r"^[a-zA-Z0-9-_]+$", max_length=246)
+    name: str = pydantic.Field(pattern=r"^[a-zA-Z0-9-]+$", max_length=246)
     type: str = MAAS_TYPE
     token: str
     network_mapping: dict[str, str | None] = {}
