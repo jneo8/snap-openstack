@@ -445,6 +445,10 @@ class RiskLevel(str, enum.Enum):
         """Return the string representation of the risk level."""
         return self.value
 
+    def __eq__(self, value: object) -> bool:
+        """Implement equality comparison."""
+        return str(self) == str(value)
+
     def __lt__(self, other: str) -> bool:
         """Implement less than comparison."""
         if self == other:
@@ -458,15 +462,17 @@ class RiskLevel(str, enum.Enum):
                 return False
         return False
 
+    def __le__(self, other: str) -> bool:
+        """Implement less than or equal comparison."""
+        return self < other or self == other
+
     def __gt__(self, other: str) -> bool:
         """Implement greater than comparison."""
-        return not (self < other)
+        return not self < other and self != other
 
     def __ge__(self, other: str) -> bool:
         """Implement greater than or equal comparison."""
-        if self == other:
-            return True
-        return not (self < other)
+        return not self < other or self == other
 
 
 def infer_risk(snap: Snap) -> RiskLevel:
