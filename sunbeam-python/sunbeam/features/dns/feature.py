@@ -37,7 +37,11 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.utils import argument_with_deprecated_option, pass_method_obj
+from sunbeam.utils import (
+    argument_with_deprecated_option,
+    click_option_show_hints,
+    pass_method_obj,
+)
 from sunbeam.versions import BIND_CHANNEL, OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -106,7 +110,9 @@ class DnsFeature(OpenStackControlPlaneFeature):
             }
         }
 
-    def run_enable_plans(self, deployment: Deployment, config: DnsFeatureConfig):
+    def run_enable_plans(
+        self, deployment: Deployment, config: DnsFeatureConfig, show_hints: bool
+    ):
         """Run plans to enable feature."""
         jhelper = JujuHelper(deployment.get_connected_controller())
 
@@ -124,7 +130,7 @@ class DnsFeature(OpenStackControlPlaneFeature):
             ]
         )
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo(f"OpenStack {self.display_name} application enabled.")
 
     def set_application_names(self, deployment: Deployment) -> list:
@@ -172,21 +178,29 @@ class DnsFeature(OpenStackControlPlaneFeature):
         the domain to DNS service. e.g. "ns1.example.com. ns2.example.com."
         """,
     )
+    @click_option_show_hints
     @pass_method_obj
-    def enable_cmd(self, deployment: Deployment, nameservers: str) -> None:
+    def enable_cmd(
+        self, deployment: Deployment, nameservers: str, show_hints: bool
+    ) -> None:
         """Enable dns service.
 
         NAMESERVERS: Space delimited list of nameservers. These are the nameservers that
         have been provided to the domain registrar in order to delegate
         the domain to DNS service. e.g. "ns1.example.com. ns2.example.com."
         """
-        self.enable_feature(deployment, DnsFeatureConfig(nameservers=nameservers))
+        self.enable_feature(
+            deployment,
+            DnsFeatureConfig(nameservers=nameservers),
+            show_hints,
+        )
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable dns service."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)
 
     @click.group()
     def dns_groups(self):

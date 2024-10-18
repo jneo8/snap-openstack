@@ -158,6 +158,7 @@ from sunbeam.utils import (
     CatchGroup,
     DefaultableMappingParameter,
     argument_with_deprecated_option,
+    click_option_show_hints,
 )
 
 LOG = logging.getLogger(__name__)
@@ -251,12 +252,14 @@ class MaasProvider(ProviderBase):
     type=str,
     help="Juju controller name",
 )
+@click_option_show_hints
 @click.pass_context
 def bootstrap(
     ctx: click.Context,
     juju_controller: str | None = None,
     manifest_path: Path | None = None,
     accept_defaults: bool = False,
+    show_hints: bool = False,
 ) -> None:
     """Bootstrap the MAAS-backed deployment.
 
@@ -312,7 +315,7 @@ def bootstrap(
             deployment, accept_defaults=accept_defaults, manifest=manifest
         )
     )
-    plan_results = run_plan(plan, console)
+    plan_results = run_plan(plan, console, show_hints)
 
     # Reload deployment to get credentials
     deployment = deployments.refresh_deployment(deployment)
@@ -376,7 +379,7 @@ def bootstrap(
             )
         )
 
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
 
     # Reload deployment to get credentials
     deployment = deployments.refresh_deployment(deployment)
@@ -421,7 +424,7 @@ def bootstrap(
     )
     plan2.append(MaasSaveClusterdCredentialsStep(jhelper, deployment.name, deployments))
 
-    run_plan(plan2, console)
+    run_plan(plan2, console, show_hints)
     # reload deployment to get clusterd address
     deployment = deployments.refresh_deployment(deployment)
     client_url = deployment.clusterd_address
@@ -445,7 +448,7 @@ def bootstrap(
             client, jhelper, deployment.infra_model, CLUSTERD_APPLICATION
         )
     )
-    run_plan(plan3, console)
+    run_plan(plan3, console, show_hints)
 
     if proxy_from_user and isinstance(proxy_from_user, dict):
         LOG.debug(f"Writing proxy information to clusterdb: {proxy_from_user}")
@@ -467,12 +470,14 @@ def _name_mapper(node: dict) -> str:
     help="Manifest file.",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
+@click_option_show_hints
 @click.pass_context
 def deploy(
     ctx: click.Context,
     manifest_path: Path | None = None,
     accept_defaults: bool = False,
     topology: str = "auto",
+    show_hints: bool = False,
 ) -> None:
     """Deploy the MAAS-backed deployment.
 
@@ -516,7 +521,7 @@ def deploy(
     clusterd_plan = [
         MaasSaveClusterdCredentialsStep(jhelper, deployment.name, deployments)
     ]
-    run_plan(clusterd_plan, console)  # type: ignore
+    run_plan(clusterd_plan, console, show_hints)  # type: ignore
 
     client = deployment.get_client()
     preflight_checks = []
@@ -553,7 +558,7 @@ def deploy(
     plan.append(
         MaasDeployMachinesStep(client, jhelper, deployment.openstack_machines_model)
     )
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
 
     control = list(
         map(_name_mapper, client.cluster.list_nodes_by_role(RoleTags.CONTROL.value))
@@ -729,7 +734,7 @@ def deploy(
         )
     )
     plan2.append(SetBootstrapped(client))
-    run_plan(plan2, console)
+    run_plan(plan2, console, show_hints)
 
     console.print(
         f"Deployment complete with {nb_control} control,"
@@ -754,11 +759,13 @@ def deploy(
     help="Output file for cloud access details.",
     type=click.Path(dir_okay=False, path_type=Path),
 )
+@click_option_show_hints
 def configure_cmd(
     ctx: click.Context,
     openrc: Path | None = None,
     manifest_path: Path | None = None,
     accept_defaults: bool = False,
+    show_hints: bool = False,
 ) -> None:
     deployment: Deployment = ctx.obj
     client = deployment.get_client()
@@ -829,7 +836,7 @@ def configure_cmd(
         ),
     ]
 
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
     dashboard_url = retrieve_dashboard_url(jhelper)
     console.print("The cloud has been configured for sample usage.")
     console.print(
@@ -846,13 +853,14 @@ def configure_cmd(
     default=FORMAT_TABLE,
     help="Output format.",
 )
+@click_option_show_hints
 @click.pass_context
-def list_nodes(ctx: click.Context, format: str) -> None:
+def list_nodes(ctx: click.Context, format: str, show_hints: bool) -> None:
     """List nodes in the custer."""
     deployment: MaasDeployment = ctx.obj
     jhelper = JujuHelper(deployment.get_connected_controller())
     step = MaasClusterStatusStep(deployment, jhelper)
-    results = run_plan([step], console)
+    results = run_plan([step], console, show_hints)
     msg = get_step_message(results, MaasClusterStatusStep)
     renderables = cluster_status.format_status(deployment, msg, format)
     for renderable in renderables:
@@ -863,7 +871,8 @@ def list_nodes(ctx: click.Context, format: str) -> None:
 @argument_with_deprecated_option("name", type=str, help="Name of the deployment")
 @argument_with_deprecated_option("token", type=str, help="API token")
 @argument_with_deprecated_option("url", type=str, help="API URL")
-def add_maas(name: str, token: str, url: str) -> None:
+@click_option_show_hints
+def add_maas(name: str, token: str, url: str, show_hints: bool) -> None:
     """Add MAAS-backed deployment to registered deployments."""
     preflight_checks = [
         LocalShareCheck(),
@@ -886,7 +895,7 @@ def add_maas(name: str, token: str, url: str) -> None:
             deployment,
         )
     )
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
     click.echo(f"MAAS deployment {name} added.")
 
 
@@ -897,6 +906,7 @@ def add_maas(name: str, token: str, url: str) -> None:
     default=FORMAT_TABLE,
     help="Output format",
 )
+@click_option_show_hints
 @click.pass_context
 def list_machines_cmd(ctx: click.Context, format: str) -> None:
     """List machines in active deployment."""

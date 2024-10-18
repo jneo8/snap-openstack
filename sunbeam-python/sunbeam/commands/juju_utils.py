@@ -26,6 +26,7 @@ from sunbeam.steps.juju import (
     SwitchToController,
     UnregisterJujuController,
 )
+from sunbeam.utils import click_option_show_hints
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -40,8 +41,11 @@ console = Console()
 )
 @click.argument("name", type=str)
 @click.argument("token", type=str)
+@click_option_show_hints
 @click.pass_context
-def register_controller(ctx: click.Context, name: str, token: str, force: bool) -> None:
+def register_controller(
+    ctx: click.Context, name: str, token: str, force: bool, show_hints: bool
+) -> None:
     """Register existing Juju controller."""
     deployment: Deployment = ctx.obj
     data_location = Snap().paths.user_data
@@ -51,16 +55,17 @@ def register_controller(ctx: click.Context, name: str, token: str, force: bool) 
     if deployment.juju_controller:
         plan.append(SwitchToController(deployment.juju_controller.name))
 
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
     console.print(f"Controller {name} registered")
 
 
 @click.command()
 @click.argument("name", type=str)
+@click_option_show_hints
 @click.pass_context
-def unregister_controller(ctx: click.Context, name: str) -> None:
+def unregister_controller(ctx: click.Context, name: str, show_hints: bool) -> None:
     """Unregister external Juju controller."""
     data_location = Snap().paths.user_data
     plan = [UnregisterJujuController(name, data_location)]
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
     console.print(f"Controller {name} unregistered")

@@ -33,6 +33,13 @@ SERVICE_LB_ANNOTATION = "io.cilium/lb-ipam-ips"
 SUPPORTED_K8S_PROVIDERS = ["k8s", "microk8s"]
 CREDENTIAL_SUFFIX = "-creds"
 K8S_CLOUD_SUFFIX = "-k8s"
+LOADBALANCER_QUESTION_DESCRIPTION = """\
+OpenStack services are exposed via virtual IP addresses.\
+ This range should contain at least ten addresses\
+ and must not overlap with external network CIDR.\
+ To access APIs from a remote host, the range must reside\
+ within the subnet that the primary network interface is on.\
+"""
 
 
 class K8SHelper:

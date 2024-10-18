@@ -157,7 +157,11 @@ from sunbeam.steps.sunbeam_machine import (
     DeploySunbeamMachineApplicationStep,
     RemoveSunbeamMachineUnitsStep,
 )
-from sunbeam.utils import CatchGroup, argument_with_deprecated_option
+from sunbeam.utils import (
+    CatchGroup,
+    argument_with_deprecated_option,
+    click_option_show_hints,
+)
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -250,6 +254,7 @@ class LocalProvider(ProviderBase):
     type=str,
     help="Juju controller name",
 )
+@click_option_show_hints
 @click.pass_context
 def bootstrap(
     ctx: click.Context,
@@ -259,6 +264,7 @@ def bootstrap(
     juju_controller: str | None = None,
     manifest_path: Path | None = None,
     accept_defaults: bool = False,
+    show_hints: bool = False,
 ) -> None:
     """Bootstrap the local node.
 
@@ -321,7 +327,7 @@ def bootstrap(
 
     cidr_plan = []
     cidr_plan.append(AskManagementCidrStep(client, manifest, accept_defaults))
-    results = run_plan(cidr_plan, console)
+    results = run_plan(cidr_plan, console, show_hints)
     management_cidr = get_step_message(results, AskManagementCidrStep)
 
     try:
@@ -368,7 +374,7 @@ def bootstrap(
             deployment, accept_defaults=accept_defaults, manifest=manifest
         )
     )
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
 
     update_config(client, DEPLOYMENTS_CONFIG_KEY, deployments.get_minimal_info())
     proxy_settings = deployment.get_proxy_settings()
@@ -383,7 +389,7 @@ def bootstrap(
         plan1.append(
             AddCloudJujuStep(deployment.name, cloud_definition, juju_controller)
         )
-        run_plan(plan1, console)
+        run_plan(plan1, console, show_hints)
 
         # Not creating Juju user in external controller case because of below juju bug
         # https://bugs.launchpad.net/juju/+bug/2073741
@@ -392,7 +398,7 @@ def bootstrap(
             ClusterUpdateJujuControllerStep(client, deployment.controller, True)
         )
         plan2.append(SaveJujuRemoteUserLocallyStep(juju_controller, data_location))
-        run_plan(plan2, console)
+        run_plan(plan2, console, show_hints)
 
         deployment.reload_credentials()
         jhelper = JujuHelper(deployment.get_connected_controller())
@@ -412,7 +418,7 @@ def bootstrap(
                 local_management_ip, deployment.openstack_machines_model, jhelper
             )
         )
-        run_plan(plan3, console)
+        run_plan(plan3, console, show_hints)
 
         plan4 = []
         plan4.append(
@@ -447,14 +453,14 @@ def bootstrap(
                 proxy_settings=proxy_settings,
             )
         )
-        run_plan(plan1, console)
+        run_plan(plan1, console, show_hints)
 
         plan2 = []
         plan2.append(CreateJujuUserStep(fqdn))
         plan2.append(
             ClusterUpdateJujuControllerStep(client, deployment.controller, False)
         )
-        plan2_results = run_plan(plan2, console)
+        plan2_results = run_plan(plan2, console, show_hints)
 
         token = get_step_message(plan2_results, CreateJujuUserStep)
 
@@ -467,7 +473,7 @@ def bootstrap(
                 client, fqdn, deployment.controller, data_location, replace=True
             )
         )
-        run_plan(plan3, console)
+        run_plan(plan3, console, show_hints)
 
         deployment.reload_credentials()
         jhelper = JujuHelper(deployment.get_connected_controller())
@@ -645,7 +651,7 @@ def bootstrap(
             )
         )
 
-    run_plan(plan4, console)
+    run_plan(plan4, console, show_hints)
 
     plan5: list[BaseStep] = []
 
@@ -676,7 +682,7 @@ def bootstrap(
         )
 
     plan5.append(SetBootstrapped(client))
-    run_plan(plan5, console)
+    run_plan(plan5, console, show_hints)
 
     click.echo(f"Node has been bootstrapped with roles: {pretty_roles}")
 
@@ -722,12 +728,14 @@ def _write_to_file(token: str, output: Path):
     ),
     help="Output file for join token.",
 )
+@click_option_show_hints
 @click.pass_context
 def add(
     ctx: click.Context,
     name: str,
     format: str,
     output: Path | None,
+    show_hints: bool,
 ) -> None:
     """Generate a token for a new node to join the cluster.
 
@@ -749,12 +757,12 @@ def add(
         JujuGrantModelAccessStep(jhelper, name, OPENSTACK_MODEL),
     ]
 
-    plan1_results = run_plan(plan1, console)
+    plan1_results = run_plan(plan1, console, show_hints)
 
     user_token = get_step_message(plan1_results, CreateJujuUserStep)
 
     plan2 = [ClusterAddJujuUserStep(client, name, user_token)]
-    run_plan(plan2, console)
+    run_plan(plan2, console, show_hints)
 
     add_node_step_result = get_step_result(plan1_results, ClusterAddNodeStep)
     if add_node_step_result.result_type == ResultType.COMPLETED:
@@ -789,12 +797,14 @@ def add(
         " Can be repeated and comma separated."
     ),
 )
+@click_option_show_hints
 @click.pass_context
 def join(
     ctx: click.Context,
     token: str,
     roles: list[Role],
     accept_defaults: bool = False,
+    show_hints: bool = False,
 ) -> None:
     """Join node to the cluster.
 
@@ -851,7 +861,7 @@ def join(
     deployments = DeploymentsConfig.load(path)
 
     plan1 = [ClusterJoinNodeStep(client, token, ip, name, roles_str)]
-    run_plan(plan1, console)
+    run_plan(plan1, console, show_hints)
 
     try:
         deployments_from_db = read_config(client, DEPLOYMENTS_CONFIG_KEY)
@@ -873,14 +883,14 @@ def join(
         SaveJujuUserLocallyStep(name, data_location),
         RegisterJujuUserStep(client, name, deployment.controller, data_location),
     ]
-    run_plan(plan2, console)
+    run_plan(plan2, console, show_hints)
 
     # Loads juju account
     deployment.reload_credentials()
     deployments.write()
     jhelper = JujuHelper(deployment.get_connected_controller())
     plan3 = [AddJujuMachineStep(ip, deployment.openstack_machines_model, jhelper)]
-    plan3_results = run_plan(plan3, console)
+    plan3_results = run_plan(plan3, console, show_hints)
 
     deployment.reload_credentials()
     # Get manifest object once the cluster is joined
@@ -949,7 +959,7 @@ def join(
             ]
         )
 
-    run_plan(plan4, console)
+    run_plan(plan4, console, show_hints)
 
     click.echo(f"Node joined cluster with roles: {pretty_roles}")
 
@@ -962,10 +972,12 @@ def join(
     default=FORMAT_TABLE,
     help="Output format.",
 )
+@click_option_show_hints
 @click.pass_context
 def list_nodes(
     ctx: click.Context,
     format: str,
+    show_hints: bool,
 ) -> None:
     """List nodes in the cluster."""
     preflight_checks = [DaemonGroupCheck()]
@@ -973,7 +985,7 @@ def list_nodes(
     deployment: LocalDeployment = ctx.obj
     jhelper = JujuHelper(deployment.get_connected_controller())
     step = LocalClusterStatusStep(deployment, jhelper)
-    results = run_plan([step], console)
+    results = run_plan([step], console, show_hints)
     msg = get_step_message(results, LocalClusterStatusStep)
     renderables = cluster_status.format_status(deployment, msg, format)
     for renderable in renderables:
@@ -988,8 +1000,9 @@ def list_nodes(
     is_flag=True,
 )
 @argument_with_deprecated_option("name", type=str, help="Fully qualified node name.")
+@click_option_show_hints
 @click.pass_context
-def remove(ctx: click.Context, name: str, force: bool) -> None:
+def remove(ctx: click.Context, name: str, force: bool, show_hints: bool) -> None:
     """Remove a node from the cluster."""
     deployment: LocalDeployment = ctx.obj
     client = deployment.get_client()
@@ -1037,7 +1050,7 @@ def remove(ctx: click.Context, name: str, force: bool) -> None:
             ClusterRemoveNodeStep(client, name),
         ]
     )
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
     click.echo(f"Removed node {name} from the cluster")
     # Removing machine does not clean up all deployed juju components. This is
     # deliberate, see https://bugs.launchpad.net/juju/+bug/1851489.
@@ -1064,12 +1077,14 @@ def remove(ctx: click.Context, name: str, force: bool) -> None:
     help="Output file for cloud access details.",
     type=click.Path(dir_okay=False, path_type=Path),
 )
+@click_option_show_hints
 @click.pass_context
 def configure_cmd(
     ctx: click.Context,
     openrc: Path | None = None,
     manifest_path: Path | None = None,
     accept_defaults: bool = False,
+    show_hints: bool = False,
 ) -> None:
     deployment: LocalDeployment = ctx.obj
     client = deployment.get_client()
@@ -1144,7 +1159,7 @@ def configure_cmd(
                 manifest=manifest,
             )
         )
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
     dashboard_url = retrieve_dashboard_url(jhelper)
     console.print("The cloud has been configured for sample usage.")
     console.print(

@@ -46,6 +46,7 @@ from sunbeam.core.k8s import (
     CREDENTIAL_SUFFIX,
     K8S_CLOUD_SUFFIX,
     K8S_KUBECONFIG_KEY,
+    LOADBALANCER_QUESTION_DESCRIPTION,
 )
 from sunbeam.core.manifest import Manifest
 from sunbeam.core.questions import (
@@ -79,10 +80,10 @@ def validate_cidrs(ip_ranges: str, separator: str = ","):
 def k8s_addons_questions():
     return {
         "loadbalancer": PromptQuestion(
-            "OpenStack APIs IP ranges"
-            " (supports multiple ranges/cidrs, comma separated)",
+            "OpenStack APIs IP ranges",
             default_value="172.16.1.201-172.16.1.240",
             validation_function=validate_cidr_or_ip_ranges,
+            description=LOADBALANCER_QUESTION_DESCRIPTION,
         ),
     }
 
@@ -120,7 +121,11 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
         self.accept_defaults = accept_defaults
         self.variables: dict = {}
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -140,6 +145,7 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
             preseed=preseed,
             previous_answers=self.variables.get("k8s-addons", {}),
             accept_defaults=self.accept_defaults,
+            show_hint=show_hint,
         )
         self.variables["k8s-addons"]["loadbalancer"] = (
             k8s_addons_bank.loadbalancer.ask()

@@ -52,7 +52,7 @@ from sunbeam.features.interface.v1.openstack import (
     TerraformPlanLocation,
 )
 from sunbeam.steps.juju import JujuLoginStep
-from sunbeam.utils import pass_method_obj
+from sunbeam.utils import click_option_show_hints, pass_method_obj
 from sunbeam.versions import TEMPEST_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -432,16 +432,20 @@ class ValidationFeature(OpenStackControlPlaneFeature):
         return True
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def enable_cmd(self, deployment: Deployment, config: FeatureConfig) -> None:
+    def enable_cmd(
+        self, deployment: Deployment, config: FeatureConfig, show_hints: bool
+    ) -> None:
         """Enable OpenStack Integration Test Suite (tempest)."""
-        self.enable_feature(deployment, config)
+        self.enable_feature(deployment, config, show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable OpenStack Integration Test Suite (tempest)."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)
 
     @click.command()
     @click.argument("options", nargs=-1)
@@ -507,12 +511,14 @@ class ValidationFeature(OpenStackControlPlaneFeature):
             "by running `sunbeam validation get-last-result`."
         ),
     )
+    @click_option_show_hints
     @pass_method_obj
     def run_validate_action(
         self,
         deployment: Deployment,
         profile: str,
         output: str | None,
+        show_hints: bool,
     ) -> None:
         """Run validation tests (default: "refstack" profile).
 
@@ -534,7 +540,7 @@ class ValidationFeature(OpenStackControlPlaneFeature):
         if output:
             # Due to shelling out to the juju cli (rather than using libjuju),
             # we need to ensure the juju cli is logged in.
-            run_plan([JujuLoginStep(deployment.juju_account)], console)
+            run_plan([JujuLoginStep(deployment.juju_account)], console, show_hints)
 
             self._copy_file_from_tempest_container(
                 deployment, TEMPEST_VALIDATION_RESULT, output
@@ -561,12 +567,15 @@ class ValidationFeature(OpenStackControlPlaneFeature):
         required=True,
         help="Download the last validation check result to output file.",
     )
+    @click_option_show_hints
     @pass_method_obj
-    def run_get_last_result(self, deployment: Deployment, output: str) -> None:
+    def run_get_last_result(
+        self, deployment: Deployment, output: str, show_hints: bool
+    ) -> None:
         """Get last validation result."""
         # Due to shelling out to the juju cli (rather than using libjuju),
         # we need to ensure the juju cli is logged in.
-        run_plan([JujuLoginStep(deployment.juju_account)], console)
+        run_plan([JujuLoginStep(deployment.juju_account)], console, show_hints)
 
         if not self._check_file_exist_in_tempest_container(
             deployment, TEMPEST_VALIDATION_RESULT

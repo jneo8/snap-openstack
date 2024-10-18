@@ -36,7 +36,7 @@ from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper
 from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.steps.juju import WriteCharmLogStep, WriteJujuStatusStep
-from sunbeam.utils import argument_with_deprecated_option
+from sunbeam.utils import argument_with_deprecated_option, click_option_show_hints
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -44,8 +44,9 @@ snap = Snap()
 
 
 @click.group(invoke_without_command=True)
+@click_option_show_hints
 @click.pass_context
-def inspect(ctx: click.Context) -> None:
+def inspect(ctx: click.Context, show_hints: bool) -> None:
     """Inspect the sunbeam installation.
 
     This script will inspect your installation. It will report any issue
@@ -74,7 +75,7 @@ def inspect(ctx: click.Context) -> None:
                 ]
             )
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
 
         with console.status("[bold green]Copying logs..."):
             log_dir = snap.paths.user_common / "logs"

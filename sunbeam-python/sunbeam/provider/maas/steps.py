@@ -1071,7 +1071,11 @@ class MaasBootstrapJujuStep(BootstrapJujuStep):
         )
         self.maas_client = maas_client
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -1735,7 +1739,11 @@ class MaasDeployMicrok8sApplicationStep(microk8s.DeployMicrok8sApplicationStep):
         )
         return tfvars
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -1848,7 +1856,11 @@ class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
         self.maas_client = maas_client
         self.ranges = None
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -2086,7 +2098,11 @@ class MaasUserQuestions(BaseStep):
         """Returns true if the step has prompts that it can ask the user."""
         return True
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Prompt the user for basic cloud configuration.
 
         Prompts the user for required information for cloud configuration.
@@ -2109,6 +2125,7 @@ class MaasUserQuestions(BaseStep):
             preseed=preseed,
             previous_answers=self.variables.get("user"),
             accept_defaults=self.accept_defaults,
+            show_hint=show_hint,
         )
         self.variables["user"]["remote_access_location"] = sunbeam_utils.REMOTE_ACCESS
         # External Network Configuration
@@ -2123,6 +2140,7 @@ class MaasUserQuestions(BaseStep):
             preseed=preseed,
             previous_answers=self.variables.get("external_network"),
             accept_defaults=self.accept_defaults,
+            show_hint=show_hint,
         )
         self.variables["external_network"]["cidr"] = ext_net_bank.cidr.ask()
         external_network = ipaddress.ip_network(

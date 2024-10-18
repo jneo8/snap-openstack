@@ -158,10 +158,12 @@ class FeatureManager:
 
         return charms
 
-    def update_proxy_model_configs(self, deployment: Deployment) -> None:
+    def update_proxy_model_configs(
+        self, deployment: Deployment, show_hints: bool
+    ) -> None:
         """Make all features update proxy model configs."""
         for feature in self.features().values():
-            feature.update_proxy_model_configs(deployment)
+            feature.update_proxy_model_configs(deployment, show_hints)
 
     def register(self, cli: click.Group) -> None:
         """Register the features.

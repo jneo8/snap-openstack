@@ -43,6 +43,7 @@ from sunbeam.core.juju import (
 from sunbeam.core.k8s import (
     CREDENTIAL_SUFFIX,
     K8S_CLOUD_SUFFIX,
+    LOADBALANCER_QUESTION_DESCRIPTION,
     MICROK8S_KUBECONFIG_KEY,
 )
 from sunbeam.core.manifest import Manifest
@@ -65,10 +66,10 @@ MICROK8S_ADDONS_CONFIG_KEY = "TerraformVarsMicrok8sAddons"
 def microk8s_addons_questions():
     return {
         "metallb": questions.PromptQuestion(
-            "OpenStack APIs IP ranges"
-            " (supports multiple ranges/cidrs, comma separated)",
+            "OpenStack APIs IP ranges",
             default_value="172.16.1.201-172.16.1.240",
             validation_function=validate_cidr_or_ip_ranges,
+            description=LOADBALANCER_QUESTION_DESCRIPTION,
         ),
     }
 
@@ -110,7 +111,11 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
         """Return application timeout in seconds."""
         return MICROK8S_APP_TIMEOUT
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -130,6 +135,7 @@ class DeployMicrok8sApplicationStep(DeployMachineApplicationStep):
             preseed=preseed,
             previous_answers=self.variables.get("addons", {}),
             accept_defaults=self.accept_defaults,
+            show_hint=show_hint,
         )
         # Microk8s configuration
         # Let microk8s handle dns server configuration

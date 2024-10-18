@@ -70,7 +70,7 @@ from sunbeam.features.tls.common import (
     TlsFeature,
     TlsFeatureConfig,
 )
-from sunbeam.utils import pass_method_obj
+from sunbeam.utils import click_option_show_hints, pass_method_obj
 
 CERTIFICATE_FEATURE_KEY = "TlsProvider"
 CA_APP_NAME = "manual-tls-certificates"
@@ -135,7 +135,11 @@ class ConfigureCAStep(BaseStep):
         """Returns true if the step has prompts that it can ask the user."""
         return True
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Prompt the user for certificates.
 
         Prompts the user for required information for cert configuration.
@@ -182,6 +186,7 @@ class ConfigureCAStep(BaseStep):
                 console=console,
                 preseed=self.preseed.get("certificates", {}).get(subject),
                 previous_answers=variables.get("certificates", {}).get(subject),
+                show_hint=show_hint,
             )
             cert = certificates_bank.certificate.ask()
             if not cert or not is_certificate_valid(cert):
@@ -319,21 +324,29 @@ class CaTlsFeature(TlsFeature):
         callback=validate_ca_certificate,
         help="Base64 encoded CA certificate",
     )
+    @click_option_show_hints
     @pass_method_obj
     def enable_cmd(
-        self, deployment: Deployment, ca: str, ca_chain: str, endpoints: list[str]
+        self,
+        deployment: Deployment,
+        ca: str,
+        ca_chain: str,
+        endpoints: list[str],
+        show_hints: bool,
     ):
         """Enable CA feature."""
         self.enable_feature(
             deployment,
             CaTlsFeatureConfig(ca=ca, ca_chain=ca_chain, endpoints=endpoints),
+            show_hints,
         )
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment):
+    def disable_cmd(self, deployment: Deployment, show_hints: bool):
         """Disable CA feature."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)
         console.print("CA feature disabled")
 
     def set_application_names(self, deployment: Deployment) -> list:
@@ -437,11 +450,13 @@ class CaTlsFeature(TlsFeature):
         help="Manifest file.",
         type=click.Path(exists=True, dir_okay=False, path_type=Path),
     )
+    @click_option_show_hints
     @pass_method_obj
     def configure(
         self,
         deployment: Deployment,
         manifest_path: Path | None = None,
+        show_hints: bool = False,
     ) -> None:
         """Configure Unit certs."""
         client = deployment.get_client()
@@ -479,7 +494,7 @@ class CaTlsFeature(TlsFeature):
                 jhelper, apps_to_monitor, model, INGRESS_CHANGE_APPLICATION_TIMEOUT
             ),
         ]
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo("CA certs configured")
 
     def enabled_commands(self) -> dict[str, list[dict]]:

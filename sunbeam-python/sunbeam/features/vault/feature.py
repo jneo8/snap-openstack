@@ -30,7 +30,7 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.utils import pass_method_obj
+from sunbeam.utils import click_option_show_hints, pass_method_obj
 from sunbeam.versions import VAULT_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -85,17 +85,19 @@ class VaultFeature(OpenStackControlPlaneFeature):
         return {}
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def enable_cmd(self, deployment: Deployment) -> None:
+    def enable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Enable Vault.
 
         Vault secure, store and tightly control access to tokens, passwords,
         certificates, encryption keys for protecting secrets and other sensitive data.
         """
-        self.enable_feature(deployment, FeatureConfig())
+        self.enable_feature(deployment, FeatureConfig(), show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable Vault."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)

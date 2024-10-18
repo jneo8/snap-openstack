@@ -493,7 +493,9 @@ class BaseFeature(BaseRegisterable, Generic[ConfigType]):
         """
         return []
 
-    def update_proxy_model_configs(self, deployment: Deployment) -> None:
+    def update_proxy_model_configs(
+        self, deployment: Deployment, show_hints: bool
+    ) -> None:
         """Update proxy model configs.
 
         Features that creates a new model should override this function
@@ -693,7 +695,7 @@ class EnableDisableFeature(BaseFeature, Generic[ConfigType]):
                     break
                 raise IncompatibleVersionError(message)
 
-    def enable_requirements(self, deployment: Deployment):
+    def enable_requirements(self, deployment: Deployment, show_hints: bool):
         """Iterate through requirements, enable features if possible."""
         for requirement in self.requires:
             if not issubclass(requirement.klass, EnableDisableFeature):
@@ -730,26 +732,34 @@ class EnableDisableFeature(BaseFeature, Generic[ConfigType]):
                 else:
                     config = config_type()
 
-            feature.enable_feature(deployment, config)
+            feature.enable_feature(deployment, config, show_hints)
 
-    def pre_enable(self, deployment: Deployment, config: ConfigType) -> None:
+    def pre_enable(
+        self, deployment: Deployment, config: ConfigType, show_hints: bool
+    ) -> None:
         """Handler to perform tasks before enabling the feature."""
         self.check_enablement_requirements(deployment)
-        self.enable_requirements(deployment)
+        self.enable_requirements(deployment, show_hints)
 
-    def post_enable(self, deployment: Deployment, config: ConfigType) -> None:
+    def post_enable(
+        self, deployment: Deployment, config: ConfigType, show_hints: bool
+    ) -> None:
         """Handler to perform tasks after the feature is enabled."""
         pass
 
     @abstractmethod
-    def run_enable_plans(self, deployment: Deployment, config: ConfigType) -> None:
+    def run_enable_plans(
+        self, deployment: Deployment, config: ConfigType, show_hints: bool
+    ) -> None:
         """Run plans to enable feature.
 
         The feature implementation is expected to override this function and
         specify the plans to be run to deploy the workload supported by feature.
         """
 
-    def enable_feature(self, deployment: Deployment, config: ConfigType) -> None:
+    def enable_feature(
+        self, deployment: Deployment, config: ConfigType, show_hints: bool
+    ) -> None:
         """Enable feature command."""
         self.user_manifest = None
         current_click_context = click.get_current_context()
@@ -763,32 +773,32 @@ class EnableDisableFeature(BaseFeature, Generic[ConfigType]):
                     deployment.get_manifest(self.user_manifest)
             current_click_context = current_click_context.parent
 
-        self.pre_enable(deployment, config)
-        self.run_enable_plans(deployment, config)
-        self.post_enable(deployment, config)
+        self.pre_enable(deployment, config, show_hints)
+        self.run_enable_plans(deployment, config, show_hints)
+        self.post_enable(deployment, config, show_hints)
         self.update_feature_info(deployment.get_client(), {"enabled": "true"})
 
-    def pre_disable(self, deployment: Deployment) -> None:
+    def pre_disable(self, deployment: Deployment, show_hints: bool) -> None:
         """Handler to perform tasks before disabling the feature."""
         self.check_enablement_requirements(deployment, state="disable")
 
-    def post_disable(self, deployment: Deployment) -> None:
+    def post_disable(self, deployment: Deployment, show_hints: bool) -> None:
         """Handler to perform tasks after the feature is disabled."""
         pass
 
     @abstractmethod
-    def run_disable_plans(self, deployment: Deployment) -> None:
+    def run_disable_plans(self, deployment: Deployment, show_hints: bool) -> None:
         """Run plans to disable feature.
 
         The feature implementation is expected to override this function and
         specify the plans to be run to destroy the workload supported by feature.
         """
 
-    def disable_feature(self, deployment: Deployment) -> None:
+    def disable_feature(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable feature command."""
-        self.pre_disable(deployment)
-        self.run_disable_plans(deployment)
-        self.post_disable(deployment)
+        self.pre_disable(deployment, show_hints)
+        self.run_disable_plans(deployment, show_hints)
+        self.post_disable(deployment, show_hints)
         self.update_feature_info(deployment.get_client(), {"enabled": "false"})
 
     def commands(

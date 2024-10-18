@@ -81,7 +81,7 @@ from sunbeam.features.interface.v1.openstack import (
     TerraformPlanLocation,
 )
 from sunbeam.steps.k8s import CREDENTIAL_SUFFIX
-from sunbeam.utils import pass_method_obj
+from sunbeam.utils import click_option_show_hints, pass_method_obj
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -845,17 +845,19 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
         if provider and provider != self.get_provider_type().name:
             raise Exception(f"Observability provider already set to {provider!r}")
 
-    def post_enable(self, deployment: Deployment, config: FeatureConfig) -> None:
+    def post_enable(
+        self, deployment: Deployment, config: FeatureConfig, show_hints: bool
+    ) -> None:
         """Handler to perform tasks after the feature is enabled."""
-        super().post_enable(deployment, config)
+        super().post_enable(deployment, config, show_hints)
         provider = {
             "provider": self.get_provider_type().name,
         }
         update_config(deployment.get_client(), OBSERVABILITY_FEATURE_KEY, provider)
 
-    def pre_disable(self, deployment: Deployment) -> None:
+    def pre_disable(self, deployment: Deployment, show_hints: bool) -> None:
         """Handler to perform tasks before disabling the feature."""
-        super().pre_disable(deployment)
+        super().pre_disable(deployment, show_hints)
         try:
             config = read_config(deployment.get_client(), OBSERVABILITY_FEATURE_KEY)
         except ConfigItemNotFoundException:
@@ -865,9 +867,9 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
         if provider and provider != self.get_provider_type().name:
             raise Exception(f"Observability provider set to {provider!r}")
 
-    def post_disable(self, deployment: Deployment) -> None:
+    def post_disable(self, deployment: Deployment, show_hints: bool) -> None:
         """Handler to perform tasks after the feature is disabled."""
-        super().post_disable(deployment)
+        super().post_disable(deployment, show_hints)
 
         config: dict = {}
         update_config(deployment.get_client(), OBSERVABILITY_FEATURE_KEY, config)
@@ -904,7 +906,9 @@ class ObservabilityFeature(OpenStackControlPlaneFeature):
 class EmbeddedObservabilityFeature(ObservabilityFeature):
     name = "observability.embedded"
 
-    def update_proxy_model_configs(self, deployment: Deployment) -> None:
+    def update_proxy_model_configs(
+        self, deployment: Deployment, show_hints: bool
+    ) -> None:
         """Update proxy model configs."""
         try:
             if not self.is_enabled(deployment.get_client()):
@@ -923,9 +927,11 @@ class EmbeddedObservabilityFeature(ObservabilityFeature):
                 deployment, self, deployment.get_tfhelper(self.tfplan_cos)
             ),
         ]
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
 
-    def run_enable_plans(self, deployment: Deployment, config: FeatureConfig):
+    def run_enable_plans(
+        self, deployment: Deployment, config: FeatureConfig, show_hints: bool
+    ):
         """Run the enablement plans for embedded."""
         jhelper = JujuHelper(deployment.get_connected_controller())
 
@@ -956,14 +962,14 @@ class EmbeddedObservabilityFeature(ObservabilityFeature):
             ),
         ]
 
-        run_plan(plan, console)
-        run_plan(cos_plan, console)
-        run_plan(grafana_agent_k8s_plan, console)
-        run_plan(grafana_agent_plan, console)
+        run_plan(plan, console, show_hints)
+        run_plan(cos_plan, console, show_hints)
+        run_plan(grafana_agent_k8s_plan, console, show_hints)
+        run_plan(grafana_agent_plan, console, show_hints)
 
         click.echo("Observability enabled.")
 
-    def run_disable_plans(self, deployment: Deployment):
+    def run_disable_plans(self, deployment: Deployment, show_hints: bool):
         """Run the disablement plans for embedded."""
         jhelper = JujuHelper(deployment.get_connected_controller())
         tfhelper = deployment.get_tfhelper(self.tfplan)
@@ -993,9 +999,9 @@ class EmbeddedObservabilityFeature(ObservabilityFeature):
             RemoveObservabilityStackStep(deployment, self, tfhelper_cos, jhelper),
         ]
 
-        run_plan(agent_grafana_k8s_plan, console)
-        run_plan(grafana_agent_plan, console)
-        run_plan(cos_plan, console)
+        run_plan(agent_grafana_k8s_plan, console, show_hints)
+        run_plan(grafana_agent_plan, console, show_hints)
+        run_plan(cos_plan, console, show_hints)
 
         click.echo("Observability disabled.")
 
@@ -1029,16 +1035,18 @@ class EmbeddedObservabilityFeature(ObservabilityFeature):
                 raise click.ClickException(_message)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def enable_cmd(self, deployment: Deployment) -> None:
+    def enable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Deploy Observability stack."""
-        self.enable_feature(deployment, FeatureConfig())
+        self.enable_feature(deployment, FeatureConfig(), show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable Observability stack."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)
 
     def enabled_commands(self) -> dict[str, list[dict]]:
         """Dict of clickgroup along with commands.
@@ -1056,7 +1064,9 @@ class EmbeddedObservabilityFeature(ObservabilityFeature):
 class ExternalObservabilityFeature(ObservabilityFeature):
     name = "observability.external"
 
-    def run_enable_plans(self, deployment: Deployment, config: FeatureConfig):
+    def run_enable_plans(
+        self, deployment: Deployment, config: FeatureConfig, show_hints: bool
+    ):
         """Run the enablement plans for external."""
         jhelper = JujuHelper(deployment.get_connected_controller())
 
@@ -1098,14 +1108,14 @@ class ExternalObservabilityFeature(ObservabilityFeature):
             IntegrateRemoteCosOffersStep(deployment, self, jhelper)
         ]
 
-        run_plan(plan, console)
-        run_plan(grafana_agent_k8s_plan, console)
-        run_plan(grafana_agent_plan, console)
-        run_plan(grafana_integrations_plan, console)
+        run_plan(plan, console, show_hints)
+        run_plan(grafana_agent_k8s_plan, console, show_hints)
+        run_plan(grafana_agent_plan, console, show_hints)
+        run_plan(grafana_integrations_plan, console, show_hints)
 
         click.echo("Observability enabled.")
 
-    def run_disable_plans(self, deployment: Deployment):
+    def run_disable_plans(self, deployment: Deployment, show_hints: bool):
         """Run the disablement plans for external."""
         jhelper = JujuHelper(deployment.get_connected_controller())
         tfhelper = deployment.get_tfhelper(self.tfplan)
@@ -1137,9 +1147,9 @@ class ExternalObservabilityFeature(ObservabilityFeature):
             ),
         ]
 
-        run_plan(grafana_remove_offers_plan, console)
-        run_plan(agent_grafana_k8s_plan, console)
-        run_plan(grafana_agent_plan, console)
+        run_plan(grafana_remove_offers_plan, console, show_hints)
+        run_plan(agent_grafana_k8s_plan, console, show_hints)
+        run_plan(grafana_agent_plan, console, show_hints)
 
         click.echo("Observability disabled.")
 
@@ -1157,6 +1167,7 @@ class ExternalObservabilityFeature(ObservabilityFeature):
         type=str,
     )
     @click.argument("loki-logging-offer-url", type=str)
+    @click_option_show_hints
     @pass_method_obj
     def enable_cmd(
         self,
@@ -1165,6 +1176,7 @@ class ExternalObservabilityFeature(ObservabilityFeature):
         grafana_dashboard_offer_url: str,
         prometheus_receive_remote_write_offer_url: str,
         loki_logging_offer_url: str,
+        show_hints: bool,
     ) -> None:
         """Connect to external Observability stack."""
         self.external = True
@@ -1181,10 +1193,11 @@ class ExternalObservabilityFeature(ObservabilityFeature):
         )
         run_preflight_checks(preflight_checks, console)
 
-        self.enable_feature(deployment, FeatureConfig())
+        self.enable_feature(deployment, FeatureConfig(), show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable Observability stack."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)

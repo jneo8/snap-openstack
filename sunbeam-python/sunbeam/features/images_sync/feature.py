@@ -25,7 +25,7 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.utils import pass_method_obj
+from sunbeam.utils import click_option_show_hints, pass_method_obj
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -83,13 +83,15 @@ class ImagesSyncFeature(OpenStackControlPlaneFeature):
         return {}
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def enable_cmd(self, deployment: Deployment) -> None:
+    def enable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Enable images-sync service."""
-        self.enable_feature(deployment, FeatureConfig())
+        self.enable_feature(deployment, FeatureConfig(), show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable images-sync service."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)

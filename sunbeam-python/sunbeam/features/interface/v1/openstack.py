@@ -154,12 +154,16 @@ class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigTy
         preflight_checks.append(VerifyBootstrappedCheck(deployment.get_client()))
         run_preflight_checks(preflight_checks, console)
 
-    def pre_enable(self, deployment: Deployment, config: ConfigType) -> None:
+    def pre_enable(
+        self, deployment: Deployment, config: ConfigType, show_hints: bool
+    ) -> None:
         """Handler to perform tasks before enabling the feature."""
         self.pre_checks(deployment)
-        super().pre_enable(deployment, config)
+        super().pre_enable(deployment, config, show_hints)
 
-    def run_enable_plans(self, deployment: Deployment, config: ConfigType) -> None:
+    def run_enable_plans(
+        self, deployment: Deployment, config: ConfigType, show_hints: bool
+    ) -> None:
         """Run plans to enable feature."""
         tfhelper = deployment.get_tfhelper(self.tfplan)
         jhelper = JujuHelper(deployment.get_connected_controller())
@@ -176,15 +180,15 @@ class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigTy
             ]
         )
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo(f"OpenStack {self.display_name} application enabled.")
 
-    def pre_disable(self, deployment: Deployment) -> None:
+    def pre_disable(self, deployment: Deployment, show_hints: bool) -> None:
         """Handler to perform tasks before disabling the feature."""
         self.pre_checks(deployment)
-        super().pre_disable(deployment)
+        super().pre_disable(deployment, show_hints)
 
-    def run_disable_plans(self, deployment: Deployment) -> None:
+    def run_disable_plans(self, deployment: Deployment, show_hints: bool) -> None:
         """Run plans to disable the feature."""
         tfhelper = deployment.get_tfhelper(self.tfplan)
         jhelper = JujuHelper(deployment.get_connected_controller())
@@ -193,7 +197,7 @@ class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigTy
             DisableOpenStackApplicationStep(deployment, tfhelper, jhelper, self),
         ]
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo(f"OpenStack {self.display_name} application disabled.")
 
     def get_tfvar_config_key(self) -> str:
@@ -405,7 +409,12 @@ class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigTy
 
         return {"horizon-plugins": sorted(horizon_plugins)}
 
-    def upgrade_hook(self, deployment: Deployment, upgrade_release: bool = False):
+    def upgrade_hook(
+        self,
+        deployment: Deployment,
+        upgrade_release: bool = False,
+        show_hints: bool = False,
+    ):
         """Run upgrade.
 
         :param upgrade_release: Whether to upgrade release
@@ -431,7 +440,7 @@ class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigTy
             ),
         ]
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
 
 
 class UpgradeOpenStackApplicationStep(BaseStep, JujuStepHelper):
