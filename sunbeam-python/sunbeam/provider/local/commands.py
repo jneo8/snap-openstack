@@ -31,7 +31,6 @@ from sunbeam.commands import refresh as refresh_cmds
 from sunbeam.commands import resize as resize_cmds
 from sunbeam.commands.configure import (
     DemoSetup,
-    SetHypervisorCharmConfigStep,
     TerraformDemoInitStep,
     UserOpenRCStep,
     UserQuestions,
@@ -104,6 +103,7 @@ from sunbeam.steps.clusterd import (
 from sunbeam.steps.hypervisor import (
     AddHypervisorUnitsStep,
     DeployHypervisorApplicationStep,
+    ReapplyHypervisorTerraformPlanStep,
     RemoveHypervisorUnitStep,
 )
 from sunbeam.steps.juju import (
@@ -1099,6 +1099,7 @@ def configure_cmd(
     tfhelper = deployment.get_tfhelper(tfplan)
     tfhelper.env = (tfhelper.env or {}) | admin_credentials
     answer_file = tfhelper.path / "config.auto.tfvars.json"
+    tfhelper_hypervisor = deployment.get_tfhelper("hypervisor-plan")
     plan = [
         AddManifestStep(client, manifest_path),
         JujuLoginStep(deployment.juju_account),
@@ -1122,10 +1123,12 @@ def configure_cmd(
             cacert=admin_credentials.get("OS_CACERT"),
             openrc=openrc,
         ),
-        SetHypervisorCharmConfigStep(
+        TerraformInitStep(tfhelper_hypervisor),
+        ReapplyHypervisorTerraformPlanStep(
             client,
+            tfhelper_hypervisor,
             jhelper,
-            ext_network=answer_file,
+            manifest,
             model=deployment.openstack_machines_model,
         ),
     ]

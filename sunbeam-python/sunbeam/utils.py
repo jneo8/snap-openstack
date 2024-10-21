@@ -36,6 +36,7 @@ from sunbeam.core.common import SunbeamException
 LOG = logging.getLogger(__name__)
 LOCAL_ACCESS = "local"
 REMOTE_ACCESS = "remote"
+IPVANYNETWORK_UNSET = "0.0.0.0/0"
 
 
 def get_hypervisor_hostname() -> str:

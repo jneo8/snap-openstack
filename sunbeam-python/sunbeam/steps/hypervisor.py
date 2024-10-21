@@ -24,6 +24,7 @@ from sunbeam.clusterd.service import (
     ConfigItemNotFoundException,
     NodeNotExistInClusterException,
 )
+from sunbeam.commands.configure import get_external_network_configs
 from sunbeam.core.common import BaseStep, Result, ResultType, read_config, update_config
 from sunbeam.core.deployment import Deployment, Networks
 from sunbeam.core.juju import (
@@ -321,6 +322,15 @@ class ReapplyHypervisorTerraformPlanStep(BaseStep):
 
     def run(self, status: Status | None = None) -> Result:
         """Apply terraform configuration to deploy hypervisor."""
+        # Apply Network configs everytime reapply is called
+        network_configs = get_external_network_configs(self.client)
+        if network_configs:
+            LOG.debug(
+                "Add external network configs from DemoSetup to extra tfvars: "
+                f"{network_configs}"
+            )
+            self.extra_tfvars.update({"charm_config": network_configs})
+
         statuses = ["active", "unknown"]
         if len(self.client.cluster.list_nodes_by_role("storage")) < 1:
             LOG.debug("No storage nodes found, allowing hypervisor waiting status")

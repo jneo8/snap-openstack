@@ -221,75 +221,24 @@ def retrieve_admin_credentials(jhelper: JujuHelper, model: str) -> dict:
     return params
 
 
-class SetHypervisorCharmConfigStep(BaseStep):
-    """Update openstack-hypervisor charm config."""
+def get_external_network_configs(client: Client) -> dict:
+    charm_config = {}
 
-    IPVANYNETWORK_UNSET = "0.0.0.0/0"
-    ext_network: dict
-    charm_config: dict
-
-    def __init__(
-        self, client: Client, jhelper: JujuHelper, ext_network: Path, model: str
-    ):
-        super().__init__(
-            "Update charm config",
-            "Updating openstack-hypervisor charm configuration",
+    variables = sunbeam.core.questions.load_answers(client, CLOUD_CONFIG_SECTION)
+    ext_network = variables.get("external_network", {})
+    charm_config["external-bridge"] = "br-ex"
+    if variables["user"]["remote_access_location"] == utils.LOCAL_ACCESS:
+        external_network = ipaddress.ip_network(
+            variables["external_network"].get("cidr")
         )
+        bridge_interface = f"{ext_network.get('gateway')}/{external_network.prefixlen}"
+        charm_config["external-bridge-address"] = bridge_interface
+    else:
+        charm_config["external-bridge-address"] = utils.IPVANYNETWORK_UNSET
 
-        # File path with external_network details in json format
-        self.client = client
-        self.jhelper = jhelper
-        self.ext_network_file = ext_network
-        self.model = model
-        self.ext_network = {}
-        self.charm_config = {}
+    charm_config["physnet-name"] = variables["external_network"].get("physical_network")
 
-    def has_prompts(self) -> bool:
-        """Returns true if the step has prompts that it can ask the user."""
-        return False
-
-    def run(self, status: Status | None = None) -> Result:
-        """Run the step to completion.
-
-        Invoked when the step is run and returns a ResultType to indicate
-
-        :return:
-        """
-        self.variables = sunbeam.core.questions.load_answers(
-            self.client, CLOUD_CONFIG_SECTION
-        )
-        self.ext_network = self.variables.get("external_network", {})
-        self.charm_config["external-bridge"] = "br-ex"
-        if self.variables["user"]["remote_access_location"] == utils.LOCAL_ACCESS:
-            external_network = ipaddress.ip_network(
-                self.variables["external_network"].get("cidr")
-            )
-            bridge_interface = (
-                f"{self.ext_network.get('gateway')}/{external_network.prefixlen}"
-            )
-            self.charm_config["external-bridge-address"] = bridge_interface
-        else:
-            self.charm_config["external-bridge-address"] = self.IPVANYNETWORK_UNSET
-
-        self.charm_config["physnet-name"] = self.variables["external_network"].get(
-            "physical_network"
-        )
-        try:
-            LOG.debug(
-                f"Config to apply on openstack-hypervisor snap: {self.charm_config}"
-            )
-            run_sync(
-                self.jhelper.set_application_config(
-                    self.model,
-                    "openstack-hypervisor",
-                    self.charm_config,
-                )
-            )
-        except Exception as e:
-            LOG.exception("Error setting config for openstack-hypervisor")
-            return Result(ResultType.FAILED, str(e))
-
-        return Result(ResultType.COMPLETED)
+    return charm_config
 
 
 class UserOpenRCStep(BaseStep):
