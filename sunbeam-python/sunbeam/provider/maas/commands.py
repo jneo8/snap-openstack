@@ -31,7 +31,6 @@ from snaphelpers import Snap
 from sunbeam.commands import resize as resize_cmds
 from sunbeam.commands.configure import (
     DemoSetup,
-    SetHypervisorCharmConfigStep,
     TerraformDemoInitStep,
     UserOpenRCStep,
     retrieve_admin_credentials,
@@ -125,6 +124,7 @@ from sunbeam.steps.clusterd import DeploySunbeamClusterdApplicationStep
 from sunbeam.steps.hypervisor import (
     AddHypervisorUnitsStep,
     DeployHypervisorApplicationStep,
+    ReapplyHypervisorTerraformPlanStep,
 )
 from sunbeam.steps.juju import (
     AddCloudJujuStep,
@@ -787,6 +787,7 @@ def configure_cmd(
     tfhelper = deployment.get_tfhelper(tfplan)
     tfhelper.env = (tfhelper.env or {}) | admin_credentials
     answer_file = tfhelper.path / "config.auto.tfvars.json"
+    tfhelper_hypervisor = deployment.get_tfhelper("hypervisor-plan")
     compute = list(
         map(_name_mapper, client.cluster.list_nodes_by_role(RoleTags.COMPUTE.value))
     )
@@ -813,10 +814,12 @@ def configure_cmd(
             cacert=admin_credentials.get("OS_CACERT"),
             openrc=openrc,
         ),
-        SetHypervisorCharmConfigStep(
+        TerraformInitStep(tfhelper_hypervisor),
+        ReapplyHypervisorTerraformPlanStep(
             client,
+            tfhelper_hypervisor,
             jhelper,
-            ext_network=answer_file,
+            manifest,
             model=deployment.openstack_machines_model,
         ),
         MaasSetHypervisorUnitsOptionsStep(
