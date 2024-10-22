@@ -46,7 +46,7 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.utils import pass_method_obj
+from sunbeam.utils import click_option_show_hints, pass_method_obj
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -207,20 +207,23 @@ class CaasFeature(OpenStackControlPlaneFeature):
         }
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def enable_cmd(self, deployment: Deployment) -> None:
+    def enable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Enable Container as a Service feature."""
-        self.enable_feature(deployment, FeatureConfig())
+        self.enable_feature(deployment, FeatureConfig(), show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable Container as a Service feature."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def configure(self, deployment: Deployment) -> None:
+    def configure(self, deployment: Deployment, show_hints: bool) -> None:
         """Configure Cloud for Container as a Service use."""
         jhelper = JujuHelper(deployment.get_connected_controller())
         admin_credentials = retrieve_admin_credentials(jhelper, OPENSTACK_MODEL)
@@ -237,7 +240,7 @@ class CaasFeature(OpenStackControlPlaneFeature):
             ),
         ]
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
 
     def enabled_commands(self) -> dict[str, list[dict]]:
         """Dict of clickgroup along with commands.

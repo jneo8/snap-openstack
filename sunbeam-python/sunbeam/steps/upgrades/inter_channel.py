@@ -507,10 +507,10 @@ class ChannelUpgradeCoordinator(UpgradeCoordinator):
         )
         return plan
 
-    def run_plan(self) -> None:
+    def run_plan(self, show_hints: bool = False) -> None:
         """Execute the upgrade plan."""
         plan = self.get_plan()
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
 
 
 class ValidationCheck(BaseStep):

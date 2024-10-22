@@ -88,6 +88,8 @@ class Question(typing.Generic[T]):
     accept_defaults: bool
     default_function: Callable[[], T] | None
     validation_function: Callable[[T], None] | None
+    description: str | None
+    show_hint: bool
     console: Console | None
 
     def __init__(
@@ -98,6 +100,7 @@ class Question(typing.Generic[T]):
         choices: list | None = None,
         password: bool = False,
         validation_function: Callable[[T], None] | None = None,
+        description: str | None = None,
     ):
         """Setup question.
 
@@ -110,6 +113,7 @@ class Question(typing.Generic[T]):
         :param password: whether answer to question is a password
         :param validation_function: A function to use to validate the answer,
                                     must raise ValueError when value is invalid.
+        :param description: A description of the question, displayed when asking.
         """
         self.preseed = None
         self.console = None
@@ -122,6 +126,8 @@ class Question(typing.Generic[T]):
         self.accept_defaults = False
         self.password = password
         self.validation_function = validation_function
+        self.description = description
+        self.show_hint = False
 
     @property
     def question_function(self) -> Callable[..., T]:
@@ -175,6 +181,8 @@ class Question(typing.Generic[T]):
             if self.accept_defaults:
                 self.answer = default
             else:
+                if self.console and self.description and self.show_hint:
+                    self.console.print(self.description, style="bright_black")
                 self.answer = self.question_function(
                     self.question,
                     default=default,
@@ -266,6 +274,7 @@ class QuestionBank:
         preseed: dict | None = None,
         previous_answers: dict | None = None,
         accept_defaults: bool = False,
+        show_hint: bool = False,
     ):
         """Apply preseed and previous answers to questions in bank.
 
@@ -281,6 +290,7 @@ class QuestionBank:
         for key in self.questions.keys():
             self.questions[key].console = console
             self.questions[key].accept_defaults = accept_defaults
+            self.questions[key].show_hint = show_hint
         for key, value in self.preseed.items():
             if self.questions.get(key) is not None:
                 self.questions[key].preseed = value
@@ -351,6 +361,8 @@ def show_questions(
         if default is None:
             default = ""
         lines.append(f"{outer_indent}{comment}{indent}# {question.question}")
+        if description := question.description:
+            lines.append(f"{outer_indent}{comment}{indent}# {description}")
         lines.append(f"{outer_indent}{comment}{indent}{key}: {default}")
 
     return lines

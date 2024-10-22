@@ -52,6 +52,7 @@ from sunbeam.core.terraform import TerraformInitStep
 from sunbeam.steps.juju import UpdateJujuModelConfigStep
 from sunbeam.steps.openstack import UpdateOpenStackModelConfigStep
 from sunbeam.steps.sunbeam_machine import DeploySunbeamMachineApplicationStep
+from sunbeam.utils import click_option_show_hints
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -73,7 +74,7 @@ def _preflight_checks(deployment: Deployment):
     run_preflight_checks(preflight_checks, console)
 
 
-def _update_proxy(proxy: dict, deployment: Deployment):
+def _update_proxy(proxy: dict, deployment: Deployment, show_hints: bool):
     from sunbeam.provider.maas.deployment import MAAS_TYPE  # to avoid circular import
 
     _preflight_checks(deployment)
@@ -119,9 +120,9 @@ def _update_proxy(proxy: dict, deployment: Deployment):
                 client, openstack_tfhelper, manifest, model_config
             )
         )
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
 
-    deployment.get_feature_manager().update_proxy_model_configs(deployment)
+    deployment.get_feature_manager().update_proxy_model_configs(deployment, show_hints)
 
 
 @click.command()
@@ -156,8 +157,15 @@ def show(ctx: click.Context, format: str) -> None:
 @click.option("--no-proxy", type=str, prompt=True, help="NO_PROXY configuration")
 @click.option("--https-proxy", type=str, prompt=True, help="HTTPS_PROXY configuration")
 @click.option("--http-proxy", type=str, prompt=True, help="HTTP_PROXY configuration")
+@click_option_show_hints
 @click.pass_context
-def set(ctx: click.Context, http_proxy: str, https_proxy: str, no_proxy: str) -> None:
+def set(
+    ctx: click.Context,
+    http_proxy: str,
+    https_proxy: str,
+    no_proxy: str,
+    show_hints: bool,
+) -> None:
     """Update proxy configuration."""
     deployment: Deployment = ctx.obj
 
@@ -172,7 +180,7 @@ def set(ctx: click.Context, http_proxy: str, https_proxy: str, no_proxy: str) ->
     variables["proxy"]["https_proxy"] = https_proxy
     variables["proxy"]["no_proxy"] = no_proxy
     try:
-        _update_proxy(variables, deployment)
+        _update_proxy(variables, deployment, show_hints)
     except (ClusterServiceUnavailableException, ConfigItemNotFoundException) as e:
         LOG.debug(f"Exception in updating config {str(e)}")
         click.echo("ERROR: Not able to update proxy config: str(e)")
@@ -180,8 +188,9 @@ def set(ctx: click.Context, http_proxy: str, https_proxy: str, no_proxy: str) ->
 
 
 @click.command()
+@click_option_show_hints
 @click.pass_context
-def clear(ctx: click.Context) -> None:
+def clear(ctx: click.Context, show_hints: bool) -> None:
     """Clear proxy configuration."""
     deployment: Deployment = ctx.obj
 
@@ -191,7 +200,7 @@ def clear(ctx: click.Context) -> None:
     variables["proxy"]["https_proxy"] = ""
     variables["proxy"]["no_proxy"] = ""
     try:
-        _update_proxy(variables, deployment)
+        _update_proxy(variables, deployment, show_hints)
     except (ClusterServiceUnavailableException, ConfigItemNotFoundException) as e:
         LOG.debug(f"Exception in updating config {str(e)}")
         click.echo("ERROR: Not able to clear proxy config: str(e)")
@@ -209,18 +218,34 @@ def proxy_questions():
         "proxy_required": ConfirmQuestion(
             "Use proxy to access external network resources?",
             default_value=False,
+            description=(
+                "This will configure the proxy settings for the deployment."
+                " Resources will be fetched from the internet via the proxy."
+            ),
         ),
         "http_proxy": PromptQuestion(
-            "http_proxy (url):",
+            "http_proxy",
             validation_function=does_not_contain_quotes,
+            description=(
+                "HTTP proxy server to use for fetching resources from the internet."
+            ),
         ),
         "https_proxy": PromptQuestion(
-            "https_proxy (url):",
+            "https_proxy",
             validation_function=does_not_contain_quotes,
+            description=(
+                "HTTPS proxy server to use for fetching resources from the internet."
+                " Usually, the same as the HTTP proxy."
+            ),
         ),
         "no_proxy": PromptQuestion(
-            "no_proxy (comma separated domain/IP/cidr):",
+            "no_proxy",
             validation_function=does_not_contain_quotes,
+            description=(
+                "Comma separated list of domain/IP/cidr"
+                " for which proxy should not be used. Usually, the management network"
+                " and the internal network of the deployment are part of this list."
+            ),
         ),
     }
 
@@ -245,7 +270,11 @@ class PromptForProxyStep(BaseStep):
             self.client = None
         self.variables: dict = {}
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -288,6 +317,7 @@ class PromptForProxyStep(BaseStep):
             preseed=preseed,
             previous_answers=previous_answers,
             accept_defaults=self.accept_defaults,
+            show_hint=show_hint,
         )
 
         self.variables["proxy"]["proxy_required"] = proxy_bank.proxy_required.ask()

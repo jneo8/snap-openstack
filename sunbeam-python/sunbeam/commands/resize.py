@@ -27,6 +27,7 @@ from sunbeam.steps.microceph import (
     SetCephMgrPoolSizeStep,
 )
 from sunbeam.steps.openstack import DeployControlPlaneStep
+from sunbeam.utils import click_option_show_hints
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -37,8 +38,11 @@ console = Console()
 @click.option(
     "-f", "--force", help="Force resizing to incompatible topology.", is_flag=True
 )
+@click_option_show_hints
 @click.pass_context
-def resize(ctx: click.Context, topology: str, force: bool = False) -> None:
+def resize(
+    ctx: click.Context, topology: str, show_hints: bool, force: bool = False
+) -> None:
     """Expand the control plane to fit available nodes."""
     deployment: Deployment = ctx.obj
     client: Client = deployment.get_client()
@@ -89,6 +93,6 @@ def resize(ctx: click.Context, topology: str, force: bool = False) -> None:
         ]
     )
 
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
 
     click.echo("Resize complete.")

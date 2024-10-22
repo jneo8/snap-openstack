@@ -665,6 +665,10 @@ def region_questions():
         "region": PromptQuestion(
             "Enter a region name (cannot be changed later)",
             default_value=DEFAULT_REGION,
+            description=(
+                "A region is general division of OpenStack services. It cannot"
+                " be changed once set."
+            ),
         )
     }
 
@@ -684,7 +688,11 @@ class PromptRegionStep(BaseStep):
         self.accept_defaults = accept_defaults
         self.variables: dict = {}
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -707,6 +715,7 @@ class PromptRegionStep(BaseStep):
             preseed=preseed,
             previous_answers=self.variables,
             accept_defaults=self.accept_defaults,
+            show_hint=show_hint,
         )
         self.variables["region"] = region_bank.region.ask()
         write_answers(self.client, REGION_CONFIG_KEY, self.variables)

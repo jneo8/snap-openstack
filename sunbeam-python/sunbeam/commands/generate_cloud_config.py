@@ -41,6 +41,7 @@ from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper, ModelNotFoundException, run_sync
 from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.core.terraform import TerraformHelper
+from sunbeam.utils import click_option_show_hints
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -240,12 +241,14 @@ class GenerateCloudConfigStep(BaseStep):
     help="Output file for cloud yaml, defaults to $HOME/.config/openstack/clouds.yaml",
     type=click.Path(dir_okay=False, path_type=Path),
 )
+@click_option_show_hints
 def cloud_config(
     ctx: click.Context,
     cloud: str,
     admin: bool,
     update: bool,
     cloud_file: Path | None = None,
+    show_hints: bool = True,
 ) -> None:
     """Generate or Update clouds.yaml."""
     parameter_source = ctx.get_parameter_source("cloud")
@@ -278,4 +281,4 @@ def cloud_config(
             cloudfile=cloud_file,
         ),
     ]
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)

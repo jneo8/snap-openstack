@@ -95,9 +95,11 @@ class TlsFeature(OpenStackControlPlaneFeature):
             provider_config = {}
         return provider_config
 
-    def pre_enable(self, deployment: Deployment, config: TlsFeatureConfig) -> None:
+    def pre_enable(
+        self, deployment: Deployment, config: TlsFeatureConfig, show_hints: bool
+    ) -> None:
         """Handler to perform tasks before enabling the feature."""
-        super().pre_enable(deployment, config)
+        super().pre_enable(deployment, config, show_hints)
 
         provider_config = self.provider_config(deployment)
 
@@ -105,7 +107,9 @@ class TlsFeature(OpenStackControlPlaneFeature):
         if provider and provider != self.name:
             raise Exception(f"Certificate provider already set to {provider!r}")
 
-    def post_enable(self, deployment: Deployment, config: TlsFeatureConfig) -> None:
+    def post_enable(
+        self, deployment: Deployment, config: TlsFeatureConfig, show_hints: bool
+    ) -> None:
         """Handler to perform tasks after the feature is enabled."""
         jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
@@ -116,7 +120,7 @@ class TlsFeature(OpenStackControlPlaneFeature):
                 config.ca_chain,  # type: ignore
             )
         ]
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
 
         stored_config = {
             "provider": self.name,
@@ -126,9 +130,9 @@ class TlsFeature(OpenStackControlPlaneFeature):
         }
         update_config(deployment.get_client(), CERTIFICATE_FEATURE_KEY, stored_config)
 
-    def post_disable(self, deployment: Deployment) -> None:
+    def post_disable(self, deployment: Deployment, show_hints: bool) -> None:
         """Handler to perform tasks after the feature is disabled."""
-        super().post_disable(deployment)
+        super().post_disable(deployment, show_hints)
 
         client = deployment.get_client()
         jhelper = JujuHelper(deployment.get_connected_controller())
@@ -144,7 +148,7 @@ class TlsFeature(OpenStackControlPlaneFeature):
                 jhelper, apps_to_monitor, model, INGRESS_CHANGE_APPLICATION_TIMEOUT
             ),
         ]
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
 
         config: dict = {}
         update_config(deployment.get_client(), CERTIFICATE_FEATURE_KEY, config)

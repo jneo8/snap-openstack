@@ -42,37 +42,78 @@ CLOUD_CONFIG_SECTION = "CloudConfig"
 LOG = logging.getLogger(__name__)
 console = Console()
 
+EXT_NETWORK_DESCRIPTION = """\
+Network from which the instances will be remotely \
+accessed (outside OpenStack). Takes the form of a CIDR block.\
+"""
+EXT_NETWORK_RANGE_DESCRIPTION = """\
+VMs intended to be accessed from remote hosts will \
+be assigned dedicated addresses from a portion of the physical \
+network (outside OpenStack). Takes the form of an IP range.\
+"""
+EXT_NETWORK_TYPE_DESCRIPTION = "Type of network to use for external access."
+EXT_NETWORK_SEGMENTATION_ID_DESCRIPTION = "Vlan ID the external network is on."
+
 
 def user_questions():
     return {
         "run_demo_setup": sunbeam.core.questions.ConfirmQuestion(
             "Populate OpenStack cloud with demo user, default images, flavors etc",
             default_value=True,
+            description=(
+                "If enabled, demonstration resources will be created on the cloud."
+            ),
         ),
         "username": sunbeam.core.questions.PromptQuestion(
-            "Username to use for access to OpenStack", default_value="demo"
+            "Username to use for access to OpenStack",
+            default_value="demo",
+            description="Username for the demonstration user.",
         ),
         "password": sunbeam.core.questions.PasswordPromptQuestion(
             "Password to use for access to OpenStack",
             default_function=utils.generate_password,
             password=True,
+            description="Password for the demonstration user.",
         ),
         "cidr": sunbeam.core.questions.PromptQuestion(
-            "Project network (CIDR)",
+            "Project network",
             default_value="192.168.0.0/24",
             validation_function=ipaddress.ip_network,
+            description=(
+                "Network range for the private network for the demonstration user's"
+                " project. Typically an unroutable network (RFC 1918)."
+            ),
         ),
         "nameservers": sunbeam.core.questions.PromptQuestion(
-            "Project network's nameservers (space separated)",
+            "Project network's nameservers",
             default_function=lambda: " ".join(utils.get_nameservers()),
+            description=(
+                "A list of DNS server IP addresses (comma separated)"
+                " that should be used for external DNS resolution from"
+                " cloud instances. If not specified, the system's default"
+                " nameservers will be used."
+            ),
         ),
         "security_group_rules": sunbeam.core.questions.ConfirmQuestion(
-            "Enable ping and SSH access to instances?", default_value=True
+            "Enable ping and SSH access to instances?",
+            default_value=True,
+            description=(
+                "If enabled, security groups will be created with"
+                " rules to allow ICMP and SSH access to instances."
+            ),
         ),
         "remote_access_location": sunbeam.core.questions.PromptQuestion(
             "Local or remote access to VMs",
             choices=[utils.LOCAL_ACCESS, utils.REMOTE_ACCESS],
             default_value=utils.LOCAL_ACCESS,
+            # This is not true
+            description=(
+                "VMs will be accessible only from the local host"
+                " or only from remote hosts. For remote, you must"
+                " specify the network interface dedicated to VM"
+                " access traffic. The intended remote hosts must"
+                " have connectivity to this interface."
+            ),
         ),
     }
 
@@ -80,27 +121,33 @@ def user_questions():
 def ext_net_questions():
     return {
         "cidr": sunbeam.core.questions.PromptQuestion(
-            "External network (CIDR)",
+            "External network",
             default_value="172.16.2.0/24",
             validation_function=ipaddress.ip_network,
+            description=EXT_NETWORK_DESCRIPTION,
         ),
         "gateway": sunbeam.core.questions.PromptQuestion(
-            "External network's gateway (IP)",
+            "External network's gateway",
             default_value=None,
             validation_function=ipaddress.ip_address,
+            description="Router IP address connecting the network for outside use.",
         ),
         "range": sunbeam.core.questions.PromptQuestion(
-            "External network's allocation range (IP range)",
+            "External network's allocation range",
             default_value=None,
             validation_function=validate_ip_range,
+            description=EXT_NETWORK_RANGE_DESCRIPTION,
         ),
         "network_type": sunbeam.core.questions.PromptQuestion(
             "External network's type [flat/vlan]",
             choices=["flat", "vlan"],
             default_value="flat",
+            description=EXT_NETWORK_TYPE_DESCRIPTION,
         ),
         "segmentation_id": sunbeam.core.questions.PromptQuestion(
-            "External network's segmentation id", default_value=0
+            "External network's segmentation id",
+            default_value=0,
+            description=EXT_NETWORK_SEGMENTATION_ID_DESCRIPTION,
         ),
     }
 
@@ -108,22 +155,27 @@ def ext_net_questions():
 def ext_net_questions_local_only():
     return {
         "cidr": sunbeam.core.questions.PromptQuestion(
-            ("External network (CIDR) - arbitrary but must not be in use"),
+            "External network - arbitrary but must not be in use",
             default_value="172.16.2.0/24",
             validation_function=ipaddress.ip_network,
+            description=EXT_NETWORK_DESCRIPTION,
         ),
         "range": sunbeam.core.questions.PromptQuestion(
-            "External network's allocation range (IP range)",
+            "External network's allocation range",
             default_value=None,
             validation_function=validate_ip_range,
+            description=EXT_NETWORK_RANGE_DESCRIPTION,
         ),
         "network_type": sunbeam.core.questions.PromptQuestion(
             "External network's type [flat/vlan]",
             choices=["flat", "vlan"],
             default_value="flat",
+            description=EXT_NETWORK_TYPE_DESCRIPTION,
         ),
         "segmentation_id": sunbeam.core.questions.PromptQuestion(
-            "External network's segmentation id", default_value=0
+            "External network's segmentation id",
+            default_value=0,
+            description=EXT_NETWORK_SEGMENTATION_ID_DESCRIPTION,
         ),
     }
 
@@ -337,7 +389,11 @@ class UserQuestions(BaseStep):
         """Returns true if the step has prompts that it can ask the user."""
         return True
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Prompt the user for basic cloud configuration.
 
         Prompts the user for required information for cloud configuration.
@@ -361,6 +417,7 @@ class UserQuestions(BaseStep):
             preseed=preseed,
             previous_answers=self.variables.get("user"),
             accept_defaults=self.accept_defaults,
+            show_hint=show_hint,
         )
         self.variables["user"]["remote_access_location"] = (
             user_bank.remote_access_location.ask()
@@ -378,6 +435,7 @@ class UserQuestions(BaseStep):
                 preseed=preseed,
                 previous_answers=self.variables.get("external_network"),
                 accept_defaults=self.accept_defaults,
+                show_hint=show_hint,
             )
         else:
             ext_net_bank = sunbeam.core.questions.QuestionBank(
@@ -386,6 +444,7 @@ class UserQuestions(BaseStep):
                 preseed=preseed,
                 previous_answers=self.variables.get("external_network"),
                 accept_defaults=self.accept_defaults,
+                show_hint=show_hint,
             )
         self.variables["external_network"]["cidr"] = ext_net_bank.cidr.ask()
         external_network = ipaddress.ip_network(

@@ -40,7 +40,14 @@ console = Console()
 
 def local_hypervisor_questions():
     return {
-        "nic": sunbeam.core.questions.PromptQuestion("External network's interface"),
+        "nic": sunbeam.core.questions.PromptQuestion(
+            "External network's interface",
+            description=(
+                "Interface used by networking layer to allow remote access to cloud"
+                " instances. This interface must be unconfigured"
+                " (no IP address assigned) and connected to the external network."
+            ),
+        ),
     }
 
 
@@ -132,21 +139,29 @@ class LocalSetHypervisorUnitsOptionsStep(SetHypervisorUnitsOptionsStep):
                 agree_nic_up = sunbeam.core.questions.ConfirmQuestion(
                     f"WARNING: Interface {nic} is configured. Any "
                     "configuration will be lost, are you sure you want to "
-                    "continue?"
+                    "continue?",
                 ).ask()
                 if not agree_nic_up:
                     continue
             if nic_state["up"] and not nic_state["connected"]:
                 agree_nic_no_link = sunbeam.core.questions.ConfirmQuestion(
                     f"WARNING: Interface {nic} is not connected. Are "
-                    "you sure you want to continue?"
+                    "you sure you want to continue?",
+                    description=(
+                        "Interface is not detected as connected to any network. This"
+                        " means it will most likely not work as expected."
+                    ),
                 ).ask()
                 if not agree_nic_no_link:
                     continue
             break
         return nic
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user."""
         # If adding a node before configure step has run then answers will
         # not be populated yet.

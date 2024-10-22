@@ -35,7 +35,7 @@ from sunbeam.features.interface.v1.openstack import (
     TerraformPlanLocation,
 )
 from sunbeam.steps.hypervisor import ReapplyHypervisorTerraformPlanStep
-from sunbeam.utils import pass_method_obj
+from sunbeam.utils import click_option_show_hints, pass_method_obj
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 console = Console()
@@ -68,14 +68,18 @@ class InstanceRecoveryFeature(OpenStackControlPlaneFeature):
             }
         }
 
-    def pre_enable(self, deployment: Deployment, config: FeatureConfig) -> None:
+    def pre_enable(
+        self, deployment: Deployment, config: FeatureConfig, show_hints: bool
+    ) -> None:
         """Handler to perform tasks before enabling the feature."""
         if self.get_cluster_topology(deployment) == "single":
             click.echo("WARNING: This feature is meant for multi-node deployment only.")
 
-        super().pre_enable(deployment, config)
+        super().pre_enable(deployment, config, show_hints)
 
-    def run_enable_plans(self, deployment: Deployment, config: FeatureConfig) -> None:
+    def run_enable_plans(
+        self, deployment: Deployment, config: FeatureConfig, show_hints: bool
+    ) -> None:
         """Run plans to enable feature."""
         tfhelper = deployment.get_tfhelper(self.tfplan)
         tfhelper_hypervisor = deployment.get_tfhelper("hypervisor-plan")
@@ -101,10 +105,10 @@ class InstanceRecoveryFeature(OpenStackControlPlaneFeature):
             ]
         )
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo(f"OpenStack {self.display_name} application enabled.")
 
-    def run_disable_plans(self, deployment: Deployment) -> None:
+    def run_disable_plans(self, deployment: Deployment, show_hints: bool) -> None:
         """Run plans to disable the feature."""
         tfhelper = deployment.get_tfhelper(self.tfplan)
         tfhelper_hypervisor = deployment.get_tfhelper("hypervisor-plan")
@@ -122,7 +126,7 @@ class InstanceRecoveryFeature(OpenStackControlPlaneFeature):
             ),
         ]
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo(f"OpenStack {self.display_name} application disabled.")
 
     def set_application_names(self, deployment: Deployment) -> list:
@@ -156,13 +160,15 @@ class InstanceRecoveryFeature(OpenStackControlPlaneFeature):
         }
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def enable_cmd(self, deployment: Deployment) -> None:
+    def enable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Enable OpenStack Instance Recovery service."""
-        self.enable_feature(deployment, FeatureConfig())
+        self.enable_feature(deployment, FeatureConfig(), show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable OpenStack Instance Recovery service."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)

@@ -375,6 +375,17 @@ def argument_with_deprecated_option(
     return decorator
 
 
+def click_option_show_hints(func: click.decorators.FC) -> click.decorators.FC:
+    """Common decorator to show hints for questions."""
+    return click.option(
+        "--hints/--no-hints",
+        "show_hints",
+        is_flag=True,
+        default=True,
+        help="Display question hints.",
+    )(func)
+
+
 def pass_method_obj(f):
     """Pass the context object to a method.
 

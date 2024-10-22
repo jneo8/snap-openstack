@@ -51,7 +51,7 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.utils import pass_method_obj
+from sunbeam.utils import click_option_show_hints, pass_method_obj
 from sunbeam.versions import OPENSTACK_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -332,16 +332,18 @@ class LDAPFeature(OpenStackControlPlaneFeature):
         return []
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def enable_cmd(self, deployment: Deployment) -> None:
+    def enable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Enable ldap service."""
-        self.enable_feature(deployment, FeatureConfig())
+        self.enable_feature(deployment, FeatureConfig(), show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable OpenStack LDAP application."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)
 
     @click.command()
     @pass_method_obj
@@ -369,6 +371,7 @@ class LDAPFeature(OpenStackControlPlaneFeature):
         CA for contacting ldap
         """,
     )
+    @click_option_show_hints
     @pass_method_obj
     def add_domain(
         self,
@@ -376,6 +379,7 @@ class LDAPFeature(OpenStackControlPlaneFeature):
         ca_cert_file: str,
         domain_config_file: str,
         domain_name: str,
+        show_hints: bool,
     ) -> None:
         """Add LDAP backed domain."""
         with Path(domain_config_file).open(mode="r") as f:
@@ -396,7 +400,7 @@ class LDAPFeature(OpenStackControlPlaneFeature):
             AddLDAPDomainStep(deployment, FeatureConfig(), jhelper, self, charm_config),
         ]
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo(f"{domain_name} added.")
 
     @click.command()
@@ -415,6 +419,7 @@ class LDAPFeature(OpenStackControlPlaneFeature):
         CA for contacting ldap
         """,
     )
+    @click_option_show_hints
     @pass_method_obj
     def update_domain(
         self,
@@ -422,6 +427,7 @@ class LDAPFeature(OpenStackControlPlaneFeature):
         ca_cert_file: str,
         domain_config_file: str,
         domain_name: str,
+        show_hints: bool,
     ) -> None:
         """Add LDAP backed domain."""
         charm_config = {"domain-name": domain_name}
@@ -439,12 +445,15 @@ class LDAPFeature(OpenStackControlPlaneFeature):
             UpdateLDAPDomainStep(deployment, jhelper, self, charm_config),
         ]
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
 
     @click.command()
     @click.argument("domain-name")
+    @click_option_show_hints
     @pass_method_obj
-    def remove_domain(self, deployment: Deployment, domain_name: str) -> None:
+    def remove_domain(
+        self, deployment: Deployment, domain_name: str, show_hints: bool
+    ) -> None:
         """Remove LDAP backed domain."""
         jhelper = JujuHelper(deployment.get_connected_controller())
         plan = [
@@ -453,7 +462,7 @@ class LDAPFeature(OpenStackControlPlaneFeature):
                 deployment, FeatureConfig(), jhelper, self, domain_name
             ),
         ]
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo(f"{domain_name} removed.")
 
     @click.group()

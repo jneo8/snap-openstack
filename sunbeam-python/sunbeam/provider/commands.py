@@ -43,7 +43,7 @@ from sunbeam.provider.base import ProviderBase
 from sunbeam.provider.local.commands import LocalProvider
 from sunbeam.provider.local.deployment import LocalDeployment
 from sunbeam.provider.maas.commands import MaasProvider
-from sunbeam.utils import CatchGroup
+from sunbeam.utils import CatchGroup, click_option_show_hints
 
 console = Console()
 LOG = logging.getLogger(__name__)
@@ -113,7 +113,8 @@ def switch(name: str) -> None:
     type=click.Path(exists=True, path_type=pathlib.Path),
     help="Deployment file",
 )
-def import_deployment(file: Path | None):
+@click_option_show_hints
+def import_deployment(file: Path | None, show_hints: bool):
     """Import deployment."""
     if file is None:
         click.echo("Missing deployment file argument.")
@@ -148,7 +149,7 @@ def import_deployment(file: Path | None):
     plan = []
     plan.append(import_step_class(deployments_config, deployment))
 
-    run_plan(plan, console)
+    run_plan(plan, console, show_hints)
 
     console.print(f"Deployment {deployment.name!r} imported.")
 

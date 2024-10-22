@@ -55,7 +55,12 @@ MICROCEPH_UNIT_TIMEOUT = (
 def microceph_questions():
     return {
         "osd_devices": questions.PromptQuestion(
-            "Ceph devices (paths, separated by a comma)",
+            "Ceph devices",
+            description=(
+                "Comma separated list of devices to be used by Ceph OSDs."
+                " `/dev/disk/by-id/<id>` are preferred, as they are stable"
+                " given the same device."
+            ),
         ),
     }
 
@@ -303,7 +308,11 @@ class ConfigureMicrocephOSDStep(BaseStep):
             LOG.debug(str(e))
             raise SunbeamException("Unable to list disks")
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        display_question_description: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -340,6 +349,7 @@ class ConfigureMicrocephOSDStep(BaseStep):
                 self.node_name
             ),
             accept_defaults=self.accept_defaults,
+            show_hint=display_question_description,
         )
         # Microceph configuration
         self.disks = microceph_config_bank.osd_devices.ask()

@@ -63,7 +63,7 @@ from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
 )
-from sunbeam.utils import pass_method_obj
+from sunbeam.utils import click_option_show_hints, pass_method_obj
 from sunbeam.versions import CONSUL_CHANNEL
 
 LOG = logging.getLogger(__name__)
@@ -492,7 +492,9 @@ class ConsulFeature(OpenStackControlPlaneFeature):
         """Set terraform variables to resize the consul-k8s application."""
         return {}
 
-    def run_enable_plans(self, deployment: Deployment, config: FeatureConfig) -> None:
+    def run_enable_plans(
+        self, deployment: Deployment, config: FeatureConfig, show_hints: bool
+    ) -> None:
         """Run plans to enable feature."""
         tfhelper = deployment.get_tfhelper(self.tfplan)
         tfhelper_consul_client = deployment.get_tfhelper(self.tfplan_consul_client)
@@ -518,10 +520,10 @@ class ConsulFeature(OpenStackControlPlaneFeature):
             ]
         )
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo(f"{self.display_name} application enabled.")
 
-    def run_disable_plans(self, deployment: Deployment) -> None:
+    def run_disable_plans(self, deployment: Deployment, show_hints: bool) -> None:
         """Run plans to disable the feature."""
         tfhelper = deployment.get_tfhelper(self.tfplan)
         tfhelper_consul_client = deployment.get_tfhelper(self.tfplan_consul_client)
@@ -533,22 +535,24 @@ class ConsulFeature(OpenStackControlPlaneFeature):
             DisableOpenStackApplicationStep(deployment, tfhelper, jhelper, self),
         ]
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo(f"{self.display_name} application disabled.")
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def enable_cmd(self, deployment: Deployment) -> None:
+    def enable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Enable Consul.
 
         Consul offers service discovery, service mesh, traffic
         management, node failure detection and automated updates
         to network infrastructure devices
         """
-        self.enable_feature(deployment, FeatureConfig())
+        self.enable_feature(deployment, FeatureConfig(), show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable Consul."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)

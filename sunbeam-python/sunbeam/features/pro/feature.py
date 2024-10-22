@@ -41,7 +41,11 @@ from sunbeam.core.terraform import (
     TerraformInitStep,
 )
 from sunbeam.features.interface.v1.base import EnableDisableFeature
-from sunbeam.utils import argument_with_deprecated_option, pass_method_obj
+from sunbeam.utils import (
+    argument_with_deprecated_option,
+    click_option_show_hints,
+    pass_method_obj,
+)
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -211,7 +215,9 @@ class ProFeature(EnableDisableFeature):
             }
         )
 
-    def run_enable_plans(self, deployment: Deployment, config: ProFeatureConfig):
+    def run_enable_plans(
+        self, deployment: Deployment, config: ProFeatureConfig, show_hints: bool
+    ):
         """Run the enablement plans."""
         tfhelper = deployment.get_tfhelper(self.tfplan)
         jhelper = JujuHelper(deployment.get_connected_controller())
@@ -227,7 +233,7 @@ class ProFeature(EnableDisableFeature):
             ),
         ]
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
 
         click.echo(
             "Please check minimum hardware requirements for support:\n\n"
@@ -235,7 +241,7 @@ class ProFeature(EnableDisableFeature):
         )
         click.echo("Ubuntu Pro enabled.")
 
-    def run_disable_plans(self, deployment: Deployment):
+    def run_disable_plans(self, deployment: Deployment, show_hints: bool):
         """Run the disablement plans."""
         tfhelper = deployment.get_tfhelper(self.tfplan)
         plan = [
@@ -247,7 +253,7 @@ class ProFeature(EnableDisableFeature):
             ),
         ]
 
-        run_plan(plan, console)
+        run_plan(plan, console, show_hints)
         click.echo("Ubuntu Pro disabled.")
 
     @click.command()
@@ -255,17 +261,19 @@ class ProFeature(EnableDisableFeature):
     @argument_with_deprecated_option(
         "token", type=str, short_form="t", help="Ubuntu Pro token"
     )
-    def enable_cmd(self, deployment: Deployment, token: str) -> None:
+    @click_option_show_hints
+    def enable_cmd(self, deployment: Deployment, token: str, show_hints: bool) -> None:
         """Enable Ubuntu Pro across deployment.
 
         Minimum hardware requirements for support:
 
         https://microstack.run/docs/enterprise-reqs
         """
-        self.enable_feature(deployment, ProFeatureConfig(token=token))
+        self.enable_feature(deployment, ProFeatureConfig(token=token), show_hints)
 
     @click.command()
+    @click_option_show_hints
     @pass_method_obj
-    def disable_cmd(self, deployment: Deployment) -> None:
+    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Disable Ubuntu Pro across deployment."""
-        self.disable_feature(deployment)
+        self.disable_feature(deployment, show_hints)

@@ -180,7 +180,11 @@ class BaseStep:
         self.name = name
         self.description = description
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -228,7 +232,11 @@ class BaseStep:
             status.update(self.status + msg)
 
 
-def run_plan(plan: Sequence[BaseStep], console: Console) -> dict:
+def run_plan(
+    plan: Sequence[BaseStep],
+    console: Console,
+    no_hint: bool = True,
+) -> dict:
     """Run plans sequentially.
 
     Runs each step of the plan, logs each step of
@@ -244,7 +252,7 @@ def run_plan(plan: Sequence[BaseStep], console: Console) -> dict:
         with console.status(step.status) as status:
             if step.has_prompts():
                 status.stop()
-                step.prompt(console)
+                step.prompt(console, no_hint)
                 status.start()
 
             skip_result = step.is_skip(status)

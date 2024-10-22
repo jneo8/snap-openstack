@@ -60,8 +60,14 @@ CLUSTERD_PORT = 7000
 def bootstrap_questions():
     return {
         "management_cidr": questions.PromptQuestion(
-            "Management network (CIDRs, separated by comma)",
+            "Management network",
             default_value=utils.get_local_cidr_by_default_route(),
+            description=(
+                "Management network should be available on every node of"
+                " the deployment. It is used for communication between"
+                " the nodes of the deployment. Requires CIDR format, can "
+                "be a comma-separated list."
+            ),
         ),
     }
 
@@ -142,7 +148,11 @@ class AskManagementCidrStep(BaseStep):
         self.accept_defaults = accept_defaults
         self.variables: dict = {}
 
-    def prompt(self, console: Console | None = None) -> None:
+    def prompt(
+        self,
+        console: Console | None = None,
+        show_hint: bool = False,
+    ) -> None:
         """Determines if the step can take input from the user.
 
         Prompts are used by Steps to gather the necessary input prior to
@@ -169,6 +179,7 @@ class AskManagementCidrStep(BaseStep):
             preseed=preseed,
             previous_answers=self.variables.get("bootstrap", {}),
             accept_defaults=self.accept_defaults,
+            show_hint=show_hint,
         )
 
         self.variables["bootstrap"]["management_cidr"] = (

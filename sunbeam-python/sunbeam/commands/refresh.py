@@ -25,6 +25,7 @@ from sunbeam.core.manifest import AddManifestStep
 from sunbeam.steps.upgrades.base import UpgradeCoordinator
 from sunbeam.steps.upgrades.inter_channel import ChannelUpgradeCoordinator
 from sunbeam.steps.upgrades.intra_channel import LatestInChannelCoordinator
+from sunbeam.utils import click_option_show_hints
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -53,12 +54,14 @@ console = Console()
     default=False,
     help="Upgrade OpenStack release.",
 )
+@click_option_show_hints
 @click.pass_context
 def refresh(
     ctx: click.Context,
     upgrade_release: bool,
     manifest_path: Path | None = None,
     clear_manifest: bool = False,
+    show_hints: bool = False,
 ) -> None:
     """Refresh deployment.
 
@@ -75,10 +78,10 @@ def refresh(
     # Validate manifest file
     manifest = None
     if clear_manifest:
-        run_plan([AddManifestStep(client, clear=True)], console)
+        run_plan([AddManifestStep(client, clear=True)], console, show_hints)
     elif manifest_path:
         manifest = deployment.get_manifest(manifest_path)
-        run_plan([AddManifestStep(client, manifest_path)], console)
+        run_plan([AddManifestStep(client, manifest_path)], console, show_hints)
 
     if not manifest:
         LOG.debug("Getting latest manifest from cluster db")
@@ -91,10 +94,10 @@ def refresh(
         upgrade_coordinator = ChannelUpgradeCoordinator(
             deployment, client, jhelper, manifest
         )
-        upgrade_coordinator.run_plan()
+        upgrade_coordinator.run_plan(show_hints)
     else:
         upgrade_coordinator = LatestInChannelCoordinator(
             deployment, client, jhelper, manifest
         )
-        upgrade_coordinator.run_plan()
+        upgrade_coordinator.run_plan(show_hints)
     click.echo("Refresh complete.")
