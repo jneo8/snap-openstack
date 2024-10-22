@@ -254,64 +254,6 @@ class TestRemoveGrafanaAgentStep:
         assert result.message == "timed out"
 
 
-class TestRemoveSaasApplicationsStep:
-    def test_is_skip(self, jhelper):
-        jhelper.get_model_status.return_value = {
-            "remote-applications": {
-                "test-1": {"offer-url": "admin/offering_model.test-1"},
-                "test-2": {"endpoints": [{"interface": "grafana_dashboard"}]},
-                "test-3": {"endpoints": [{"interface": "identity_credentials"}]},
-            }
-        }
-        step = observability_feature.RemoveSaasApplicationsStep(
-            jhelper,
-            "test",
-            "offering_model",
-            observability_feature.OBSERVABILITY_OFFER_INTERFACES,
-        )
-        result = step.is_skip()
-        assert step._remote_app_to_delete == ["test-1", "test-2"]
-        assert result.result_type == ResultType.COMPLETED
-
-    def test_is_skip_no_remote_app(self, jhelper):
-        jhelper.get_model_status.return_value = {}
-        step = observability_feature.RemoveSaasApplicationsStep(
-            jhelper,
-            "test",
-            "offering_model",
-            observability_feature.OBSERVABILITY_OFFER_INTERFACES,
-        )
-        result = step.is_skip()
-        assert result.result_type == ResultType.SKIPPED
-
-    def test_is_skip_no_saas_app(self, jhelper):
-        jhelper.get_model_status.return_value = {
-            "remote-applications": {
-                "test-1": {"offer-url": "admin/offering_model.test-1"},
-                "test-3": {"endpoints": [{"interface": "identity_credentials"}]},
-            }
-        }
-        step = observability_feature.RemoveSaasApplicationsStep(
-            jhelper,
-            "test",
-            "offering_model-no-apps",
-            observability_feature.OBSERVABILITY_OFFER_INTERFACES,
-        )
-        result = step.is_skip()
-        assert result.result_type == ResultType.SKIPPED
-
-    def test_run(self, jhelper):
-        step = observability_feature.RemoveSaasApplicationsStep(
-            jhelper,
-            "test",
-            "offering_model",
-            observability_feature.OBSERVABILITY_OFFER_INTERFACES,
-        )
-        step._remote_app_to_delete = ["test-1"]
-        result = step.run()
-        assert result.result_type == ResultType.COMPLETED
-
-
 class TestIntegrateRemoteCosOffersStep:
     def test_run(self, deployment, jhelper, observabilityfeature, snap, run):
         observabilityfeature.grafana_offer_url = "remotecos:admin/grafana"

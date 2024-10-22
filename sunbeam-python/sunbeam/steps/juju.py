@@ -1840,3 +1840,126 @@ class SaveControllerStep(BaseStep, JujuStepHelper):
 
         self.deployments_config.write()
         return Result(ResultType.COMPLETED)
+
+
+class RemoveSaasApplicationsStep(BaseStep):
+    """Removes SAAS offers from given model.
+
+    This is a workaround around:
+    https://github.com/juju/terraform-provider-juju/issues/473
+
+    For CMR on same controller, offering_model should be sufficient.
+    For CMR across controllers, offering_interfaces are required to
+    determine the SAAS Applications.
+    Remove saas applications specified in saas_apps_to_delete. If
+    saas_apps_to_delete is None, remove all the remote saas applications.
+    """
+
+    def __init__(
+        self,
+        jhelper: JujuHelper,
+        model: str,
+        offering_model: str | None = None,
+        offering_interfaces: list | None = None,
+        saas_apps_to_delete: list | None = None,
+    ):
+        super().__init__(
+            f"Purge SAAS Offers: {model}", f"Purging SAAS Offers from {model}"
+        )
+        self.jhelper = jhelper
+        self.model = model
+        self.offering_model = offering_model
+        self.offering_interfaces = offering_interfaces
+        self.saas_apps_to_delete = saas_apps_to_delete
+        self._remote_app_to_delete: list[str] = []
+
+    def _get_remote_apps_from_model(
+        self, remote_applications: dict, offering_model: str
+    ) -> list:
+        """Get all remote apps connected to offering model."""
+        remote_apps = []
+        for name, remote_app in remote_applications.items():
+            if not remote_app:
+                continue
+
+            offer = remote_app.get("offer-url")
+            if not offer:
+                continue
+
+            LOG.debug("Processing offer: %s", offer)
+            model_name = offer.split("/", 1)[1].split(".", 1)[0]
+            if model_name == offering_model:
+                remote_apps.append(name)
+
+        return remote_apps
+
+    def _get_remote_apps_from_interfaces(
+        self, remote_applications: dict, offering_interfaces: list
+    ) -> list:
+        """Get all remote apps which has offered given interfaces."""
+        remote_apps = []
+        for name, remote_app in remote_applications.items():
+            if not remote_app:
+                continue
+
+            LOG.debug(f"Processing remote app: {remote_app}")
+            for endpoint in remote_app.get("endpoints", {}):
+                if endpoint.get("interface") in offering_interfaces:
+                    remote_apps.append(name)
+
+        return remote_apps
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not."""
+        super().is_skip
+
+        model_status = run_sync(self.jhelper.get_model_status(self.model))
+        remote_applications = model_status.get("remote-applications")
+        if not remote_applications:
+            return Result(ResultType.SKIPPED, "No remote applications found")
+
+        LOG.debug(
+            "Remote applications found: %s", ", ".join(remote_applications.keys())
+        )
+
+        # Filter remote applications based on parameter self.saas_apps_to_delete
+        if self.saas_apps_to_delete is None:
+            filtered_remote_applications = remote_applications
+        else:
+            filtered_remote_applications = {
+                name: remote_app
+                for name, remote_app in remote_applications.items()
+                if name in self.saas_apps_to_delete
+            }
+
+        if self.offering_model:
+            self._remote_app_to_delete.extend(
+                self._get_remote_apps_from_model(
+                    filtered_remote_applications, self.offering_model
+                )
+            )
+
+        if self.offering_interfaces:
+            self._remote_app_to_delete.extend(
+                self._get_remote_apps_from_interfaces(
+                    filtered_remote_applications, self.offering_interfaces
+                )
+            )
+
+        if len(self._remote_app_to_delete) == 0:
+            return Result(ResultType.SKIPPED, "No remote applications to remove")
+
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None = None) -> Result:
+        """Execute to remove SAAS apps."""
+        if not self._remote_app_to_delete:
+            return Result(ResultType.COMPLETED)
+
+        model = run_sync(self.jhelper.get_model(self.model))
+
+        LOG.debug("Removing remote applications on model %s", model)
+        for saas in self._remote_app_to_delete:
+            LOG.debug("Removing remote application on %s", saas)
+            run_sync(model.remove_saas(saas))
+        return Result(ResultType.COMPLETED)
