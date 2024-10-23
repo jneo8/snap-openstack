@@ -26,11 +26,6 @@ terraform {
 
 provider "juju" {}
 
-data "terraform_remote_state" "openstack" {
-  backend = var.openstack-state-backend
-  config  = var.openstack-state-config
-}
-
 resource "juju_application" "openstack-hypervisor" {
   name  = "openstack-hypervisor"
   trust = false
@@ -60,7 +55,7 @@ resource "juju_integration" "hypervisor-amqp" {
   }
 
   application {
-    offer_url = data.terraform_remote_state.openstack.outputs.rabbitmq-offer-url
+    offer_url = var.rabbitmq-offer-url
   }
 }
 
@@ -73,11 +68,12 @@ resource "juju_integration" "hypervisor-identity" {
   }
 
   application {
-    offer_url = data.terraform_remote_state.openstack.outputs.keystone-offer-url
+    offer_url = var.keystone-offer-url
   }
 }
 
 resource "juju_integration" "hypervisor-cert-distributor" {
+  count = (var.cert-distributor-offer-url != null) ? 1 : 0
   model = var.machine_model
 
   application {
@@ -86,11 +82,12 @@ resource "juju_integration" "hypervisor-cert-distributor" {
   }
 
   application {
-    offer_url = data.terraform_remote_state.openstack.outputs.cert-distributor-offer-url
+    offer_url = var.cert-distributor-offer-url
   }
 }
 
 resource "juju_integration" "hypervisor-certs" {
+  count = (var.ca-offer-url != null) ? 1 : 0
   model = var.machine_model
 
   application {
@@ -99,7 +96,7 @@ resource "juju_integration" "hypervisor-certs" {
   }
 
   application {
-    offer_url = data.terraform_remote_state.openstack.outputs.ca-offer-url
+    offer_url = var.ca-offer-url
   }
 }
 
@@ -112,12 +109,12 @@ resource "juju_integration" "hypervisor-ovn" {
   }
 
   application {
-    offer_url = data.terraform_remote_state.openstack.outputs.ovn-relay-offer-url
+    offer_url = var.ovn-relay-offer-url
   }
 }
 
 resource "juju_integration" "hypervisor-ceilometer" {
-  count = try(data.terraform_remote_state.openstack.outputs.ceilometer-offer-url, null) != null ? 1 : 0
+  count = (var.ceilometer-offer-url != null) ? 1 : 0
   model = var.machine_model
 
   application {
@@ -126,11 +123,12 @@ resource "juju_integration" "hypervisor-ceilometer" {
   }
 
   application {
-    offer_url = data.terraform_remote_state.openstack.outputs.ceilometer-offer-url
+    offer_url = var.ceilometer-offer-url
   }
 }
 
 resource "juju_integration" "hypervisor-cinder-ceph" {
+  count = (var.cinder-ceph-offer-url != null) ? 1 : 0
   model = var.machine_model
 
   application {
@@ -139,7 +137,7 @@ resource "juju_integration" "hypervisor-cinder-ceph" {
   }
 
   application {
-    offer_url = data.terraform_remote_state.openstack.outputs.cinder-ceph-offer-url
+    offer_url = var.cinder-ceph-offer-url
   }
 }
 
@@ -152,12 +150,12 @@ resource "juju_integration" "hypervisor-nova-controller" {
   }
 
   application {
-    offer_url = data.terraform_remote_state.openstack.outputs.nova-offer-url
+    offer_url = var.nova-offer-url
   }
 }
 
 resource "juju_integration" "hypervisor-masakari" {
-  count = try(data.terraform_remote_state.openstack.outputs.masakari-offer-url, null) != null ? 1 : 0
+  count = (var.masakari-offer-url != null) ? 1 : 0
   model = var.machine_model
 
   application {
@@ -166,6 +164,6 @@ resource "juju_integration" "hypervisor-masakari" {
   }
 
   application {
-    offer_url = data.terraform_remote_state.openstack.outputs.masakari-offer-url
+    offer_url = var.masakari-offer-url
   }
 }

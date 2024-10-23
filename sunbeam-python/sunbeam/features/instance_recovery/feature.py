@@ -26,6 +26,7 @@ from sunbeam.core.manifest import (
     FeatureConfig,
     SoftwareConfig,
 )
+from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.core.terraform import TerraformInitStep
 from sunbeam.features.interface.v1.base import FeatureRequirement
 from sunbeam.features.interface.v1.openstack import (
@@ -35,6 +36,7 @@ from sunbeam.features.interface.v1.openstack import (
     TerraformPlanLocation,
 )
 from sunbeam.steps.hypervisor import ReapplyHypervisorTerraformPlanStep
+from sunbeam.steps.juju import RemoveSaasApplicationsStep
 from sunbeam.utils import click_option_show_hints, pass_method_obj
 from sunbeam.versions import OPENSTACK_CHANNEL
 
@@ -82,30 +84,41 @@ class InstanceRecoveryFeature(OpenStackControlPlaneFeature):
     ) -> None:
         """Run plans to enable feature."""
         tfhelper = deployment.get_tfhelper(self.tfplan)
+        tfhelper_openstack = deployment.get_tfhelper("openstack-plan")
         tfhelper_hypervisor = deployment.get_tfhelper("hypervisor-plan")
         jhelper = JujuHelper(deployment.get_connected_controller())
-        plan: list[BaseStep] = []
+        plan1: list[BaseStep] = []
         if self.user_manifest:
-            plan.append(AddManifestStep(deployment.get_client(), self.user_manifest))
-        plan.extend(
+            plan1.append(AddManifestStep(deployment.get_client(), self.user_manifest))
+        plan1.extend(
             [
                 TerraformInitStep(tfhelper),
                 EnableOpenStackApplicationStep(
                     deployment, config, tfhelper, jhelper, self
                 ),
+            ]
+        )
+        run_plan(plan1, console, show_hints)
+
+        openstack_tf_output = tfhelper_openstack.output()
+        extra_tfvars = {
+            "masakari-offer-url": openstack_tf_output.get("masakari-offer-url")
+        }
+        plan2: list[BaseStep] = []
+        plan2.extend(
+            [
                 TerraformInitStep(tfhelper_hypervisor),
-                # No need to pass any extra terraform vars for this feature
                 ReapplyHypervisorTerraformPlanStep(
                     deployment.get_client(),
                     tfhelper_hypervisor,
                     jhelper,
                     self.manifest,
                     deployment.openstack_machines_model,
+                    extra_tfvars=extra_tfvars,
                 ),
             ]
         )
-
-        run_plan(plan, console, show_hints)
+        run_plan(plan2, console, show_hints)
         click.echo(f"OpenStack {self.display_name} application enabled.")
 
     def run_disable_plans(self, deployment: Deployment, show_hints: bool) -> None:
@@ -113,9 +126,8 @@ class InstanceRecoveryFeature(OpenStackControlPlaneFeature):
         tfhelper = deployment.get_tfhelper(self.tfplan)
         tfhelper_hypervisor = deployment.get_tfhelper("hypervisor-plan")
         jhelper = JujuHelper(deployment.get_connected_controller())
+        extra_tfvars = {"masakari-offer-url": None}
         plan = [
-            TerraformInitStep(tfhelper),
-            DisableOpenStackApplicationStep(deployment, tfhelper, jhelper, self),
             TerraformInitStep(tfhelper_hypervisor),
             ReapplyHypervisorTerraformPlanStep(
                 deployment.get_client(),
@@ -123,7 +135,16 @@ class InstanceRecoveryFeature(OpenStackControlPlaneFeature):
                 jhelper,
                 self.manifest,
                 deployment.openstack_machines_model,
+                extra_tfvars=extra_tfvars,
             ),
+            RemoveSaasApplicationsStep(
+                jhelper,
+                deployment.openstack_machines_model,
+                OPENSTACK_MODEL,
+                saas_apps_to_delete=["masakari"],
+            ),
+            TerraformInitStep(tfhelper),
+            DisableOpenStackApplicationStep(deployment, tfhelper, jhelper, self),
         ]
 
         run_plan(plan, console, show_hints)

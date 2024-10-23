@@ -279,16 +279,21 @@ def get_external_network_configs(client: Client) -> dict:
     variables = sunbeam.core.questions.load_answers(client, CLOUD_CONFIG_SECTION)
     ext_network = variables.get("external_network", {})
     charm_config["external-bridge"] = "br-ex"
-    if variables["user"]["remote_access_location"] == utils.LOCAL_ACCESS:
+    if (
+        variables.get("user", {}).get("remote_access_location", "")
+        == utils.LOCAL_ACCESS
+    ):
         external_network = ipaddress.ip_network(
-            variables["external_network"].get("cidr")
+            variables.get("external_network", {}).get("cidr")
         )
         bridge_interface = f"{ext_network.get('gateway')}/{external_network.prefixlen}"
         charm_config["external-bridge-address"] = bridge_interface
     else:
         charm_config["external-bridge-address"] = utils.IPVANYNETWORK_UNSET
 
-    charm_config["physnet-name"] = variables["external_network"].get("physical_network")
+    charm_config["physnet-name"] = variables.get("external_network", {}).get(
+        "physical_network"
+    )
 
     return charm_config
 

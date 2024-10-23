@@ -85,7 +85,6 @@ jobs:
           # sg snap_daemon "openstack.sunbeam validation run smoke"
           # sg snap_daemon "openstack.sunbeam validation run --output tempest_validation.log"
           # sg snap_daemon "openstack.sunbeam disable caas"
-          sg snap_daemon "openstack.sunbeam disable resource-optimization"
           sg snap_daemon "openstack.sunbeam disable secrets"
           sg snap_daemon "openstack.sunbeam disable vault"
           # Commented disabling observability due to LP#1998282
@@ -94,11 +93,12 @@ jobs:
           sg snap_daemon "openstack.sunbeam disable dns"
           sg snap_daemon "openstack.sunbeam disable loadbalancer"
           sg snap_daemon "openstack.sunbeam disable orchestration"
+          sg snap_daemon "openstack.sunbeam disable resource-optimization"
           # sg snap_daemon "openstack.sunbeam disable validation"
 
           sg snap_daemon "openstack.sunbeam enable consul"
           sg snap_daemon "openstack.sunbeam enable instance-recovery"
-          # sg snap_daemon "openstack.sunbeam disable instance-recovery"
+          sg snap_daemon "openstack.sunbeam disable instance-recovery"
           # Disable consul as the pods are stuck in getting terminated
           # sg snap_daemon "openstack.sunbeam disable consul"
 

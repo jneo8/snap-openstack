@@ -81,59 +81,80 @@ class DeployHypervisorApplicationStep(DeployMachineApplicationStep):
 
     def extra_tfvars(self) -> dict:
         """Extra terraform vars to pass to terraform apply."""
-        openstack_backend_config = self.openstack_tfhelper.backend_config()
-        return {
-            "openstack_model": self.openstack_model,
-            "openstack-state-backend": self.openstack_tfhelper.backend,
-            "openstack-state-config": openstack_backend_config,
-            "endpoint_bindings": [
-                {"space": self.deployment.get_space(Networks.MANAGEMENT)},
-                {
-                    "endpoint": "ceph-access",
-                    "space": self.deployment.get_space(Networks.STORAGE),
-                },
-                {
-                    "endpoint": "migration",
-                    "space": self.deployment.get_space(Networks.DATA),
-                },
-                {
-                    "endpoint": "data",
-                    "space": self.deployment.get_space(Networks.DATA),
-                },
-                {
-                    "endpoint": "amqp",
-                    "space": self.deployment.get_space(Networks.INTERNAL),
-                },
-                {
-                    "endpoint": "ceilometer-service",
-                    "space": self.deployment.get_space(Networks.INTERNAL),
-                },
-                {
-                    "endpoint": "certificates",
-                    "space": self.deployment.get_space(Networks.INTERNAL),
-                },
-                {
-                    "endpoint": "cos-agent",
-                    "space": self.deployment.get_space(Networks.INTERNAL),
-                },
-                {
-                    "endpoint": "identity-credentials",
-                    "space": self.deployment.get_space(Networks.INTERNAL),
-                },
-                {
-                    "endpoint": "nova-service",
-                    "space": self.deployment.get_space(Networks.INTERNAL),
-                },
-                {
-                    "endpoint": "ovsdb-cms",
-                    "space": self.deployment.get_space(Networks.INTERNAL),
-                },
-                {
-                    "endpoint": "receive-ca-cert",
-                    "space": self.deployment.get_space(Networks.INTERNAL),
-                },
-            ],
+        openstack_tf_output = self.openstack_tfhelper.output()
+
+        # Always pass Offer URLs as extravars instead of terraform backend
+        # so that sunbeam has control to remove the CMR integrations by passing
+        # null value.
+        # If offer URL is retrieved directly by terraform plan itself from
+        # openstack backend, removing CMR integration results in errros.
+        # see https://bugs.launchpad.net/juju/+bug/2085310
+
+        juju_offers = {
+            "rabbitmq-offer-url",
+            "keystone-offer-url",
+            "cert-distributor-offer-url",
+            "ca-offer-url",
+            "ovn-relay-offer-url",
+            "cinder-ceph-offer-url",
+            "nova-offer-url",
         }
+        extra_tfvars = {offer: openstack_tf_output.get(offer) for offer in juju_offers}
+
+        extra_tfvars.update(
+            {
+                "openstack_model": self.openstack_model,
+                "endpoint_bindings": [
+                    {"space": self.deployment.get_space(Networks.MANAGEMENT)},
+                    {
+                        "endpoint": "ceph-access",
+                        "space": self.deployment.get_space(Networks.STORAGE),
+                    },
+                    {
+                        "endpoint": "migration",
+                        "space": self.deployment.get_space(Networks.DATA),
+                    },
+                    {
+                        "endpoint": "data",
+                        "space": self.deployment.get_space(Networks.DATA),
+                    },
+                    {
+                        "endpoint": "amqp",
+                        "space": self.deployment.get_space(Networks.INTERNAL),
+                    },
+                    {
+                        "endpoint": "ceilometer-service",
+                        "space": self.deployment.get_space(Networks.INTERNAL),
+                    },
+                    {
+                        "endpoint": "certificates",
+                        "space": self.deployment.get_space(Networks.INTERNAL),
+                    },
+                    {
+                        "endpoint": "cos-agent",
+                        "space": self.deployment.get_space(Networks.INTERNAL),
+                    },
+                    {
+                        "endpoint": "identity-credentials",
+                        "space": self.deployment.get_space(Networks.INTERNAL),
+                    },
+                    {
+                        "endpoint": "nova-service",
+                        "space": self.deployment.get_space(Networks.INTERNAL),
+                    },
+                    {
+                        "endpoint": "ovsdb-cms",
+                        "space": self.deployment.get_space(Networks.INTERNAL),
+                    },
+                    {
+                        "endpoint": "receive-ca-cert",
+                        "space": self.deployment.get_space(Networks.INTERNAL),
+                    },
+                ],
+            }
+        )
+
+        return extra_tfvars
 
     def get_application_timeout(self) -> int:
         """Return application timeout in seconds."""

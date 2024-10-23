@@ -25,6 +25,12 @@ import sunbeam.steps.juju as juju
 from sunbeam.core.common import ResultType
 from sunbeam.core.juju import ModelNotFoundException
 
+TEST_OFFER_INTERFACES = [
+    "grafana_dashboard",
+    "prometheus_remote_write",
+    "loki_push_api",
+]
+
 
 @pytest.fixture(autouse=True)
 def mock_run_sync(mocker):
@@ -696,3 +702,82 @@ class TestUnregisterJujuControllerStep:
         result = step.run()
         assert mock_run.call_count == 1
         assert result.result_type == ResultType.FAILED
+
+
+class TestRemoveSaasApplicationsStep:
+    def test_is_skip(self, jhelper):
+        jhelper.get_model_status.return_value = {
+            "remote-applications": {
+                "test-1": {"offer-url": "admin/offering_model.test-1"},
+                "test-2": {"endpoints": [{"interface": "grafana_dashboard"}]},
+                "test-3": {"endpoints": [{"interface": "identity_credentials"}]},
+            }
+        }
+        step = juju.RemoveSaasApplicationsStep(
+            jhelper,
+            "test",
+            "offering_model",
+            TEST_OFFER_INTERFACES,
+        )
+        result = step.is_skip()
+        assert step._remote_app_to_delete == ["test-1", "test-2"]
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_is_skip_given_remote_app(self, jhelper):
+        jhelper.get_model_status.return_value = {
+            "remote-applications": {
+                "test-1": {"offer-url": "admin/offering_model.test-1"},
+                "test-2": {"endpoints": [{"interface": "grafana_dashboard"}]},
+                "test-3": {"endpoints": [{"interface": "identity_credentials"}]},
+                "test-4": {"offer-url": "admin/offering_model.test-4"},
+                "test-5": {"offer-url": "admin/offering_model.test-5"},
+            }
+        }
+        step = juju.RemoveSaasApplicationsStep(
+            jhelper,
+            "test",
+            "offering_model",
+            TEST_OFFER_INTERFACES,
+            ["test-4", "test-5"],
+        )
+        result = step.is_skip()
+        assert step._remote_app_to_delete == ["test-4", "test-5"]
+        assert result.result_type == ResultType.COMPLETED
+
+    def test_is_skip_no_remote_app(self, jhelper):
+        jhelper.get_model_status.return_value = {}
+        step = juju.RemoveSaasApplicationsStep(
+            jhelper,
+            "test",
+            "offering_model",
+            TEST_OFFER_INTERFACES,
+        )
+        result = step.is_skip()
+        assert result.result_type == ResultType.SKIPPED
+
+    def test_is_skip_no_saas_app(self, jhelper):
+        jhelper.get_model_status.return_value = {
+            "remote-applications": {
+                "test-1": {"offer-url": "admin/offering_model.test-1"},
+                "test-3": {"endpoints": [{"interface": "identity_credentials"}]},
+            }
+        }
+        step = juju.RemoveSaasApplicationsStep(
+            jhelper,
+            "test",
+            "offering_model-no-apps",
+            TEST_OFFER_INTERFACES,
+        )
+        result = step.is_skip()
+        assert result.result_type == ResultType.SKIPPED
+
+    def test_run(self, jhelper):
+        step = juju.RemoveSaasApplicationsStep(
+            jhelper,
+            "test",
+            "offering_model",
+            TEST_OFFER_INTERFACES,
+        )
+        step._remote_app_to_delete = ["test-1"]
+        result = step.run()
+        assert result.result_type == ResultType.COMPLETED
