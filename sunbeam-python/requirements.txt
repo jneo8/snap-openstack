@@ -22,7 +22,7 @@ pexpect
 pyyaml>=6.0
 
 # Until https://github.com/juju/python-libjuju/pull/1103 is released
-juju @ git+https://github.com/juju/python-libjuju.git@bcbce1e7ac73764a7c12bc9321a90c35f329177c
+juju @ git+https://github.com/juju/python-libjuju.git@3436c2d2f65033bd14a65266e689361441fba5c7
 
 # Used in the launch command to launch an instance
 petname
