@@ -63,6 +63,9 @@ class JujuManifest(pydantic.BaseModel):
     scale_args: list[str] = Field(
         default=[], description="Extra args for juju enable-ha"
     )
+    destroy_args: list[str] = Field(
+        default=[], description="Extra args for juju destroy-controller"
+    )
 
 
 class CharmManifest(pydantic.BaseModel):

@@ -39,13 +39,18 @@ from sunbeam.core.juju import (
 from sunbeam.core.manifest import Manifest
 from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.core.openstack_api import remove_hypervisor
-from sunbeam.core.steps import AddMachineUnitsStep, DeployMachineApplicationStep
+from sunbeam.core.steps import (
+    AddMachineUnitsStep,
+    DeployMachineApplicationStep,
+    DestroyMachineApplicationStep,
+)
 from sunbeam.core.terraform import TerraformException, TerraformHelper
 
 LOG = logging.getLogger(__name__)
 CONFIG_KEY = "TerraformVarsHypervisor"
 APPLICATION = "openstack-hypervisor"
 HYPERVISOR_APP_TIMEOUT = 180  # 3 minutes, managing the application should be fast
+HYPERVISOR_DESTROY_TIMEOUT = 600
 HYPERVISOR_UNIT_TIMEOUT = (
     1800  # 30 minutes, adding / removing units can take a long time
 )
@@ -296,7 +301,7 @@ class RemoveHypervisorUnitStep(BaseStep, JujuStepHelper):
             self.remove_machine_id_from_tfvar()
             run_sync(
                 self.jhelper.wait_units_gone(
-                    self.unit,
+                    [self.unit],
                     self.model,
                     timeout=HYPERVISOR_UNIT_TIMEOUT,
                 )
@@ -402,3 +407,31 @@ class ReapplyHypervisorTerraformPlanStep(BaseStep):
             return Result(ResultType.FAILED, str(e))
 
         return Result(ResultType.COMPLETED)
+
+
+class DestroyHypervisorApplicationStep(DestroyMachineApplicationStep):
+    """Destroy Hypervisor application using Terraform."""
+
+    def __init__(
+        self,
+        client: Client,
+        tfhelper: TerraformHelper,
+        jhelper: JujuHelper,
+        manifest: Manifest,
+        model: str,
+    ):
+        super().__init__(
+            client,
+            tfhelper,
+            jhelper,
+            manifest,
+            CONFIG_KEY,
+            [APPLICATION],
+            model,
+            "Destroy Hypervisor",
+            "Destroying Hypervisor",
+        )
+
+    def get_application_timeout(self) -> int:
+        """Return application timeout in seconds."""
+        return HYPERVISOR_DESTROY_TIMEOUT

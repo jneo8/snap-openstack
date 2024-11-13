@@ -75,6 +75,7 @@ from sunbeam.core.questions import (
 from sunbeam.core.steps import (
     AddMachineUnitsStep,
     DeployMachineApplicationStep,
+    DestroyMachineApplicationStep,
     RemoveMachineUnitsStep,
 )
 from sunbeam.core.terraform import TerraformHelper
@@ -84,6 +85,7 @@ K8S_CONFIG_KEY = "TerraformVarsK8S"
 K8S_ADDONS_CONFIG_KEY = "TerraformVarsK8SAddons"
 APPLICATION = "k8s"
 K8S_APP_TIMEOUT = 180  # 3 minutes, managing the application should be fast
+K8S_DESTROY_TIMEOUT = 900
 K8S_UNIT_TIMEOUT = 1200  # 20 minutes, adding / removing units can take a long time
 K8S_ENABLE_ADDONS_TIMEOUT = 180  # 3 minutes
 K8SD_SNAP_SOCKET = "/var/snap/k8s/common/var/lib/k8sd/state/control.socket"
@@ -811,3 +813,34 @@ class DrainK8SUnitStep(BaseStep, _CommonK8SStepMixin):
         self._wait_for_evicted_pods(self.kube, self.node)
 
         return Result(ResultType.COMPLETED)
+
+
+class DestroyK8SApplicationStep(DestroyMachineApplicationStep):
+    """Destroy K8S application using Terraform."""
+
+    _APPLICATION = APPLICATION
+    _CONFIG_KEY = K8S_CONFIG_KEY
+
+    def __init__(
+        self,
+        client: Client,
+        tfhelper: TerraformHelper,
+        jhelper: JujuHelper,
+        manifest: Manifest,
+        model: str,
+    ):
+        super().__init__(
+            client,
+            tfhelper,
+            jhelper,
+            manifest,
+            self._CONFIG_KEY,
+            [self._APPLICATION],
+            model,
+            f"Destroy {self._APPLICATION}",
+            f"Destroying {self._APPLICATION}",
+        )
+
+    def get_application_timeout(self) -> int:
+        """Return application timeout in seconds."""
+        return K8S_DESTROY_TIMEOUT

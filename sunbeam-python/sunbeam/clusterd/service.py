@@ -107,7 +107,13 @@ class URLNotFoundException(RemoteException):
 class BaseService(ABC):
     """BaseService is the base service class for sunbeam clusterd services."""
 
-    def __init__(self, session: Session, endpoint: str, certs=None):
+    def __init__(
+        self,
+        session: Session,
+        endpoint: str,
+        certs=None,
+        timeout: int | float | None = None,
+    ):
         """Creates a new BaseService for the sunbeam clusterd API.
 
         The service class is used to provide convenient APIs for clients to
@@ -120,6 +126,17 @@ class BaseService(ABC):
         self.__session = session
         self._endpoint = endpoint
         self._certs = certs
+        self._timeout = timeout
+
+    @property
+    def timeout(self):
+        """Get the timeout for the service."""
+        return self._timeout
+
+    @timeout.setter
+    def timeout(self, timeout: int | float | None):
+        """Set the timeout for the service."""
+        self._timeout = timeout
 
     def _request(self, method, path, **kwargs):  # noqa: C901 too complex
         if path.startswith("/"):
@@ -130,7 +147,11 @@ class BaseService(ABC):
         try:
             LOG.debug("[%s] %s, args=%s", method, url, kwargs)
             response = self.__session.request(
-                method=method, url=url, cert=self._certs, **kwargs
+                method=method,
+                url=url,
+                cert=self._certs,
+                timeout=self._timeout,
+                **kwargs,
             )
             output = response.text
             if redact_response:

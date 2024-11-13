@@ -316,9 +316,6 @@ class Deployment(pydantic.BaseModel):
 
     def _load_tfhelpers(self):
         feature_manager = self.get_feature_manager()
-        # TODO(gboutry): Remove snap instanciation
-        snap = Snap()
-
         tfvar_map = copy.deepcopy(MANIFEST_ATTRIBUTES_TFVAR_MAP)
         tfvar_map_feature = feature_manager.get_all_feature_manifest_tfvar_map()
         tfvar_map = sunbeam_utils.merge_dict(tfvar_map, tfvar_map_feature)
@@ -356,7 +353,7 @@ class Deployment(pydantic.BaseModel):
         for tfplan, tf_manifest in terraform_plans.items():
             tfplan_dir = TERRAFORM_DIR_NAMES.get(tfplan, tfplan)
             src = tf_manifest.source
-            dst = snap.paths.user_common / "etc" / self.name / tfplan_dir
+            dst = self.plans_directory / tfplan_dir
             LOG.debug(f"Updating {dst} from {src}...")
             shutil.copytree(src, dst, dirs_exist_ok=True)
 
@@ -368,6 +365,13 @@ class Deployment(pydantic.BaseModel):
                 env=env,
                 clusterd_address=self.get_clusterd_http_address(),
             )
+
+    @property
+    def plans_directory(self) -> pathlib.Path:
+        """Return plans directory."""
+        # TODO(gboutry): Remove snap instanciation
+        snap = Snap()
+        return snap.paths.user_common / "etc" / self.name
 
     def get_tfhelper(self, tfplan: str) -> TerraformHelper:
         """Get an instance of TerraformHelper for the given tfplan.

@@ -22,6 +22,7 @@ from sunbeam.core.manifest import Manifest
 from sunbeam.core.steps import (
     AddMachineUnitsStep,
     DeployMachineApplicationStep,
+    DestroyMachineApplicationStep,
     RemoveMachineUnitsStep,
 )
 from sunbeam.core.terraform import TerraformHelper
@@ -128,3 +129,31 @@ class RemoveSunbeamMachineUnitsStep(RemoveMachineUnitsStep):
     def get_unit_timeout(self) -> int:
         """Return unit timeout in seconds."""
         return SUNBEAM_MACHINE_UNIT_TIMEOUT
+
+
+class DestroySunbeamMachineApplicationStep(DestroyMachineApplicationStep):
+    """Destroy Sunbeam Machine application using Terraform."""
+
+    def __init__(
+        self,
+        client: Client,
+        tfhelper: TerraformHelper,
+        jhelper: JujuHelper,
+        manifest: Manifest,
+        model: str,
+    ):
+        super().__init__(
+            client,
+            tfhelper,
+            jhelper,
+            manifest,
+            CONFIG_KEY,
+            [APPLICATION],
+            model,
+            "Destroy Sunbeam Machine",
+            "Destroying Sunbeam Machine",
+        )
+
+    def get_application_timeout(self) -> int:
+        """Return application timeout in seconds."""
+        return SUNBEAM_MACHINE_APP_TIMEOUT

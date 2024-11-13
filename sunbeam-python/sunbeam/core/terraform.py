@@ -225,7 +225,13 @@ class TerraformHelper:
             os_env.update(self.env)
 
         try:
-            cmd = [self.terraform, "destroy", "-auto-approve", "-no-color"]
+            cmd = [
+                self.terraform,
+                "destroy",
+                "-auto-approve",
+                "-no-color",
+                "-input=false",
+            ]
             if self.parallelism is not None:
                 cmd.append(f"-parallelism={self.parallelism}")
             LOG.debug(f'Running command {" ".join(cmd)}')
@@ -279,6 +285,94 @@ class TerraformHelper:
         except subprocess.CalledProcessError as e:
             LOG.error(f"terraform output failed: {e.output}")
             LOG.warning(e.stderr)
+            raise TerraformException(str(e))
+
+    def pull_state(self) -> dict:
+        """Pull the Terraform state."""
+        os_env = os.environ.copy()
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        tf_log = str(self.path / f"terraform-state-{timestamp}.log")
+        os_env.update({"TF_LOG_PATH": tf_log})
+        os_env.setdefault("TF_LOG", "INFO")
+        if self.env:
+            os_env.update(self.env)
+
+        try:
+            cmd = [self.terraform, "state", "pull"]
+            LOG.debug(f'Running command {" ".join(cmd)}')
+            process = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=self.path,
+                env=os_env,
+            )
+            # don't log the state as it can be large and contain sensitive data
+            LOG.debug(f"Command finished. stderr={process.stderr}")
+            return json.loads(process.stdout)
+        except subprocess.CalledProcessError as e:
+            LOG.error(f"terraform state pull failed: {e.output}")
+            LOG.error(e.stderr)
+            raise TerraformException(str(e))
+
+    def state_list(self) -> list:
+        """List the Terraform state."""
+        os_env = os.environ.copy()
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        tf_log = str(self.path / f"terraform-state-list-{timestamp}.log")
+        os_env.update({"TF_LOG_PATH": tf_log})
+        os_env.setdefault("TF_LOG", "INFO")
+        if self.env:
+            os_env.update(self.env)
+
+        try:
+            cmd = [self.terraform, "state", "list"]
+            LOG.debug(f'Running command {" ".join(cmd)}')
+            process = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=self.path,
+                env=os_env,
+            )
+            LOG.debug(
+                f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
+            )
+            return process.stdout.splitlines()
+        except subprocess.CalledProcessError as e:
+            LOG.error(f"terraform state list failed: {e.output}")
+            LOG.error(e.stderr)
+            raise TerraformException(str(e))
+
+    def state_rm(self, resource: str) -> None:
+        """Remove a resource from Terraform state."""
+        os_env = os.environ.copy()
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        tf_log = str(self.path / f"terraform-state-rm-{timestamp}.log")
+        os_env.update({"TF_LOG_PATH": tf_log})
+        os_env.setdefault("TF_LOG", "INFO")
+        if self.env:
+            os_env.update(self.env)
+
+        try:
+            cmd = [self.terraform, "state", "rm", resource]
+            LOG.debug(f'Running command {" ".join(cmd)}')
+            process = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=self.path,
+                env=os_env,
+            )
+            LOG.debug(
+                f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
+            )
+        except subprocess.CalledProcessError as e:
+            LOG.error(f"terraform state rm failed: {e.output}")
+            LOG.error(e.stderr)
             raise TerraformException(str(e))
 
     def sync(self) -> None:

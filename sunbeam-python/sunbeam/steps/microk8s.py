@@ -58,6 +58,7 @@ from sunbeam.steps.k8s import (
     CheckOvnK8SDistributionStep,
     CheckRabbitmqK8SDistributionStep,
     CordonK8SUnitStep,
+    DestroyK8SApplicationStep,
     DrainK8SUnitStep,
     MigrateK8SKubeconfigStep,
     RemoveK8SUnitsStep,
@@ -338,3 +339,8 @@ class CordonMicroK8SUnitStep(CordonK8SUnitStep):
 
 class DrainMicroK8SUnitStep(DrainK8SUnitStep):
     _SUBSTRATE = APPLICATION
+
+
+class DestroyMicroK8SApplicationStep(DestroyK8SApplicationStep):
+    _APPLICATION = APPLICATION
+    _CONFIG_KEY = MICROK8S_CONFIG_KEY
