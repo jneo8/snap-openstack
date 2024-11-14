@@ -909,7 +909,6 @@ def add_maas(name: str, token: str, url: str, show_hints: bool) -> None:
     default=FORMAT_TABLE,
     help="Output format",
 )
-@click_option_show_hints
 @click.pass_context
 def list_machines_cmd(ctx: click.Context, format: str) -> None:
     """List machines in active deployment."""
