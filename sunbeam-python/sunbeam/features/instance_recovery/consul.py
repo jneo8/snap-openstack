@@ -27,11 +27,8 @@ to the same juju space then only one consul server need to be started.
 import asyncio
 import enum
 import logging
-from pathlib import Path
 from typing import Any
 
-import click
-from packaging.version import Version
 from rich.console import Console
 from rich.status import Status
 
@@ -39,32 +36,22 @@ from sunbeam.core.common import (
     BaseStep,
     Result,
     ResultType,
-    run_plan,
     update_config,
     update_status_background,
 )
 from sunbeam.core.deployment import Deployment, Networks
 from sunbeam.core.juju import JujuHelper, JujuWaitException, TimeoutException, run_sync
 from sunbeam.core.manifest import (
-    AddManifestStep,
-    CharmManifest,
     FeatureConfig,
-    SoftwareConfig,
-    TerraformManifest,
+    Manifest,
 )
 from sunbeam.core.terraform import (
     TerraformException,
     TerraformHelper,
-    TerraformInitStep,
 )
 from sunbeam.features.interface.v1.openstack import (
-    DisableOpenStackApplicationStep,
-    EnableOpenStackApplicationStep,
-    OpenStackControlPlaneFeature,
-    TerraformPlanLocation,
+    APPLICATION_DEPLOY_TIMEOUT,
 )
-from sunbeam.utils import click_option_show_hints, pass_method_obj
-from sunbeam.versions import CONSUL_CHANNEL
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -95,19 +82,18 @@ class DeployConsulClientStep(BaseStep):
     def __init__(
         self,
         deployment: Deployment,
-        feature: "ConsulFeature",
         tfhelper: TerraformHelper,
         openstack_tfhelper: TerraformHelper,
         jhelper: JujuHelper,
+        manifest: Manifest,
         app_desired_status: list[str] = ["active"],
     ):
         super().__init__("Deploy Consul Client", "Deploy Consul Client")
         self.deployment = deployment
-        self.feature = feature
         self.tfhelper = tfhelper
         self.openstack_tfhelper = openstack_tfhelper
         self.jhelper = jhelper
-        self.manifest = self.feature.manifest
+        self.manifest = manifest
         self.app_desired_status = app_desired_status
         self.client = self.deployment.get_client()
         self.model = self.deployment.openstack_machines_model
@@ -123,7 +109,7 @@ class DeployConsulClientStep(BaseStep):
             "openstack-state-config": openstack_backend_config,
         }
 
-        servers_to_enable = self.feature.consul_servers_to_enable(self.deployment)
+        servers_to_enable = ConsulFeature.consul_servers_to_enable(self.deployment)
 
         consul_config_map = {}
         consul_endpoint_bindings_map = {}
@@ -133,8 +119,8 @@ class DeployConsulClientStep(BaseStep):
                 "serf-lan-port": CONSUL_CLIENT_MANAGEMENT_SERF_LAN_PORT,
             }
             _management_config.update(
-                self.feature.get_config_from_manifest(
-                    "consul-client", ConsulServerNetworks.MANAGEMENT
+                ConsulFeature.get_config_from_manifest(
+                    self.manifest, "consul-client", ConsulServerNetworks.MANAGEMENT
                 )
             )
             consul_config_map["consul-management"] = _management_config
@@ -154,8 +140,8 @@ class DeployConsulClientStep(BaseStep):
                 "serf-lan-port": CONSUL_CLIENT_TENANT_SERF_LAN_PORT,
             }
             _tenant_config.update(
-                self.feature.get_config_from_manifest(
-                    "consul-client", ConsulServerNetworks.TENANT
+                ConsulFeature.get_config_from_manifest(
+                    self.manifest, "consul-client", ConsulServerNetworks.TENANT
                 )
             )
             consul_config_map["consul-tenant"] = _tenant_config
@@ -175,8 +161,8 @@ class DeployConsulClientStep(BaseStep):
                 "serf-lan-port": CONSUL_CLIENT_STORAGE_SERF_LAN_PORT,
             }
             _storage_config.update(
-                self.feature.get_config_from_manifest(
-                    "consul-client", ConsulServerNetworks.STORAGE
+                ConsulFeature.get_config_from_manifest(
+                    self.manifest, "consul-client", ConsulServerNetworks.STORAGE
                 )
             )
             consul_config_map["consul-storage"] = _storage_config
@@ -209,7 +195,7 @@ class DeployConsulClientStep(BaseStep):
             LOG.exception("Error deploying consul client")
             return Result(ResultType.FAILED, str(e))
 
-        apps = self.feature.set_consul_client_application_names(self.deployment)
+        apps = ConsulFeature.set_consul_client_application_names(self.deployment)
         LOG.debug(f"Application monitored for readiness: {apps}")
         queue: asyncio.queues.Queue[str] = asyncio.queues.Queue(maxsize=len(apps))
         task = run_sync(update_status_background(self, apps, queue, status))
@@ -219,7 +205,7 @@ class DeployConsulClientStep(BaseStep):
                     self.model,
                     apps,
                     status=self.app_desired_status,
-                    timeout=self.feature.set_application_timeout_on_enable(),
+                    timeout=APPLICATION_DEPLOY_TIMEOUT,
                     queue=queue,
                 )
             )
@@ -241,16 +227,13 @@ class RemoveConsulClientStep(BaseStep):
     def __init__(
         self,
         deployment: Deployment,
-        feature: "ConsulFeature",
         tfhelper: TerraformHelper,
         jhelper: JujuHelper,
     ):
         super().__init__("Remove Consul Client", "Removing Consul Client")
         self.deployment = deployment
-        self.feature = feature
         self.tfhelper = tfhelper
         self.jhelper = jhelper
-        self.manifest = self.feature.manifest
         self.client = deployment.get_client()
         self.model = deployment.openstack_machines_model
 
@@ -262,80 +245,34 @@ class RemoveConsulClientStep(BaseStep):
             LOG.exception("Error destroying consul client")
             return Result(ResultType.FAILED, str(e))
 
-        apps = self.feature.set_consul_client_application_names(self.deployment)
+        apps = ConsulFeature.set_consul_client_application_names(self.deployment)
         LOG.debug(f"Application monitored for removal: {apps}")
         try:
             run_sync(
                 self.jhelper.wait_application_gone(
                     apps,
                     self.model,
-                    timeout=self.feature.set_application_timeout_on_disable(),
+                    timeout=APPLICATION_DEPLOY_TIMEOUT,
                 )
             )
         except TimeoutException as e:
             LOG.debug(f"Failed to destroy {apps}", exc_info=True)
             return Result(ResultType.FAILED, str(e))
 
-        extra_tfvars = self.feature.set_tfvars_on_disable(self.deployment)
+        extra_tfvars = {
+            "enable-consul-management": False,
+            "enable-consul-tenant": False,
+            "enable-consul-storage": False,
+        }
         update_config(self.client, self._CONFIG, extra_tfvars)
 
         return Result(ResultType.COMPLETED)
 
 
-class ConsulFeature(OpenStackControlPlaneFeature):
-    version = Version("0.0.1")
-
-    name = "consul"
-    tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.tfplan_consul_client = CONSUL_CLIENT_TFPLAN
-        self.tfplan_consul_client_dir = "deploy-consul-client"
-
-    def default_software_overrides(self) -> SoftwareConfig:
-        """Manifest pluing part in dict format."""
-        return SoftwareConfig(
-            charms={
-                "consul-k8s": CharmManifest(channel=CONSUL_CHANNEL),
-                "consul-client": CharmManifest(channel=CONSUL_CHANNEL),
-            },
-            terraform={
-                self.tfplan_consul_client: TerraformManifest(
-                    source=Path(__file__).parent
-                    / "etc"  # noqa: W503
-                    / self.tfplan_consul_client_dir  # noqa: W503
-                ),
-            },
-        )
-
-    def manifest_attributes_tfvar_map(self) -> dict:
-        """Manifest attrbitues to terraformvars map."""
-        return {
-            self.tfplan: {
-                "charms": {
-                    "consul-k8s": {
-                        "channel": "consul-channel",
-                        "revision": "consul-revision",
-                        "config": "consul-config",
-                        "config-map": "consul-config-map",
-                    }
-                }
-            },
-            self.tfplan_consul_client: {
-                "charms": {
-                    "consul-client": {
-                        "channel": "consul-channel",
-                        "revision": "consul-revision",
-                        "config": "consul-config",
-                        "config-map": "consul-config-map",
-                    }
-                }
-            },
-        }
-
+class ConsulFeature:
+    @staticmethod
     def consul_servers_to_enable(
-        self, deployment: Deployment
+        deployment: Deployment,
     ) -> dict[ConsulServerNetworks, bool]:
         """Return consul servers to enable.
 
@@ -370,8 +307,9 @@ class ConsulFeature(OpenStackControlPlaneFeature):
 
         return enable
 
+    @staticmethod
     def get_config_from_manifest(
-        self, charm: str, network: ConsulServerNetworks
+        manifest: Manifest, charm: str, network: ConsulServerNetworks
     ) -> dict:
         """Compute config from manifest.
 
@@ -379,7 +317,7 @@ class ConsulFeature(OpenStackControlPlaneFeature):
         config-map holds consul configs for each ConsulServerNetworks.
         config-map takes precedence over config section.
         """
-        feature_manifest = self.manifest.get_feature(self.name)
+        feature_manifest = manifest.get_feature("instance-recovery")
         if not feature_manifest:
             return {}
 
@@ -388,11 +326,11 @@ class ConsulFeature(OpenStackControlPlaneFeature):
             return {}
 
         config = {}
-        # Read feature.consul.software.charms.consul-k8s.config
+        # Read feature.instance-recovery.software.charms.consul-k8s.config
         if charm_manifest.config:
             config.update(charm_manifest.config)
 
-        # Read feature-consul.software.charms.consul-k8s.config-map
+        # Read feature-instance-recovery.software.charms.consul-k8s.config-map
         # config-map is an extra field for CharmManifest, so use model_extra
         if charm_manifest.model_extra:
             config.update(
@@ -403,30 +341,33 @@ class ConsulFeature(OpenStackControlPlaneFeature):
 
         return config
 
-    def set_application_names(self, deployment: Deployment) -> list:
+    @staticmethod
+    def set_application_names(deployment: Deployment) -> list:
         """Application names handled by the terraform plan."""
         enable = [
             f"consul-{k.value}"
-            for k, v in self.consul_servers_to_enable(deployment).items()
+            for k, v in ConsulFeature.consul_servers_to_enable(deployment).items()
             if v
         ]
         return enable
 
-    def set_consul_client_application_names(self, deployment: Deployment) -> list:
+    @staticmethod
+    def set_consul_client_application_names(deployment: Deployment) -> list:
         """Application names handled by the consul client terraform plan."""
         enable = [
             f"consul-client-{k.value}"
-            for k, v in self.consul_servers_to_enable(deployment).items()
+            for k, v in ConsulFeature.consul_servers_to_enable(deployment).items()
             if v
         ]
         return enable
 
+    @staticmethod
     def set_tfvars_on_enable(
-        self, deployment: Deployment, config: FeatureConfig
+        deployment: Deployment, config: FeatureConfig, manifest: Manifest
     ) -> dict:
         """Set terraform variables to enable the consul-k8s application."""
         tfvars: dict[str, Any] = {}
-        servers_to_enable = self.consul_servers_to_enable(deployment)
+        servers_to_enable = ConsulFeature.consul_servers_to_enable(deployment)
 
         consul_config_map = {}
         if servers_to_enable.get(ConsulServerNetworks.MANAGEMENT):
@@ -437,8 +378,8 @@ class ConsulFeature(OpenStackControlPlaneFeature):
             }
             # Manifest takes precedence
             _management_config.update(
-                self.get_config_from_manifest(
-                    "consul-k8s", ConsulServerNetworks.MANAGEMENT
+                ConsulFeature.get_config_from_manifest(
+                    manifest, "consul-k8s", ConsulServerNetworks.MANAGEMENT
                 )
             )
             consul_config_map["consul-management"] = _management_config
@@ -453,7 +394,9 @@ class ConsulFeature(OpenStackControlPlaneFeature):
             }
             # Manifest takes precedence
             _tenant_config.update(
-                self.get_config_from_manifest("consul-k8s", ConsulServerNetworks.TENANT)
+                ConsulFeature.get_config_from_manifest(
+                    manifest, "consul-k8s", ConsulServerNetworks.TENANT
+                )
             )
             consul_config_map["consul-tenant"] = _tenant_config
         else:
@@ -467,8 +410,8 @@ class ConsulFeature(OpenStackControlPlaneFeature):
             }
             # Manifest takes precedence
             _storage_config.update(
-                self.get_config_from_manifest(
-                    "consul-k8s", ConsulServerNetworks.STORAGE
+                ConsulFeature.get_config_from_manifest(
+                    manifest, "consul-k8s", ConsulServerNetworks.STORAGE
                 )
             )
             consul_config_map["consul-storage"] = _storage_config
@@ -477,82 +420,3 @@ class ConsulFeature(OpenStackControlPlaneFeature):
 
         tfvars["consul-config-map"] = consul_config_map
         return tfvars
-
-    def set_tfvars_on_disable(self, deployment: Deployment) -> dict:
-        """Set terraform variables to disable the consul-k8s application."""
-        return {
-            "enable-consul-management": False,
-            "enable-consul-tenant": False,
-            "enable-consul-storage": False,
-        }
-
-    def set_tfvars_on_resize(
-        self, deployment: Deployment, config: FeatureConfig
-    ) -> dict:
-        """Set terraform variables to resize the consul-k8s application."""
-        return {}
-
-    def run_enable_plans(
-        self, deployment: Deployment, config: FeatureConfig, show_hints: bool
-    ) -> None:
-        """Run plans to enable feature."""
-        tfhelper = deployment.get_tfhelper(self.tfplan)
-        tfhelper_consul_client = deployment.get_tfhelper(self.tfplan_consul_client)
-        jhelper = JujuHelper(deployment.get_connected_controller())
-
-        plan: list[BaseStep] = []
-        if self.user_manifest:
-            plan.append(AddManifestStep(deployment.get_client(), self.user_manifest))
-        plan.extend(
-            [
-                TerraformInitStep(tfhelper),
-                EnableOpenStackApplicationStep(
-                    deployment, config, tfhelper, jhelper, self
-                ),
-                TerraformInitStep(tfhelper_consul_client),
-                DeployConsulClientStep(
-                    deployment,
-                    self,
-                    tfhelper_consul_client,
-                    tfhelper,
-                    jhelper,
-                ),
-            ]
-        )
-
-        run_plan(plan, console, show_hints)
-        click.echo(f"{self.display_name} application enabled.")
-
-    def run_disable_plans(self, deployment: Deployment, show_hints: bool) -> None:
-        """Run plans to disable the feature."""
-        tfhelper = deployment.get_tfhelper(self.tfplan)
-        tfhelper_consul_client = deployment.get_tfhelper(self.tfplan_consul_client)
-        jhelper = JujuHelper(deployment.get_connected_controller())
-        plan = [
-            TerraformInitStep(tfhelper_consul_client),
-            RemoveConsulClientStep(deployment, self, tfhelper_consul_client, jhelper),
-            TerraformInitStep(tfhelper),
-            DisableOpenStackApplicationStep(deployment, tfhelper, jhelper, self),
-        ]
-
-        run_plan(plan, console, show_hints)
-        click.echo(f"{self.display_name} application disabled.")
-
-    @click.command()
-    @click_option_show_hints
-    @pass_method_obj
-    def enable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
-        """Enable Consul.
-
-        Consul offers service discovery, service mesh, traffic
-        management, node failure detection and automated updates
-        to network infrastructure devices
-        """
-        self.enable_feature(deployment, FeatureConfig(), show_hints)
-
-    @click.command()
-    @click_option_show_hints
-    @pass_method_obj
-    def disable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
-        """Disable Consul."""
-        self.disable_feature(deployment, show_hints)
