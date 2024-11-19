@@ -23,6 +23,7 @@ from snaphelpers import Snap
 
 import sunbeam.features
 from sunbeam import utils
+from sunbeam.clusterd.service import ClusterServiceUnavailableException
 from sunbeam.core.common import SunbeamException, infer_risk
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.manifest import FeatureGroupManifest, FeatureManifest
@@ -165,7 +166,7 @@ class FeatureManager:
         for feature in self.features().values():
             feature.update_proxy_model_configs(deployment, show_hints)
 
-    def register(self, cli: click.Group) -> None:
+    def register(self, cli: click.Group, deployment: Deployment) -> None:
         """Register the features.
 
         Register the features. Once registeted, all the commands/groups defined by
@@ -189,7 +190,17 @@ class FeatureManager:
                 )
                 continue
             try:
-                feature.register(cli)
+                enabled = feature.is_enabled(deployment.get_client())  # type: ignore
+            except AttributeError:
+                LOG.debug("Feature %r is not enable / disable feature", feature.name)
+                enabled = False
+            except (SunbeamException, ClusterServiceUnavailableException) as e:
+                LOG.debug(
+                    "Feature %r failed to check if it is enabled: %r", feature.name, e
+                )
+                enabled = False
+            try:
+                feature.register(cli, {"enabled": enabled})
             except (ValueError, SunbeamException) as e:
                 LOG.debug("Failed to register feature: %r", str(feature))
                 if "Clusterd address" in str(e) or "Insufficient permissions" in str(e):
