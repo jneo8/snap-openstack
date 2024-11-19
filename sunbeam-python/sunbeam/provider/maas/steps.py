@@ -37,6 +37,7 @@ import sunbeam.steps.microceph as microceph
 import sunbeam.steps.microk8s as microk8s
 import sunbeam.utils as sunbeam_utils
 from sunbeam.clusterd.client import Client
+from sunbeam.clusterd.service import NodeNotExistInClusterException
 from sunbeam.commands.configure import (
     CLOUD_CONFIG_SECTION,
     VARIABLE_DEFAULTS,
@@ -1343,6 +1344,32 @@ class MaasAddMachinesToClusterdStep(BaseStep):
             )
         for node in self.nodes:
             self.client.cluster.update_node_info(*node)  # type: ignore
+        return Result(ResultType.COMPLETED)
+
+
+class MaasRemoveMachineFromClusterdStep(BaseStep):
+    """Remove machine from Clusterd."""
+
+    def __init__(self, client: Client, node: str):
+        super().__init__("Remove machine", "Adding machine from Clusterd")
+        self.client = client
+        self.node = node
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not."""
+        try:
+            self.client.cluster.get_node_info(self.node)
+        except NodeNotExistInClusterException:
+            return Result(ResultType.SKIPPED)
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None = None) -> Result:
+        """Add machines to Juju model."""
+        try:
+            self.client.cluster.remove_node_info(self.node)
+        except Exception:
+            LOG.debug("Failed to remove machine", exc_info=True)
+            return Result(ResultType.FAILED, f"Failed to remove {self.node}")
         return Result(ResultType.COMPLETED)
 
 

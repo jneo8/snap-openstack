@@ -723,6 +723,39 @@ class JujuHelper:
             credential_name, credential=cred, cloud=cloud_name
         )
 
+    async def update_k8s_cloud(self, cloud_name: str, kubeconfig: dict):
+        """Update K8S cloud endpoint."""
+        contexts = {v["name"]: v["context"] for v in kubeconfig["contexts"]}
+        clusters = {v["name"]: v["cluster"] for v in kubeconfig["clusters"]}
+
+        ctx = contexts.get(kubeconfig.get("current-context", {}), {})
+        cluster = clusters.get(ctx.get("cluster", {}), {})
+
+        ep = cluster["server"]
+        ca_cert = base64.b64decode(cluster["certificate-authority-data"]).decode(
+            "utf-8"
+        )
+        cloud_facade = juju_client.CloudFacade.from_connection(
+            self.controller.connection()
+        )
+        await cloud_facade.UpdateCloud(
+            [
+                {
+                    "cloud": juju_client.Cloud(
+                        auth_types=["oauth2", "clientcertificate"],
+                        ca_certificates=[ca_cert],
+                        endpoint=ep,
+                        host_cloud_region="k8s/localhost",
+                        regions=[
+                            juju_client.CloudRegion(endpoint=ep, name="localhost")
+                        ],
+                        type_="kubernetes",
+                    ),
+                    "name": cloud_name,
+                }
+            ]
+        )
+
     async def add_k8s_credential(
         self, cloud_name: str, credential_name: str, kubeconfig: dict
     ):
@@ -831,6 +864,32 @@ class JujuHelper:
         except asyncio.TimeoutError as e:
             raise TimeoutException(
                 f"Timed out while waiting for model {model} to be gone"
+            ) from e
+
+    async def wait_units_gone(
+        self,
+        names: typing.Sequence[str],
+        model: str,
+        timeout: int | None = None,
+    ):
+        """Block execution until units are gone.
+
+        :names: List of units to wait for departure
+        :model: Name of the model where the units are located
+        :timeout: Waiting timeout in seconds
+        """
+        model_impl = await self.get_model(model)
+
+        name_set = set(names)
+        empty_set: set[str] = set()
+        try:
+            await model_impl.block_until(
+                lambda: name_set.intersection(model_impl.units) == empty_set,
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError as e:
+            raise TimeoutException(
+                "Timed out while waiting for units " f"{', '.join(name_set)} to be gone"
             ) from e
 
     async def wait_units_ready(

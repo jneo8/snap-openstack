@@ -102,6 +102,7 @@ from sunbeam.provider.maas.steps import (
     MaasDeployMachinesStep,
     MaasDeployMicrok8sApplicationStep,
     MaasEnableK8SFeatures,
+    MaasRemoveMachineFromClusterdStep,
     MaasSaveClusterdCredentialsStep,
     MaasSaveControllerStep,
     MaasScaleJujuStep,
@@ -120,11 +121,14 @@ from sunbeam.steps.bootstrap_state import SetBootstrapped
 from sunbeam.steps.certificates import APPLICATION as CERTIFICATES_APPLICATION
 from sunbeam.steps.certificates import DeployCertificatesProviderApplicationStep
 from sunbeam.steps.clusterd import APPLICATION as CLUSTERD_APPLICATION
-from sunbeam.steps.clusterd import DeploySunbeamClusterdApplicationStep
+from sunbeam.steps.clusterd import (
+    DeploySunbeamClusterdApplicationStep,
+)
 from sunbeam.steps.hypervisor import (
     AddHypervisorUnitsStep,
     DeployHypervisorApplicationStep,
     ReapplyHypervisorTerraformPlanStep,
+    RemoveHypervisorUnitStep,
 )
 from sunbeam.steps.juju import (
     AddCloudJujuStep,
@@ -133,17 +137,41 @@ from sunbeam.steps.juju import (
     DownloadJujuControllerCharmStep,
     IntegrateJujuApplicationsStep,
     JujuLoginStep,
+    RemoveJujuMachineStep,
     UpdateJujuMachineIDStep,
 )
-from sunbeam.steps.k8s import AddK8SCloudStep, AddK8SUnitsStep, StoreK8SKubeConfigStep
+from sunbeam.steps.k8s import (
+    AddK8SCloudStep,
+    AddK8SUnitsStep,
+    CheckMysqlK8SDistributionStep,
+    CheckOvnK8SDistributionStep,
+    CheckRabbitmqK8SDistributionStep,
+    CordonK8SUnitStep,
+    DrainK8SUnitStep,
+    MigrateK8SKubeconfigStep,
+    RemoveK8SUnitsStep,
+    StoreK8SKubeConfigStep,
+    UpdateK8SCloudStep,
+)
 from sunbeam.steps.microceph import (
     AddMicrocephUnitsStep,
+    CheckMicrocephDistributionStep,
     DeployMicrocephApplicationStep,
+    RemoveMicrocephUnitsStep,
+    SetCephMgrPoolSizeStep,
 )
 from sunbeam.steps.microk8s import (
     AddMicrok8sCloudStep,
     AddMicrok8sUnitsStep,
+    CheckMysqlMicroK8SDistributionStep,
+    CheckOvnMicroK8SDistributionStep,
+    CheckRabbitmqMicroK8SDistributionStep,
+    CordonMicroK8SUnitStep,
+    DrainMicroK8SUnitStep,
+    MigrateMicroK8SKubeconfigStep,
+    RemoveMicrok8sUnitsStep,
     StoreMicrok8sConfigStep,
+    UpdateMicroK8SCloudStep,
 )
 from sunbeam.steps.openstack import (
     DeployControlPlaneStep,
@@ -153,6 +181,7 @@ from sunbeam.steps.openstack import (
 from sunbeam.steps.sunbeam_machine import (
     AddSunbeamMachineUnitsStep,
     DeploySunbeamMachineApplicationStep,
+    RemoveSunbeamMachineUnitsStep,
 )
 from sunbeam.utils import (
     CatchGroup,
@@ -216,6 +245,7 @@ class MaasProvider(ProviderBase):
         cluster.add_command(deploy)
         cluster.add_command(list_nodes)
         cluster.add_command(resize_cmds.resize)
+        cluster.add_command(remove_node)
         configure.add_command(configure_cmd)
         deployment.add_command(machine)
         machine.add_command(list_machines_cmd)
@@ -1327,3 +1357,114 @@ def validate_deployment_cmd(ctx: click.Context):
     report = _run_maas_meta_checks(validation_checks, console)
     report_path = _save_report(snap, "validate-deployment-" + deployment.name, report)
     console.print(f"Report saved to {report_path!r}")
+
+
+@click.command("remove")
+@click.option(
+    "--force",
+    type=bool,
+    help="Skip safety checks and ignore cleanup errors for some tasks",
+    is_flag=True,
+)
+@click.argument("name", type=str)
+@click_option_show_hints
+@click.pass_context
+def remove_node(ctx: click.Context, name: str, force: bool, show_hints: bool) -> None:
+    """Remove a node from the cluster."""
+    deployment: MaasDeployment = ctx.obj
+    client = deployment.get_client()
+    jhelper = JujuHelper(deployment.get_connected_controller())
+
+    k8s_provider = Snap().config.get("k8s.provider")
+
+    preflight_checks = [
+        LocalShareCheck(),
+    ]
+    run_preflight_checks(preflight_checks, console)
+
+    if k8s_provider == "k8s":
+        check_mysql_k8s_distribution_step = CheckMysqlK8SDistributionStep
+        check_ovn_k8s_distribution_step = CheckOvnK8SDistributionStep
+        check_rabbitmq_k8s_distribution_step = CheckRabbitmqK8SDistributionStep
+        migrate_k8s_kubeconfig_step = MigrateK8SKubeconfigStep
+        update_k8s_cloud_step = UpdateK8SCloudStep
+        cordon_k8s_unit_step = CordonK8SUnitStep
+        drain_k8s_unit_step = DrainK8SUnitStep
+        remove_k8s_unit_step = RemoveK8SUnitsStep
+    else:
+        check_mysql_k8s_distribution_step = CheckMysqlMicroK8SDistributionStep
+        check_ovn_k8s_distribution_step = CheckOvnMicroK8SDistributionStep
+        check_rabbitmq_k8s_distribution_step = CheckRabbitmqMicroK8SDistributionStep
+        migrate_k8s_kubeconfig_step = MigrateMicroK8SKubeconfigStep
+        update_k8s_cloud_step = UpdateMicroK8SCloudStep
+        cordon_k8s_unit_step = CordonMicroK8SUnitStep
+        drain_k8s_unit_step = DrainMicroK8SUnitStep
+        remove_k8s_unit_step = RemoveMicrok8sUnitsStep
+
+    check_plan: list[BaseStep] = [
+        JujuLoginStep(deployment.juju_account),
+        CheckMicrocephDistributionStep(
+            client,
+            name,
+            jhelper,
+            deployment.openstack_machines_model,
+            force=force,
+        ),
+        check_mysql_k8s_distribution_step(
+            client,
+            name,
+            jhelper,
+            deployment.openstack_machines_model,
+            force=force,
+        ),
+        check_ovn_k8s_distribution_step(
+            client,
+            name,
+            jhelper,
+            deployment.openstack_machines_model,
+            force=force,
+        ),
+        check_rabbitmq_k8s_distribution_step(
+            client,
+            name,
+            jhelper,
+            deployment.openstack_machines_model,
+            force=force,
+        ),
+    ]
+
+    run_plan(check_plan, console, show_hints)
+
+    plan = [
+        migrate_k8s_kubeconfig_step(
+            client, name, jhelper, deployment.openstack_machines_model
+        ),
+        update_k8s_cloud_step(deployment, jhelper),
+        RemoveHypervisorUnitStep(
+            client, name, jhelper, deployment.openstack_machines_model, force
+        ),
+        RemoveMicrocephUnitsStep(
+            client, name, jhelper, deployment.openstack_machines_model
+        ),
+        cordon_k8s_unit_step(
+            client, name, jhelper, deployment.openstack_machines_model
+        ),
+        drain_k8s_unit_step(client, name, jhelper, deployment.openstack_machines_model),
+        remove_k8s_unit_step(
+            client, name, jhelper, deployment.openstack_machines_model
+        ),
+        RemoveSunbeamMachineUnitsStep(
+            client, name, jhelper, deployment.openstack_machines_model
+        ),
+        RemoveJujuMachineStep(
+            client, name, jhelper, deployment.openstack_machines_model
+        ),
+        MaasRemoveMachineFromClusterdStep(client, name),
+        SetCephMgrPoolSizeStep(client, jhelper, deployment.openstack_machines_model),
+    ]
+
+    run_plan(plan, console, show_hints)
+    click.echo(
+        f"Removed node {name} from the cluster."
+        " Run `sunbeam cluster resize` to scale down the cluster"
+    )

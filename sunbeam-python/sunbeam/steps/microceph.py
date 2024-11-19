@@ -21,8 +21,9 @@ from rich.console import Console
 from rich.status import Status
 
 from sunbeam.clusterd.client import Client
+from sunbeam.clusterd.service import NodeNotExistInClusterException
 from sunbeam.core import questions
-from sunbeam.core.common import BaseStep, Result, ResultType, SunbeamException
+from sunbeam.core.common import BaseStep, Result, ResultType, Role, SunbeamException
 from sunbeam.core.deployment import Deployment, Networks
 from sunbeam.core.juju import (
     ActionFailedException,
@@ -496,5 +497,76 @@ class SetCephMgrPoolSizeStep(BaseStep):
         ) as e:
             LOG.debug(f"Failed to update pool size for {pools}", exc_info=True)
             return Result(ResultType.FAILED, str(e))
+
+        return Result(ResultType.COMPLETED)
+
+
+class CheckMicrocephDistributionStep(BaseStep):
+    _APPLICATION = APPLICATION
+
+    def __init__(
+        self,
+        client: Client,
+        name: str,
+        jhelper: JujuHelper,
+        model: str,
+        force: bool = False,
+    ):
+        super().__init__(
+            "Check microceph distribution",
+            "Check if node is hosting units of microceph",
+        )
+        self.client = client
+        self.node = name
+        self.jhelper = jhelper
+        self.model = model
+        self.force = force
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        try:
+            node_info = self.client.cluster.get_node_info(self.node)
+        except NodeNotExistInClusterException:
+            return Result(ResultType.FAILED, f"Node {self.node} not found in cluster")
+        if Role.STORAGE.name.lower() not in node_info.get("role", ""):
+            LOG.debug("Node %s is not a storage node", self.node)
+            return Result(ResultType.SKIPPED)
+        try:
+            app = run_sync(self.jhelper.get_application(self._APPLICATION, self.model))
+        except ApplicationNotFoundException:
+            LOG.debug("Failed to get application", exc_info=True)
+            return Result(
+                ResultType.SKIPPED,
+                f"Application {self._APPLICATION} has not been deployed yet",
+            )
+
+        for unit in app.units:
+            if unit.machine.id == str(node_info.get("machineid")):
+                LOG.debug("Unit %s is running on node %s", unit.name, self.node)
+                break
+        else:
+            LOG.debug("No %s units found on %s", self._APPLICATION, self.node)
+            return Result(ResultType.SKIPPED)
+
+        nb_storage_nodes = len(self.client.cluster.list_nodes_by_role("storage"))
+        if nb_storage_nodes == 1 and not self.force:
+            return Result(
+                ResultType.FAILED,
+                "Cannot remove the last storage node,"
+                "--force to override, data loss will occur.",
+            )
+
+        replica_scale = ceph_replica_scale(nb_storage_nodes)
+
+        if nb_storage_nodes - 1 < replica_scale and not self.force:
+            return Result(
+                ResultType.FAILED,
+                "Cannot remove storage node, not enough storage nodes to maintain"
+                f" replica scale {replica_scale}, --force to override",
+            )
 
         return Result(ResultType.COMPLETED)

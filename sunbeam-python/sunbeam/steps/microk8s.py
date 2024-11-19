@@ -50,10 +50,19 @@ from sunbeam.core.manifest import Manifest
 from sunbeam.core.steps import (
     AddMachineUnitsStep,
     DeployMachineApplicationStep,
-    RemoveMachineUnitsStep,
 )
 from sunbeam.core.terraform import TerraformHelper
-from sunbeam.steps.k8s import AddK8SCredentialStep
+from sunbeam.steps.k8s import (
+    AddK8SCredentialStep,
+    CheckMysqlK8SDistributionStep,
+    CheckOvnK8SDistributionStep,
+    CheckRabbitmqK8SDistributionStep,
+    CordonK8SUnitStep,
+    DrainK8SUnitStep,
+    MigrateK8SKubeconfigStep,
+    RemoveK8SUnitsStep,
+    UpdateK8SCloudStep,
+)
 
 LOG = logging.getLogger(__name__)
 APPLICATION = "microk8s"
@@ -196,26 +205,12 @@ class AddMicrok8sUnitsStep(AddMachineUnitsStep):
         return MICROK8S_UNIT_TIMEOUT
 
 
-class RemoveMicrok8sUnitsStep(RemoveMachineUnitsStep):
+class RemoveMicrok8sUnitsStep(RemoveK8SUnitsStep):
     """Remove Microk8s Unit."""
 
-    def __init__(
-        self, client: Client, names: list[str] | str, jhelper: JujuHelper, model: str
-    ):
-        super().__init__(
-            client,
-            names,
-            jhelper,
-            MICROK8S_CONFIG_KEY,
-            APPLICATION,
-            model,
-            "Remove MicroK8S unit",
-            "Removing MicroK8S unit from machine",
-        )
-
-    def get_unit_timeout(self) -> int:
-        """Return unit timeout in seconds."""
-        return MICROK8S_UNIT_TIMEOUT
+    _APPLICATION = APPLICATION
+    _K8S_CONFIG_KEY = MICROK8S_CONFIG_KEY
+    _K8S_UNIT_TIMEOUT = MICROK8S_UNIT_TIMEOUT
 
 
 class AddMicrok8sCloudStep(BaseStep, JujuStepHelper):
@@ -260,8 +255,21 @@ class AddMicrok8sCloudStep(BaseStep, JujuStepHelper):
         return Result(ResultType.COMPLETED)
 
 
+class UpdateMicroK8SCloudStep(UpdateK8SCloudStep):
+    _KUBECONFIG = MICROK8S_KUBECONFIG_KEY
+
+
 class AddMicrok8sCredentialStep(AddK8SCredentialStep):
     _KUBECONFIG = MICROK8S_KUBECONFIG_KEY
+
+
+class MigrateMicroK8SKubeconfigStep(MigrateK8SKubeconfigStep):
+    _SUBSTRATE: str = APPLICATION
+    _KUBECONFIG: str = MICROK8S_KUBECONFIG_KEY
+    _ACTION: str = "kubeconfig"
+
+    def _extract_action_result(self, action_result: dict) -> str | None:
+        return action_result.get("content")
 
 
 class StoreMicrok8sConfigStep(BaseStep, JujuStepHelper):
@@ -310,3 +318,23 @@ class StoreMicrok8sConfigStep(BaseStep, JujuStepHelper):
             return Result(ResultType.FAILED, str(e))
 
         return Result(ResultType.COMPLETED)
+
+
+class CheckMysqlMicroK8SDistributionStep(CheckMysqlK8SDistributionStep):
+    _SUBSTRATE = APPLICATION
+
+
+class CheckRabbitmqMicroK8SDistributionStep(CheckRabbitmqK8SDistributionStep):
+    _SUBSTRATE = APPLICATION
+
+
+class CheckOvnMicroK8SDistributionStep(CheckOvnK8SDistributionStep):
+    _SUBSTRATE = APPLICATION
+
+
+class CordonMicroK8SUnitStep(CordonK8SUnitStep):
+    _SUBSTRATE = APPLICATION
+
+
+class DrainMicroK8SUnitStep(DrainK8SUnitStep):
+    _SUBSTRATE = APPLICATION
