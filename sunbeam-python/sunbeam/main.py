@@ -141,7 +141,7 @@ def main():
     juju.add_command(juju_cmds.unregister_controller)
 
     # Register the features after all groups,commands are registered
-    deployment.get_feature_manager().register(cli)
+    deployment.get_feature_manager().register(cli, deployment)
 
     cli(obj=deployment)
 

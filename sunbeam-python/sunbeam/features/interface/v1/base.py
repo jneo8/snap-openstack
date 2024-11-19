@@ -89,7 +89,9 @@ class ClickInstantiator:
 class BaseRegisterable(ABC):
     name: str
 
-    def validate_commands(self) -> bool:
+    def validate_commands(
+        self, conditions: typing.Mapping[str, str | bool] = {}
+    ) -> bool:
         """Validate the commands dictionary.
 
         Validate if the dictionary follows the format
@@ -99,7 +101,7 @@ class BaseRegisterable(ABC):
 
         :returns: True if validation is successful, else False.
         """
-        self_commands = self.commands()
+        self_commands = self.commands(conditions)
         LOG.debug(f"Validating commands: {self_commands}")
         for group, commands in self_commands.items():
             for command in commands:
@@ -203,19 +205,21 @@ class BaseRegisterable(ABC):
         sunbeam troubleshoot subcmd
         """
 
-    def register(self, cli: click.Group) -> None:
+    def register(
+        self, cli: click.Group, conditions: typing.Mapping[str, str | bool] = {}
+    ) -> None:
         """Register feature groups and commands.
 
         :param cli: Sunbeam main cli group
         """
         LOG.debug(f"Registering feature {self.name}")
-        if not self.validate_commands():
+        if not self.validate_commands(conditions):
             LOG.warning(f"Not able to register the feature {self.name}")
             return
 
         groups = utils.get_all_registered_groups(cli)
         LOG.debug(f"Registered groups: {groups}")
-        for group, commands in self.commands().items():
+        for group, commands in self.commands(conditions).items():
             group_obj = groups.get(group)
             if not group_obj:
                 cmd_names = [command.get("name") for command in commands]
@@ -401,8 +405,7 @@ class BaseFeature(BaseRegisterable, Generic[ConfigType]):
         """
         try:
             return read_config(client, self.feature_key)
-        except ConfigItemNotFoundException as e:
-            LOG.debug(str(e))
+        except ConfigItemNotFoundException:
             return {}
 
     def update_feature_info(self, client: Client, info: dict) -> None:
