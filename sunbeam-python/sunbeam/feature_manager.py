@@ -194,7 +194,11 @@ class FeatureManager:
             except AttributeError:
                 LOG.debug("Feature %r is not enable / disable feature", feature.name)
                 enabled = False
-            except (SunbeamException, ClusterServiceUnavailableException) as e:
+            except (
+                SunbeamException,
+                ValueError,
+                ClusterServiceUnavailableException,
+            ) as e:
                 LOG.debug(
                     "Feature %r failed to check if it is enabled: %r", feature.name, e
                 )
