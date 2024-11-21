@@ -576,32 +576,39 @@ class JujuHelper:
         model: str,
         cmd: str,
         container: str,
-        timeout=None,
-    ) -> str:
+        env: dict[str, str] | None = None,
+        timeout: int | None = None,
+    ) -> dict:
         """Run a shell command on an unit's payload container.
+
+        Returns action results irrespective of the return-code
+        in action results.
 
         :name: unit name
         :model: Name of the model where the application is located
         :cmd: Command to run
+        :env: Environment variables to set for the pebble command
         :container_name: Name of the payload container to run on
         :timeout: Timeout in seconds
         :returns: Command results
         """
         unit = await self.get_unit(name, model)
-        pebble = " ".join(
-            [
-                f"PEBBLE_SOCKET=/charm/containers/{container}/pebble.socket",
-                "/charm/bin/pebble",
-                "exec",
-                "--",
-            ]
-        )
+        pebble_cmd = [
+            f"PEBBLE_SOCKET=/charm/containers/{container}/pebble.socket",
+            "/charm/bin/pebble",
+            "exec",
+        ]
+
+        if env:
+            env_str = ",".join(f"{k}={v}" for k, v in env.items())
+            pebble_cmd.extend(["--env", env_str])
+        pebble_cmd.append("--")
+        pebble = " ".join(pebble_cmd)
+
         try:
             action = await unit.run(pebble + " " + cmd, timeout=timeout, block=True)
         except asyncio.TimeoutError as e:
             raise TimeoutException(f"Timeout while running command: {cmd}") from e
-        if action.results["return-code"] != 0:
-            raise CmdFailedException(action.results["stderr"])
         return action.results
 
     async def run_action(

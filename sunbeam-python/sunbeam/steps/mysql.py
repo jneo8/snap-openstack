@@ -118,9 +118,12 @@ class ConfigureMySQLStep(BaseStep):
                         OPENSTACK_MODEL,
                         cmd,
                         "mysql",
-                        SET_MAX_CONNECTIONS_TIMEOUT,
+                        env=None,
+                        timeout=SET_MAX_CONNECTIONS_TIMEOUT,
                     )
                 )
+                if res["return-code"] != 0:
+                    return Result(ResultType.FAILED, res.get("stderr"))
                 LOG.debug("Set max_connections on %s: %s", mysql, res)
             except TimeoutException as e:
                 LOG.debug(f"Timeout setting max_connections on {mysql}", exc_info=True)
