@@ -46,6 +46,7 @@ class TestConfigureMySQLStep(unittest.TestCase):
             "sunbeam.steps.mysql.get_mysqls",
             Mock(return_value=["mysql"]),
         ):
+            self.jhelper.run_cmd_on_unit_payload.return_value = {"return-code": 0}
             step = ConfigureMySQLStep(self.jhelper)
             result = step.run()
 
@@ -91,6 +92,7 @@ class TestConfigureMySQLStep(unittest.TestCase):
             "sunbeam.steps.mysql.get_mysqls",
             Mock(return_value=["mysql"]),
         ):
+            self.jhelper.run_cmd_on_unit_payload.return_value = {"return-code": 1}
             step = ConfigureMySQLStep(self.jhelper)
             result = step.run()
 
