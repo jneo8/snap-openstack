@@ -591,6 +591,9 @@ class JujuHelper:
         :container_name: Name of the payload container to run on
         :timeout: Timeout in seconds
         :returns: Command results
+
+        Command execution failures are part of the results with
+        return-code, stdout, stderr.
         """
         unit = await self.get_unit(name, model)
         pebble_cmd = [
@@ -635,6 +638,28 @@ class JujuHelper:
 
         return action_obj.results
 
+    async def add_secret(self, model: str, name: str, data: dict, info: str) -> str:
+        """Add secret to the model.
+
+        :model: Name of the model.
+        :name: Name of the secret.
+        :data: Content to save in the secret.
+        """
+        data_args = [f"{k}={v}" for k, v in data.items()]
+        model_impl = await self.get_model(model)
+        secret = await model_impl.add_secret(name, data_args, info=info)
+        return secret
+
+    async def grant_secret(self, model: str, name: str, application: str):
+        """Grant secret access to application.
+
+        :model: Name of the model.
+        :name: Name of the secret.
+        :application: Name of the application.
+        """
+        model_impl = await self.get_model(model)
+        await model_impl.grant_secret(name, application)
+
     async def get_secret(self, model: str, secret_id: str) -> dict:
         """Get secret from model.
 
@@ -648,6 +673,29 @@ class JujuHelper:
         if len(secrets) != 1:
             raise JujuSecretNotFound(f"Secret {secret_id!r}")
         return secrets[0].serialize()
+
+    async def get_secret_by_name(self, model: str, secret_name: str) -> dict:
+        """Get secret from model.
+
+        :model: Name of the model
+        :secret_id: Secret Name
+        """
+        model_impl = await self.get_model(model)
+        secrets = await model_impl.list_secrets(
+            filter={"name": secret_name}, show_secrets=True
+        )
+        if len(secrets) != 1:
+            raise JujuSecretNotFound(f"Secret {secret_name!r}")
+        return secrets[0].serialize()
+
+    async def remove_secret(self, model: str, name: str):
+        """Remove secret in the model.
+
+        :model: Name of the model.
+        :name: Name of the secret.
+        """
+        model_impl = await self.get_model(model)
+        await model_impl.remove_secret(name)
 
     async def scp_from(self, name: str, model: str, source: str, destination: str):
         """Scp files from unit to local.
@@ -1625,3 +1673,14 @@ class JujuStepHelper:
         model_with_owner = run_sync(self.jhelper.get_model_name_with_owner(model))
 
         return model_with_owner
+
+    def check_secret_exists(self, model_name, secret_name) -> bool:
+        """Check if secret exists.
+
+        :return: True if secret exists in the model, False otherwise
+        """
+        try:
+            run_sync(self.jhelper.get_secret_by_name(model_name, secret_name))
+            return True
+        except JujuSecretNotFound:
+            return False

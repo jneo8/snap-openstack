@@ -38,6 +38,7 @@ RAM_32_GB_IN_MB = 32 * 1000
 RAM_4_GB_IN_MB = 4 * 1000
 
 # Formatting related constants
+FORMAT_JSON = "json"
 FORMAT_TABLE = "table"
 FORMAT_YAML = "yaml"
 FORMAT_DEFAULT = "default"
