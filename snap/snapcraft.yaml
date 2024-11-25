@@ -64,6 +64,7 @@ parts:
     source: https://github.com/canonical/dqlite
     source-type: git
     source-depth: 1
+    source-branch: lts-1.17.x
     plugin: autotools
     autotools-configure-parameters:
       - --prefix=
