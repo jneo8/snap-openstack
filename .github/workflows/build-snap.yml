@@ -75,7 +75,7 @@ jobs:
           sg snap_daemon "openstack.sunbeam enable dns --nameservers=testing.github."
           sg snap_daemon "openstack.sunbeam enable telemetry"
           sg snap_daemon "openstack.sunbeam enable observability embedded"
-          sg snap_daemon "openstack.sunbeam enable vault"
+          sg snap_daemon "openstack.sunbeam enable vault --dev-mode"
           sg snap_daemon "openstack.sunbeam enable secrets"
           sg snap_daemon "openstack.sunbeam enable resource-optimization"
           # Disable caas temporarily while MySQL memory gets adjusted

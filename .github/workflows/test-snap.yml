@@ -106,7 +106,7 @@ jobs:
           sg snap_daemon "sunbeam enable dns --nameservers=testing.github."
           sg snap_daemon "sunbeam enable telemetry"
           sg snap_daemon "sunbeam enable observability"
-          sg snap_daemon "sunbeam enable vault"
+          sg snap_daemon "sunbeam enable vault --dev-mode"
           sg snap_daemon "sunbeam enable secrets"
           sg snap_daemon "sunbeam enable caas"
           # disable images-sync, not in 2023.2
