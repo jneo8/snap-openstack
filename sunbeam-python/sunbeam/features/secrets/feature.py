@@ -17,8 +17,10 @@ import click
 from packaging.version import Version
 
 from sunbeam.core.deployment import Deployment
+from sunbeam.core.juju import JujuHelper, run_sync
 from sunbeam.core.manifest import CharmManifest, FeatureConfig, SoftwareConfig
-from sunbeam.features.interface.v1.base import FeatureRequirement
+from sunbeam.core.openstack import OPENSTACK_MODEL
+from sunbeam.features.interface.v1.base import ConfigType, FeatureRequirement
 from sunbeam.features.interface.v1.openstack import (
     OpenStackControlPlaneFeature,
     TerraformPlanLocation,
@@ -28,9 +30,9 @@ from sunbeam.versions import OPENSTACK_CHANNEL
 
 
 class SecretsFeature(OpenStackControlPlaneFeature):
-    version = Version("0.0.1")
+    version = Version("0.0.2")
 
-    requires = {FeatureRequirement("vault")}
+    requires = {FeatureRequirement("vault>1")}
     name = "secrets"
     tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
 
@@ -85,6 +87,23 @@ class SecretsFeature(OpenStackControlPlaneFeature):
         return {
             "barbican": {"barbican-k8s": 9},
         }
+
+    def is_vault_application_active(self, jhelper: JujuHelper) -> bool:
+        """Check if Vault application is active."""
+        application = run_sync(jhelper.get_application("vault", OPENSTACK_MODEL))
+        if application.status == "active":
+            return True
+
+        return False
+
+    def pre_enable(
+        self, deployment: Deployment, config: ConfigType, show_hints: bool
+    ) -> None:
+        """Handler to perform tasks before enabling the feature."""
+        super().pre_enable(deployment, config, show_hints)
+        jhelper = JujuHelper(deployment.get_connected_controller())
+        if not self.is_vault_application_active(jhelper):
+            raise click.ClickException("Cannot enable secrets as Vault is not active.")
 
     @click.command()
     @click_option_show_hints

@@ -507,7 +507,7 @@ class VaultStatusStep(BaseStep):
 
 
 class VaultFeature(OpenStackControlPlaneFeature):
-    version = Version("0.0.1")
+    version = Version("1.0.1")
 
     name = "vault"
     tf_plan_location = TerraformPlanLocation.SUNBEAM_TERRAFORM_REPO
