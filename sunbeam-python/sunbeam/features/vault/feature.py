@@ -612,11 +612,13 @@ class VaultFeature(OpenStackControlPlaneFeature):
                 f"Error in getting Vault information from cluster db: {str(e)}"
             )
 
-        dev_mode_from_db = vault_info.get("dev_mode", False)
-        if dev_mode != dev_mode_from_db:
-            raise click.ClickException(
-                "--dev-mode option cannot be changed, disable and enable vault again."
-            )
+        dev_mode_from_db = vault_info.get("dev_mode")
+        if dev_mode_from_db is not None:
+            if dev_mode != dev_mode_from_db:
+                raise click.ClickException(
+                    "--dev-mode option cannot be changed, disable and enable "
+                    "vault again."
+                )
 
         self.enable_feature(deployment, FeatureConfig(), show_hints)
 
