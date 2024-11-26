@@ -96,11 +96,9 @@ jobs:
           sg snap_daemon "openstack.sunbeam disable resource-optimization"
           # sg snap_daemon "openstack.sunbeam disable validation"
 
-          sg snap_daemon "openstack.sunbeam enable consul"
           sg snap_daemon "openstack.sunbeam enable instance-recovery"
-          sg snap_daemon "openstack.sunbeam disable instance-recovery"
-          # Disable consul as the pods are stuck in getting terminated
-          # sg snap_daemon "openstack.sunbeam disable consul"
+          # Disable IR as the consul pods are stuck in getting terminated
+          # sg snap_daemon "openstack.sunbeam disable instance-recovery"
 
       - name: Collect logs
         if: always()
@@ -110,7 +108,7 @@ jobs:
           cp -rf $HOME/snap/openstack/common/logs/*.log logs/
           models=$(juju models --format json | jq -r .models[].name)
           for model in $models;
-          do 
+          do
             name=$(echo $model | cut -d/ -f2);
             juju status -m $model -o logs/$name.yaml;
             cat logs/$name.yaml;

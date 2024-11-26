@@ -292,9 +292,8 @@ def get_external_network_configs(client: Client) -> dict:
         charm_config["external-bridge-address"] = utils.IPVANYNETWORK_UNSET
 
     charm_config["physnet-name"] = variables.get("external_network", {}).get(
-        "physical_network"
+        "physical_network", VARIABLE_DEFAULTS["external_network"]["physical_network"]
     )
-
     return charm_config
 
 
