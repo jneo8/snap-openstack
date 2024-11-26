@@ -735,7 +735,9 @@ class EnableDisableFeature(BaseFeature, Generic[ConfigType]):
                 else:
                     config = config_type()
 
-            feature.enable_feature(deployment, config, show_hints)
+            # Enable feature if it is not yet enabled
+            if not feature.is_enabled(deployment.get_client()):
+                feature.enable_feature(deployment, config, show_hints)
 
     def pre_enable(
         self, deployment: Deployment, config: ConfigType, show_hints: bool
