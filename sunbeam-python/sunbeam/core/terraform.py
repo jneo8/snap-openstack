@@ -30,6 +30,7 @@ from sunbeam.core.common import BaseStep, Result, ResultType, read_config, updat
 from sunbeam.core.manifest import Manifest
 
 LOG = logging.getLogger(__name__)
+TERRAFORM_APPLY_TIMEOUT = 1200  # 20 minutes
 
 http_backend_template = """
 terraform {
@@ -203,6 +204,7 @@ class TerraformHelper:
                 check=True,
                 cwd=self.path,
                 env=os_env,
+                timeout=TERRAFORM_APPLY_TIMEOUT,
             )
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"

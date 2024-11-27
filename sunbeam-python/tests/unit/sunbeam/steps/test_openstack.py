@@ -26,7 +26,7 @@ from sunbeam.core.juju import (
     JujuWaitException,
     TimeoutException,
 )
-from sunbeam.core.k8s import SERVICE_LB_ANNOTATION
+from sunbeam.core.k8s import METALLB_ANNOTATION
 from sunbeam.core.manifest import Manifest
 from sunbeam.core.terraform import TerraformException
 from sunbeam.steps.openstack import (
@@ -334,9 +334,7 @@ class PatchLoadBalancerServicesStepTest(unittest.TestCase):
                 return_value=Mock(
                     get=Mock(
                         return_value=Mock(
-                            metadata=Mock(
-                                annotations={SERVICE_LB_ANNOTATION: "fake-ip"}
-                            )
+                            metadata=Mock(annotations={METALLB_ANNOTATION: "fake-ip"})
                         )
                     )
                 )
@@ -392,7 +390,7 @@ class PatchLoadBalancerServicesStepTest(unittest.TestCase):
             result = step.run()
         assert result.result_type == ResultType.COMPLETED
         annotation = step.kube.patch.mock_calls[0][2]["obj"].metadata.annotations[
-            SERVICE_LB_ANNOTATION
+            METALLB_ANNOTATION
         ]
         assert annotation == "fake-ip"
 
