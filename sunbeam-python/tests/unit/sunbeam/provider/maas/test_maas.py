@@ -924,7 +924,7 @@ class TestMaasDeployMachinesStep:
 
     def test_is_skip_with_infra_nodes(self, maas_deploy_machines_step):
         maas_deploy_machines_step.client.cluster.list_nodes.return_value = [
-            {"name": "test_node", "machineid": 1, "role": ["infra"]}
+            {"name": "test_node", "machineid": 1, "role": ["sunbeam"]}
         ]
         result = maas_deploy_machines_step.is_skip()
         assert result.result_type == ResultType.SKIPPED
@@ -990,7 +990,7 @@ class TestMaasDeployInfraMachinesStep:
                 {
                     "hostname": "test_node1",
                     "system_id": "1st",
-                    "roles": [RoleTags.INFRA.value],
+                    "roles": [RoleTags.SUNBEAM.value],
                 }
             ],
         )
@@ -1011,7 +1011,7 @@ class TestMaasDeployInfraMachinesStep:
                 {
                     "hostname": "test_node1",
                     "system_id": "1st",
-                    "roles": [RoleTags.INFRA.value],
+                    "roles": [RoleTags.SUNBEAM.value],
                 }
             ],
         )
@@ -1026,12 +1026,12 @@ class TestMaasDeployInfraMachinesStep:
             {
                 "hostname": "test_node1",
                 "system_id": "1st",
-                "roles": [RoleTags.INFRA.value],
+                "roles": [RoleTags.SUNBEAM.value],
             },
             {
                 "hostname": "test_node2",
                 "system_id": "2nd",
-                "roles": [RoleTags.INFRA.value],
+                "roles": [RoleTags.SUNBEAM.value],
             },
         ]
         result = maas_deploy_machines_step.run()

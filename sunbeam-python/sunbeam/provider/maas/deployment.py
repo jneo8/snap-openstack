@@ -41,7 +41,7 @@ class RoleTags(enum.Enum):
     COMPUTE = "compute"
     STORAGE = "storage"
     JUJU_CONTROLLER = "juju-controller"
-    INFRA = "infra"
+    SUNBEAM = "sunbeam"
 
     @classmethod
     def values(cls) -> list[str]:
@@ -72,7 +72,7 @@ ROLE_NETWORK_MAPPING = {
     RoleTags.JUJU_CONTROLLER: [
         Networks.MANAGEMENT,
     ],
-    RoleTags.INFRA: [
+    RoleTags.SUNBEAM: [
         Networks.MANAGEMENT,
     ],
 }
