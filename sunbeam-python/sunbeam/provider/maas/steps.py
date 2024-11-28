@@ -1577,7 +1577,7 @@ class MaasConfigureMicrocephOSDStep(BaseStep):
             LOG.debug("Failed to find leader unit", exc_info=True)
             raise ValueError(str(e))
         osds, _ = await self._list_disks(leader)
-        disks: dict[str, dict[str, list[str]]] = {}
+        disks: dict[str, dict] = {}
         default_disk: dict[str, list[str]] = {"osds": [], "unpartitioned_disks": []}
         for osd in osds:
             location = osd["location"]  # machine name
