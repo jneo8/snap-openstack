@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import logging
 import traceback
 
@@ -28,6 +29,7 @@ from sunbeam.commands.configure import get_external_network_configs
 from sunbeam.core.common import BaseStep, Result, ResultType, read_config, update_config
 from sunbeam.core.deployment import Deployment, Networks
 from sunbeam.core.juju import (
+    ActionFailedException,
     ApplicationNotFoundException,
     JujuHelper,
     JujuStepHelper,
@@ -36,7 +38,7 @@ from sunbeam.core.juju import (
 )
 from sunbeam.core.manifest import Manifest
 from sunbeam.core.openstack import OPENSTACK_MODEL
-from sunbeam.core.openstack_api import guests_on_hypervisor, remove_hypervisor
+from sunbeam.core.openstack_api import remove_hypervisor
 from sunbeam.core.steps import AddMachineUnitsStep, DeployMachineApplicationStep
 from sunbeam.core.terraform import TerraformException, TerraformHelper
 
@@ -241,9 +243,31 @@ class RemoveHypervisorUnitStep(BaseStep, JujuStepHelper):
             if unit.machine.id == self.machine_id:
                 LOG.debug(f"Unit {unit.name} is deployed on machine: {self.machine_id}")
                 self.unit = unit.name
-                return Result(ResultType.COMPLETED)
+                break
+        if not self.unit:
+            LOG.debug(f"Unit is not deployed on machine: {self.machine_id}, skipping.")
+            return Result(ResultType.SKIPPED)
+        try:
+            results = run_sync(
+                self.jhelper.run_action(self.unit, self.model, "running-guests")
+            )
+        except ActionFailedException:
+            LOG.debug("Failed to run action on hypervisor unit", exc_info=True)
+            return Result(ResultType.FAILED, "Failed to run action on hypervisor unit")
 
-        return Result(ResultType.SKIPPED)
+        if results.get("return-code", 0) > 1:
+            _message = "Failed to run action on hypervisor unit"
+            return Result(ResultType.FAILED, _message)
+
+        if result := results.get("result"):
+            guests = json.loads(result)
+            LOG.debug(f"Found guests on hypervisor: {guests}")
+            if guests and not self.force:
+                return Result(
+                    ResultType.FAILED,
+                    "Guests are running on hypervisor, aborting",
+                )
+        return Result(ResultType.COMPLETED)
 
     def remove_machine_id_from_tfvar(self) -> None:
         """Remove machine if from terraform vars saved in cluster db."""
@@ -260,25 +284,23 @@ class RemoveHypervisorUnitStep(BaseStep, JujuStepHelper):
 
     def run(self, status: Status | None = None) -> Result:
         """Remove unit from openstack-hypervisor application on Juju model."""
+        if not self.unit:
+            return Result(ResultType.FAILED, "Unit not found on machine")
         try:
-            self.guests = guests_on_hypervisor(self.name, self.jhelper)
-            LOG.debug(f"Found guests on {self.name}:")
-            LOG.debug(", ".join([g.name for g in self.guests]))
-        except openstack.exceptions.SDKException as e:
-            LOG.error("Encountered error looking up guests on hypervisor.")
-            if self.force:
-                LOG.warning("Force mode set, ignoring exception:")
-                traceback.print_exception(e)
-            else:
-                return Result(ResultType.FAILED, str(e))
-        if not self.force and len(self.guests) > 0:
-            return Result(
-                ResultType.FAILED,
-                f"OpenStack guests are running on {self.name}, aborting",
-            )
+            run_sync(self.jhelper.run_action(self.unit, self.model, "disable"))
+        except ActionFailedException as e:
+            LOG.debug(str(e))
+            return Result(ResultType.FAILED, "Failed to disable hypervisor unit")
         try:
-            run_sync(self.jhelper.remove_unit(APPLICATION, str(self.unit), self.model))
+            run_sync(self.jhelper.remove_unit(APPLICATION, self.unit, self.model))
             self.remove_machine_id_from_tfvar()
+            run_sync(
+                self.jhelper.wait_units_gone(
+                    self.unit,
+                    self.model,
+                    timeout=HYPERVISOR_UNIT_TIMEOUT,
+                )
+            )
             run_sync(
                 self.jhelper.wait_application_ready(
                     APPLICATION,

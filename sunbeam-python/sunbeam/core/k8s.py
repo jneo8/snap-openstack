@@ -14,6 +14,11 @@
 # limitations under the License.
 import logging
 
+from lightkube import ApiError
+from lightkube.core.client import Client as KubeClient
+from lightkube.models.meta_v1 import ObjectMeta
+from lightkube.resources.core_v1 import Node, PersistentVolumeClaim, Pod
+from lightkube.types import CascadeType
 from snaphelpers import Snap
 
 from sunbeam.core.common import SunbeamException
@@ -40,6 +45,14 @@ OpenStack services are exposed via virtual IP addresses.\
  To access APIs from a remote host, the range must reside\
  within the subnet that the primary network interface is on.\
 """
+
+
+class K8SError(SunbeamException):
+    """Common K8S error class."""
+
+
+class K8SNodeNotFoundError(K8SError):
+    """Node not found error."""
 
 
 class K8SHelper:
@@ -87,3 +100,118 @@ class K8SHelper:
                 return SERVICE_LB_ANNOTATION
             case _:
                 return METALLB_ANNOTATION
+
+
+def find_node(client: KubeClient, name: str) -> Node:
+    """Find a node by name."""
+    try:
+        return client.get(Node, name)
+    except ApiError as e:
+        if e.status.code == 404:
+            raise K8SNodeNotFoundError(f"Node {name} not found")
+        raise K8SError(f"Failed to get node {name}") from e
+
+
+def cordon(client: KubeClient, name: str):
+    """Taint a node as unschedulable."""
+    LOG.debug("Marking %s unschedulable", name)
+    try:
+        client.patch(Node, name, {"spec": {"unschedulable": True}})
+    except ApiError as e:
+        if e.status.code == 404:
+            raise K8SNodeNotFoundError(f"Node {name} not found")
+        raise K8SError(f"Failed to patch node {name}") from e
+
+
+def is_not_daemonset(pod):
+    return pod.metadata.ownerReferences[0].kind != "DaemonSet"
+
+
+def fetch_pods(
+    client: KubeClient,
+    namespace: str | None = None,
+    labels: dict[str, str] | None = None,
+    fields: dict[str, str] | None = None,
+) -> list[Pod]:
+    """Fetch all pods on node that can be evicted.
+
+    DaemonSet pods cannot be evicted as they don't respect unschedulable flag.
+    """
+    return list(
+        client.list(
+            res=Pod,
+            namespace=namespace if namespace else "*",
+            labels=labels,  # type: ignore
+            fields=fields,  # type: ignore
+        )
+    )
+
+
+def fetch_pods_for_eviction(
+    client: KubeClient, node_name: str, labels: dict[str, str] | None = None
+) -> list[Pod]:
+    """Fetch all pods on node that can be evicted.
+
+    DaemonSet pods cannot be evicted as they don't respect unschedulable flag.
+    """
+    pods = fetch_pods(
+        client,
+        labels=labels,
+        fields={"spec.nodeName": node_name},
+    )
+    return list(filter(is_not_daemonset, pods))
+
+
+def evict_pods(client: KubeClient, pods: list[Pod]) -> None:
+    for pod in pods:
+        if pod.metadata is None:
+            continue
+        LOG.debug(f"Evicting pod {pod.metadata.name}")
+        evict = Pod.Eviction(
+            metadata=ObjectMeta(
+                name=pod.metadata.name, namespace=pod.metadata.namespace
+            ),
+        )
+        client.create(evict, name=str(pod.metadata.name))
+
+
+def fetch_pvc(client: KubeClient, pods: list[Pod]) -> list[PersistentVolumeClaim]:
+    pvc = []
+    for pod in pods:
+        if pod.spec is None or pod.spec.volumes is None:
+            continue
+        for volume in pod.spec.volumes:
+            if volume.persistentVolumeClaim is None:
+                # not a pv
+                continue
+            pvc_name = volume.persistentVolumeClaim.claimName
+            pvc.append(
+                client.get(
+                    res=PersistentVolumeClaim,
+                    name=pvc_name,
+                    namespace=pod.metadata.namespace,  # type: ignore
+                )
+            )
+    return pvc
+
+
+def delete_pvc(client: KubeClient, pvcs: list[PersistentVolumeClaim]) -> None:
+    for pvc in pvcs:
+        if pvc.metadata is None:
+            continue
+        LOG.debug("Deleting PVC %s", pvc.metadata.name)
+        client.delete(
+            PersistentVolumeClaim,
+            pvc.metadata.name,  # type: ignore
+            namespace=pvc.metadata.namespace,  # type: ignore
+            grace_period=0,
+            cascade=CascadeType.FOREGROUND,
+        )
+
+
+def drain(client: KubeClient, name: str):
+    """Evict all pods from a node."""
+    pods = fetch_pods_for_eviction(client, name)
+    pvcs = fetch_pvc(client, pods)
+    evict_pods(client, pods)
+    delete_pvc(client, pvcs)

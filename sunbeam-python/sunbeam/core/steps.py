@@ -343,6 +343,11 @@ class RemoveMachineUnitsStep(BaseStep):
                 run_sync(self.jhelper.remove_unit(self.application, unit, self.model))
             self.update_status(status, "Waiting for units to be removed")
             run_sync(
+                self.jhelper.wait_units_gone(
+                    list(self.units_to_remove), self.model, self.get_unit_timeout()
+                ),
+            )
+            run_sync(
                 self.jhelper.wait_application_ready(
                     self.application,
                     self.model,
