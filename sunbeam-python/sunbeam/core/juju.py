@@ -1063,17 +1063,19 @@ class JujuHelper:
                 # Application is a subordinate, collect status from app instead of units
                 # as units is empty dictionary.
                 if application.subordinate_to:
-                    status = {application.status.status}
+                    app_status = {application.status.status}
                 else:
-                    status = {unit.workload_status.status for unit in units.values()}
+                    app_status = {
+                        unit.workload_status.status for unit in units.values()
+                    }
 
                 # int_ is None on machine models
                 unit_count: int | None = application.int_
                 unit_count_cond = unit_count is None or len(units) == unit_count
                 if (
                     unit_count_cond
-                    and len(status) > 0
-                    and status.issubset(expected_status)
+                    and len(app_status) > 0
+                    and app_status.issubset(expected_status)
                 ):
                     LOG.debug("Application %r is active", app)
                     # queue is sized for the number of coroutines,
