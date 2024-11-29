@@ -535,7 +535,7 @@ class MachineRequirementsCheck(DiagnosticsCheck):
         """Check machine meets requirements."""
         if [maas_deployment.RoleTags.JUJU_CONTROLLER.value] == self.machine[
             "roles"
-        ] or [maas_deployment.RoleTags.INFRA.value] == self.machine["roles"]:
+        ] or [maas_deployment.RoleTags.SUNBEAM.value] == self.machine["roles"]:
             memory_min = RAM_4_GB_IN_MB
             core_min = 2
         else:
@@ -907,7 +907,7 @@ class DeploymentTopologyCheck(DiagnosticsCheck):
             DeploymentRolesCheck(
                 self.machines,
                 "infra nodes",
-                maas_deployment.RoleTags.INFRA.value,
+                maas_deployment.RoleTags.SUNBEAM.value,
             )
         )
         checks.append(
@@ -1310,7 +1310,7 @@ class MaasAddMachinesToClusterdStep(BaseStep):
             if set(machine["roles"]).intersection(
                 {
                     maas_deployment.RoleTags.JUJU_CONTROLLER.value,
-                    maas_deployment.RoleTags.INFRA.value,
+                    maas_deployment.RoleTags.SUNBEAM.value,
                     maas_deployment.RoleTags.CONTROL.value,
                     maas_deployment.RoleTags.COMPUTE.value,
                     maas_deployment.RoleTags.STORAGE.value,
@@ -1397,7 +1397,7 @@ class MaasDeployMachinesStep(BaseStep):
             role = node.get("role")
             if role and (
                 maas_deployment.RoleTags.JUJU_CONTROLLER.value in role
-                or maas_deployment.RoleTags.INFRA.value in role
+                or maas_deployment.RoleTags.SUNBEAM.value in role
             ):
                 # Juju Controllers should not be deployed by this step
                 nodes_to_deploy.remove(node)
@@ -1483,7 +1483,7 @@ class MaasDeployInfraMachinesStep(BaseStep):
         for machine in maas_machines:
             if set(machine["roles"]).intersection(
                 {
-                    maas_deployment.RoleTags.INFRA.value,
+                    maas_deployment.RoleTags.SUNBEAM.value,
                 }
             ):
                 filtered_machines.append(machine)
