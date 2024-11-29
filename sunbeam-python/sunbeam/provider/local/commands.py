@@ -129,7 +129,6 @@ from sunbeam.steps.k8s import (
     AddK8SCredentialStep,
     AddK8SUnitsStep,
     DeployK8SApplicationStep,
-    EnableK8SFeatures,
     RemoveK8SUnitsStep,
     StoreK8SKubeConfigStep,
 )
@@ -556,9 +555,6 @@ def bootstrap(
         )
         plan4.append(
             AddK8SUnitsStep(client, fqdn, jhelper, deployment.openstack_machines_model)
-        )
-        plan4.append(
-            EnableK8SFeatures(client, jhelper, deployment.openstack_machines_model)
         )
         plan4.append(
             StoreK8SKubeConfigStep(client, jhelper, deployment.openstack_machines_model)

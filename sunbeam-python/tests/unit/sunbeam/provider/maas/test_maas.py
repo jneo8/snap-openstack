@@ -1274,7 +1274,14 @@ class TestMaasDeployK8SApplicationStep:
             "test-model",
         )
         step.ranges = "10.0.0.0/28"
-        expected_tfvars = {"endpoint_bindings": [{"space": "data"}]}
+        expected_tfvars = {
+            "endpoint_bindings": [{"space": "data"}],
+            "k8s_config": {
+                "load-balancer-cidrs": "10.0.0.0/28",
+                "load-balancer-enabled": True,
+                "load-balancer-l2-mode": True,
+            },
+        }
         assert step.extra_tfvars() == expected_tfvars
 
     def test_is_skip_with_public_ranges_error(self, mocker, deployment_k8s):

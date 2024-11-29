@@ -101,7 +101,6 @@ from sunbeam.provider.maas.steps import (
     MaasDeployK8SApplicationStep,
     MaasDeployMachinesStep,
     MaasDeployMicrok8sApplicationStep,
-    MaasEnableK8SFeatures,
     MaasRemoveMachineFromClusterdStep,
     MaasSaveClusterdCredentialsStep,
     MaasSaveControllerStep,
@@ -651,16 +650,6 @@ def deploy(
         plan2.append(
             AddK8SUnitsStep(
                 client, control, jhelper, deployment.openstack_machines_model
-            )
-        )
-        plan2.append(
-            MaasEnableK8SFeatures(
-                client,
-                maas_client,
-                jhelper,
-                str(deployment.network_mapping[Networks.PUBLIC.value]),
-                deployment.public_api_label,
-                deployment.openstack_machines_model,
             )
         )
         plan2.append(

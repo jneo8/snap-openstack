@@ -95,11 +95,7 @@ class K8SHelper:
     @classmethod
     def get_loadbalancer_annotation(cls) -> str:
         """Return loadbalancer annotation matching provider."""
-        match cls.get_provider():
-            case "k8s":
-                return SERVICE_LB_ANNOTATION
-            case _:
-                return METALLB_ANNOTATION
+        return METALLB_ANNOTATION
 
 
 def find_node(client: KubeClient, name: str) -> Node:
