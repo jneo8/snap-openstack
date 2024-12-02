@@ -42,6 +42,7 @@ from sunbeam.core.common import (
     ResultType,
     convert_proxy_to_model_configs,
 )
+from sunbeam.core.deployment import Deployment
 from sunbeam.core.deployments import DeploymentsConfig
 from sunbeam.core.juju import (
     CONTROLLER_MODEL,
@@ -362,6 +363,58 @@ class ScaleJujuStep(BaseStep, JujuStepHelper):
         LOG.debug("Waiting for HA to be enabled")
         LOG.debug(f'Running command {" ".join(cmd)}')
         process = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        LOG.debug(f"Command finished. stdout={process.stdout}, stderr={process.stderr}")
+        return Result(ResultType.COMPLETED)
+
+
+class DestroyJujuControllerStep(BaseStep, JujuStepHelper):
+    def __init__(
+        self,
+        deployment: Deployment,
+        destroy_args: list[str] | None = None,
+    ):
+        super().__init__("Destroy Juju", "Destroy Juju controller")
+        self.deployment = deployment
+        self.controller = deployment.juju_controller
+        self.destroy_args = destroy_args or []
+
+        home = os.environ.get("SNAP_REAL_HOME")
+        os.environ["JUJU_DATA"] = f"{home}/.local/share/juju"
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                 ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        if self.controller and self.controller.is_external:
+            LOG.warning("External controller, refusing to destroy")
+            return Result(ResultType.SKIPPED)
+
+        try:
+            self.get_controller(self.deployment.controller)
+        except ControllerNotFoundException:
+            return Result(ResultType.SKIPPED)
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None = None) -> Result:
+        """Destroy juju-controller."""
+        cmd = [
+            self._get_juju_binary(),
+            "destroy-controller",
+            "--destroy-all-models",
+            "--destroy-storage",
+            "--no-prompt",
+            self.deployment.controller,
+        ]
+        if self.destroy_args:
+            cmd.extend(self.destroy_args)
+
+        try:
+            process = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            LOG.exception("Error destroying controller")
+            return Result(ResultType.FAILED, str(e))
         LOG.debug(f"Command finished. stdout={process.stdout}, stderr={process.stderr}")
         return Result(ResultType.COMPLETED)
 
@@ -1361,6 +1414,44 @@ class AddJujuModelStep(BaseStep):
             return Result(ResultType.FAILED, str(e))
 
 
+class DestroyJujuModelStep(BaseStep):
+    def __init__(
+        self,
+        jhelper: JujuHelper,
+        model: str,
+        timeout: int = 1800,
+    ):
+        super().__init__(f"Destroy model {model}", f"Destroying model {model}")
+        self.jhelper = jhelper
+        self.model = model
+        self.timeout = timeout
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not."""
+        try:
+            run_sync(self.jhelper.get_model(self.model))
+        except ModelNotFoundException:
+            LOG.debug(f"Model {self.model} not found")
+            return Result(ResultType.SKIPPED)
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None = None) -> Result:
+        """Add model with configs."""
+        try:
+            run_sync(self.jhelper.destroy_model(self.model, destroy_storage=True))
+            run_sync(
+                self.jhelper.wait_model_gone(
+                    self.model,
+                    timeout=self.timeout,
+                )
+            )
+        except Exception as e:
+            LOG.debug(f"Error destroying model {self.model}", exc_info=True)
+            return Result(ResultType.FAILED, str(e))
+
+        return Result(ResultType.COMPLETED)
+
+
 class UpdateJujuModelConfigStep(BaseStep):
     """Update Model Config for the given models."""
 
@@ -1911,8 +2002,6 @@ class RemoveSaasApplicationsStep(BaseStep):
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
-        super().is_skip
-
         model_status = run_sync(self.jhelper.get_model_status(self.model))
         remote_applications = model_status.get("remote-applications")
         if not remote_applications:

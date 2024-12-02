@@ -291,6 +291,17 @@ class JujuHelper:
         finally:
             os.environ["HOME"] = old_home
 
+    async def destroy_model(
+        self, model: str, destroy_storage: bool = False, force: bool = False
+    ):
+        """Destroy model.
+
+        :model: Name of the model
+        """
+        await self.controller.destroy_models(
+            model, destroy_storage=destroy_storage, force=force
+        )
+
     async def integrate(
         self,
         model: str,

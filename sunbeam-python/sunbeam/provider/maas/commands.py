@@ -28,6 +28,7 @@ from rich.console import Console
 from rich.table import Table
 from snaphelpers import Snap
 
+from sunbeam.clusterd.service import ConfigItemNotFoundException
 from sunbeam.commands import resize as resize_cmds
 from sunbeam.commands.configure import (
     DemoSetup,
@@ -101,6 +102,7 @@ from sunbeam.provider.maas.steps import (
     MaasDeployK8SApplicationStep,
     MaasDeployMachinesStep,
     MaasDeployMicrok8sApplicationStep,
+    MaasRemoveDeploymentCredentialsStep,
     MaasRemoveMachineFromClusterdStep,
     MaasSaveClusterdCredentialsStep,
     MaasSaveControllerStep,
@@ -123,9 +125,11 @@ from sunbeam.steps.clusterd import APPLICATION as CLUSTERD_APPLICATION
 from sunbeam.steps.clusterd import (
     DeploySunbeamClusterdApplicationStep,
 )
+from sunbeam.steps.features import DisableEnabledFeatures
 from sunbeam.steps.hypervisor import (
     AddHypervisorUnitsStep,
     DeployHypervisorApplicationStep,
+    DestroyHypervisorApplicationStep,
     ReapplyHypervisorTerraformPlanStep,
     RemoveHypervisorUnitStep,
 )
@@ -133,10 +137,13 @@ from sunbeam.steps.juju import (
     AddCloudJujuStep,
     AddCredentialsJujuStep,
     AddJujuModelStep,
+    DestroyJujuControllerStep,
+    DestroyJujuModelStep,
     DownloadJujuControllerCharmStep,
     IntegrateJujuApplicationsStep,
     JujuLoginStep,
     RemoveJujuMachineStep,
+    RemoveSaasApplicationsStep,
     UpdateJujuMachineIDStep,
 )
 from sunbeam.steps.k8s import (
@@ -146,6 +153,7 @@ from sunbeam.steps.k8s import (
     CheckOvnK8SDistributionStep,
     CheckRabbitmqK8SDistributionStep,
     CordonK8SUnitStep,
+    DestroyK8SApplicationStep,
     DrainK8SUnitStep,
     MigrateK8SKubeconfigStep,
     RemoveK8SUnitsStep,
@@ -156,6 +164,7 @@ from sunbeam.steps.microceph import (
     AddMicrocephUnitsStep,
     CheckMicrocephDistributionStep,
     DeployMicrocephApplicationStep,
+    DestroyMicrocephApplicationStep,
     RemoveMicrocephUnitsStep,
     SetCephMgrPoolSizeStep,
 )
@@ -166,6 +175,7 @@ from sunbeam.steps.microk8s import (
     CheckOvnMicroK8SDistributionStep,
     CheckRabbitmqMicroK8SDistributionStep,
     CordonMicroK8SUnitStep,
+    DestroyMicroK8SApplicationStep,
     DrainMicroK8SUnitStep,
     MigrateMicroK8SKubeconfigStep,
     RemoveMicrok8sUnitsStep,
@@ -174,14 +184,17 @@ from sunbeam.steps.microk8s import (
 )
 from sunbeam.steps.openstack import (
     DeployControlPlaneStep,
+    DestroyControlPlaneStep,
     OpenStackPatchLoadBalancerServicesStep,
     PromptRegionStep,
 )
 from sunbeam.steps.sunbeam_machine import (
     AddSunbeamMachineUnitsStep,
     DeploySunbeamMachineApplicationStep,
+    DestroySunbeamMachineApplicationStep,
     RemoveSunbeamMachineUnitsStep,
 )
+from sunbeam.steps.terraform import CleanTerraformPlansStep
 from sunbeam.utils import (
     CatchGroup,
     DefaultableMappingParameter,
@@ -245,6 +258,7 @@ class MaasProvider(ProviderBase):
         cluster.add_command(list_nodes)
         cluster.add_command(resize_cmds.resize)
         cluster.add_command(remove_node)
+        cluster.add_command(destroy_deployment_cmd)
         configure.add_command(configure_cmd)
         deployment.add_command(machine)
         machine.add_command(list_machines_cmd)
@@ -1457,3 +1471,147 @@ def remove_node(ctx: click.Context, name: str, force: bool, show_hints: bool) ->
         f"Removed node {name} from the cluster."
         " Run `sunbeam cluster resize` to scale down the cluster"
     )
+
+
+@click.command("destroy")
+@click.option(
+    "--no-prompt",
+    is_flag=True,
+    help="Do not prompt for confirmation.",
+)
+@click.option(
+    "-m",
+    "--manifest",
+    "manifest_path",
+    help="Manifest file.",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.pass_context
+def destroy_deployment_cmd(
+    ctx: click.Context,
+    no_prompt: bool,
+    manifest_path: Path | None,
+) -> None:
+    """Destroy deployment.
+
+    Destroy the deployment, leaving the deployment on a clean slate to
+    be re-deployed as-is.
+    """
+    if not no_prompt:
+        click.confirm("This will destroy the deployment. Are you sure?", abort=True)
+    k8s_provider = Snap().config.get("k8s.provider")
+    preflight_checks = [
+        JujuSnapCheck(),
+        LocalShareCheck(),
+    ]
+    run_preflight_checks(preflight_checks, console)
+    deployments = DeploymentsConfig.load(deployment_path(Snap()))
+    deployment: MaasDeployment = ctx.obj
+    plan = []
+
+    client = None
+    try:
+        client = deployment.get_client()
+    except ValueError:
+        pass
+
+    if client:
+        client.cluster.timeout = 5
+        try:
+            client.cluster.get_config("test")
+        except ConfigItemNotFoundException:
+            clusterd_up = True
+            # Back to default timeout
+            client.cluster.timeout = None
+        except Exception as e:
+            if "timeout" in str(e):
+                LOG.debug("Cluster is not reachable, skipping cleanup")
+                client.cluster.timeout = 0.1
+            else:
+                raise e
+
+    jhelper = None
+    manifest = deployment.get_manifest(manifest_path)
+    try:
+        jhelper = JujuHelper(deployment.get_connected_controller())
+        hypervisor_tfhelper = deployment.get_tfhelper("hypervisor-plan")
+        sunbeam_machine_tfhelper = deployment.get_tfhelper("sunbeam-machine-plan")
+
+        openstack_tfhelper = deployment.get_tfhelper("openstack-plan")
+        microceph_tfhelper = deployment.get_tfhelper("microceph-plan")
+        if k8s_provider == "k8s":
+            k8s_tfhelper = deployment.get_tfhelper("k8s-plan")
+            destroy_k8s_step = DestroyK8SApplicationStep
+        else:
+            k8s_tfhelper = deployment.get_tfhelper("microk8s-plan")
+            destroy_k8s_step = DestroyMicroK8SApplicationStep
+        if client and clusterd_up:
+            # note(gboutry): can't use terraform if no clusterd is up
+            plan.extend(
+                [
+                    DisableEnabledFeatures(deployment, no_prompt),
+                    TerraformInitStep(hypervisor_tfhelper),
+                    DestroyHypervisorApplicationStep(
+                        client,
+                        hypervisor_tfhelper,
+                        jhelper,
+                        manifest,
+                        deployment.openstack_machines_model,
+                    ),
+                    TerraformInitStep(openstack_tfhelper),
+                    DestroyControlPlaneStep(deployment, openstack_tfhelper, jhelper),
+                    RemoveSaasApplicationsStep(
+                        jhelper, deployment.openstack_machines_model, OPENSTACK_MODEL
+                    ),
+                    TerraformInitStep(microceph_tfhelper),
+                    DestroyMicrocephApplicationStep(
+                        client,
+                        microceph_tfhelper,
+                        jhelper,
+                        manifest,
+                        deployment.openstack_machines_model,
+                    ),
+                    TerraformInitStep(k8s_tfhelper),
+                    destroy_k8s_step(
+                        client,
+                        k8s_tfhelper,
+                        jhelper,
+                        manifest,
+                        deployment.openstack_machines_model,
+                    ),
+                    TerraformInitStep(sunbeam_machine_tfhelper),
+                    DestroySunbeamMachineApplicationStep(
+                        client,
+                        sunbeam_machine_tfhelper,
+                        jhelper,
+                        manifest,
+                        deployment.openstack_machines_model,
+                    ),
+                ]
+            )
+        plan.extend(
+            [
+                DestroyJujuModelStep(jhelper, deployment.openstack_machines_model),
+                DestroyJujuModelStep(jhelper, deployment.infra_model),
+            ]
+        )
+    except (ValueError, TimeoutError):
+        LOG.debug(
+            "Failed to initialize different helpers,"
+            " has juju controller already been destroyed?",
+            exc_info=True,
+        )
+    plan.append(
+        DestroyJujuControllerStep(
+            deployment,
+            manifest.core.software.juju.destroy_args,
+        ),
+    )
+    plan.append(
+        MaasRemoveDeploymentCredentialsStep(deployment.name, deployments),
+    )
+    plan.append(CleanTerraformPlansStep(deployment))
+    run_plan(plan, console, no_hint=False)
+    if jhelper:
+        run_sync(jhelper.controller.disconnect())
+    click.echo("Deployment destroyed.")

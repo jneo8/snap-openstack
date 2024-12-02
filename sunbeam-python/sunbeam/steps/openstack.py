@@ -40,6 +40,7 @@ from sunbeam.core.juju import (
     JujuHelper,
     JujuStepHelper,
     JujuWaitException,
+    ModelNotFoundException,
     TimeoutException,
     run_sync,
 )
@@ -57,6 +58,7 @@ from sunbeam.core.terraform import TerraformException, TerraformHelper
 
 LOG = logging.getLogger(__name__)
 OPENSTACK_DEPLOY_TIMEOUT = 3600  # 60 minutes
+OPENSTACK_DESTROY_TIMEOUT = 1800  # 30 minutes
 
 CONFIG_KEY = "TerraformVarsOpenstack"
 TOPOLOGY_KEY = "Topology"
@@ -735,3 +737,94 @@ class PromptRegionStep(BaseStep):
         :return:
         """
         return Result(ResultType.COMPLETED, f"Region set to {self.variables['region']}")
+
+
+class DestroyControlPlaneStep(BaseStep):
+    _MODEL = OPENSTACK_MODEL
+
+    def __init__(
+        self,
+        deployment: Deployment,
+        tfhelper: TerraformHelper,
+        jhelper: JujuHelper,
+    ):
+        super().__init__(
+            "Destroying OpenStack Control Plane", "Destroying OpenStack Control Plane"
+        )
+        self.deployment = deployment
+        self.tfhelper = tfhelper
+        self.jhelper = jhelper
+        self._has_tf_resources = False
+        self._has_juju_resources = False
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        try:
+            state = self.tfhelper.pull_state()
+            self._has_tf_resources = bool(state.get("resources"))
+        except TerraformException:
+            LOG.debug("Failed to pull state", exc_info=True)
+
+        try:
+            run_sync(self.jhelper.get_model(self._MODEL))
+            self._has_juju_resources = True
+        except ModelNotFoundException:
+            self._has_juju_resources = False
+
+        if not self._has_tf_resources and not self._has_juju_resources:
+            return Result(ResultType.SKIPPED)
+
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None) -> Result:
+        """Run the step to completion.
+
+        Invoked when the step is run and returns a ResultType to indicate
+
+        :return:
+        """
+        if self._has_tf_resources:
+            try:
+                self.tfhelper.destroy()
+            except TerraformException as e:
+                LOG.exception("Error destroying cloud")
+                return Result(ResultType.FAILED, str(e))
+
+        timeout_factor = 0.8
+
+        try:
+            run_sync(
+                self.jhelper.wait_model_gone(
+                    OPENSTACK_MODEL, int(OPENSTACK_DESTROY_TIMEOUT * timeout_factor)
+                )
+            )
+        except TimeoutException:
+            LOG.debug(
+                "Timeout waiting for model to be removed, trying through provider sdk"
+            )
+            try:
+                run_sync(self.jhelper.get_model(self._MODEL))
+            except ModelNotFoundException:
+                return Result(ResultType.COMPLETED)
+            run_sync(
+                self.jhelper.destroy_model(
+                    self._MODEL, destroy_storage=True, force=True
+                )
+            )
+            try:
+                run_sync(
+                    self.jhelper.wait_model_gone(
+                        OPENSTACK_MODEL,
+                        int(OPENSTACK_DESTROY_TIMEOUT * (1 - timeout_factor)),
+                    )
+                )
+            except TimeoutException:
+                return Result(
+                    ResultType.FAILED,
+                    "Timeout waiting for model to be removed, please check manually",
+                )
+        return Result(ResultType.COMPLETED)

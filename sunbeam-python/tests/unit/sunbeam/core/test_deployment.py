@@ -68,6 +68,7 @@ def deployment(mocker, snap):
             Deployment._load_tfhelpers, dep
         )
         dep.get_client.side_effect = ValueError("No clusterd in testing...")
+        dep.plans_directory = Path("/tmp/plans")
         dep.__setattr__("_tfhelpers", {})
         dep._manifest = None
         dep.__setattr__("name", "test_deployment")
@@ -136,7 +137,7 @@ class TestDeployment:
             [
                 call(
                     Path(snap.paths.snap / "etc" / tfplan_dir),
-                    Path(snap.paths.user_common / "etc" / deployment.name / tfplan_dir),
+                    Path(deployment.plans_directory / tfplan_dir),
                     dirs_exist_ok=True,
                 )
                 for tfplan_dir in TERRAFORM_DIR_NAMES.values()
@@ -165,7 +166,7 @@ class TestDeployment:
                     "source"
                 ]
             ),
-            Path(snap.paths.user_common / "etc" / deployment.name / tfplan_dir),
+            Path(deployment.plans_directory / tfplan_dir),
             dirs_exist_ok=True,
         )
         assert tfhelper.plan == tfplan

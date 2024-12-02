@@ -71,7 +71,11 @@ class DisabledFeatureError(FeatureError):
 
 
 class NotAutomaticFeatureError(FeatureError):
-    """Exception rased when feature cannot be automatically enabled."""
+    """Exception raised when feature cannot be automatically enabled."""
+
+
+class HasRequirersFeaturesError(FeatureError):
+    """Exception raised when feature has requirers features."""
 
 
 class ClickInstantiator:
@@ -685,7 +689,7 @@ class EnableDisableFeature(BaseFeature, Generic[ConfigType]):
                 if requirement.name != self.name:
                     continue
                 if state == "disable":
-                    raise FeatureError(
+                    raise HasRequirersFeaturesError(
                         f"{feature.name} is enabled and requires {self.name}"
                     )
                 message = (

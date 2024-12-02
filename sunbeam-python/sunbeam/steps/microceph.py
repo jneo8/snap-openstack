@@ -37,9 +37,10 @@ from sunbeam.core.manifest import Manifest
 from sunbeam.core.steps import (
     AddMachineUnitsStep,
     DeployMachineApplicationStep,
+    DestroyMachineApplicationStep,
     RemoveMachineUnitsStep,
 )
-from sunbeam.core.terraform import TerraformHelper
+from sunbeam.core.terraform import TerraformException, TerraformHelper
 
 LOG = logging.getLogger(__name__)
 CONFIG_KEY = "TerraformVarsMicrocephPlan"
@@ -570,3 +571,54 @@ class CheckMicrocephDistributionStep(BaseStep):
             )
 
         return Result(ResultType.COMPLETED)
+
+
+class DestroyMicrocephApplicationStep(DestroyMachineApplicationStep):
+    """Destroy Microceph application using Terraform."""
+
+    def __init__(
+        self,
+        client: Client,
+        tfhelper: TerraformHelper,
+        jhelper: JujuHelper,
+        manifest: Manifest,
+        model: str,
+    ):
+        super().__init__(
+            client,
+            tfhelper,
+            jhelper,
+            manifest,
+            CONFIG_KEY,
+            [APPLICATION],
+            model,
+            "Destroy MicroCeph",
+            "Destroying MicroCeph",
+        )
+
+    def get_application_timeout(self) -> int:
+        """Return application timeout in seconds."""
+        return MICROCEPH_APP_TIMEOUT
+
+    def run(self, status: Status | None = None) -> Result:
+        """Destroy microceph application."""
+        # note(gboutry):this is a workaround for
+        # https://github.com/juju/terraform-provider-juju/issues/473
+        try:
+            resources = self.tfhelper.state_list()
+        except TerraformException as e:
+            LOG.debug(f"Failed to list terraform state: {str(e)}")
+            return Result(ResultType.FAILED, "Failed to list terraform state")
+
+        for resource in resources:
+            if "integration" in resource:
+                try:
+                    self.tfhelper.state_rm(resource)
+                except TerraformException as e:
+                    LOG.debug(f"Failed to remove resource {resource}: {str(e)}")
+                    return Result(
+                        ResultType.FAILED,
+                        f"Failed to remove resource {resource}" " from state",
+                    )
+
+        return super().run(status)

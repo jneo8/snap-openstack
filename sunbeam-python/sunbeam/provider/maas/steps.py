@@ -1288,6 +1288,46 @@ class MaasSaveClusterdCredentialsStep(BaseStep):
         return Result(ResultType.COMPLETED)
 
 
+class MaasRemoveDeploymentCredentialsStep(BaseStep):
+    """Remove deployment credentials."""
+
+    def __init__(
+        self,
+        deployment_name: str,
+        deployments_config: DeploymentsConfig,
+    ):
+        super().__init__(
+            "Remove deployment credentials",
+            "Removing deployment credentials",
+        )
+        self.deployment_name = deployment_name
+        self.deployments_config = deployments_config
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not."""
+        deployment = self.deployments_config.get_deployment(self.deployment_name)
+        if not maas_deployment.is_maas_deployment(deployment):
+            return Result(ResultType.SKIPPED)
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None) -> Result:
+        """Remove credentials from deployment information."""
+        deployment = self.deployments_config.get_deployment(self.deployment_name)
+        if not maas_deployment.is_maas_deployment(deployment):
+            return Result(ResultType.FAILED)
+        deployment.clusterd_address = None
+        deployment.clusterd_certificate_authority = None
+        deployment.clusterd_certpair = None
+        # Do not unregister external controllers
+        if (
+            juju_controller := deployment.juju_controller
+        ) and not juju_controller.is_external:
+            deployment.juju_account = None
+            deployment.juju_controller = None
+        self.deployments_config.write()
+        return Result(ResultType.COMPLETED)
+
+
 class MaasAddMachinesToClusterdStep(BaseStep):
     """Add machines from MAAS to Clusterd."""
 

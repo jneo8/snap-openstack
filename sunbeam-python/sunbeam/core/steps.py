@@ -16,6 +16,8 @@
 import abc
 import logging
 
+from juju import application
+from juju import errors as juju_errors
 from lightkube.config.kubeconfig import KubeConfig
 from lightkube.core import exceptions
 from lightkube.core.client import Client as KubeClient
@@ -358,6 +360,117 @@ class RemoveMachineUnitsStep(BaseStep):
         except (ApplicationNotFoundException, TimeoutException) as e:
             LOG.warning(str(e))
             return Result(ResultType.FAILED, str(e))
+
+        return Result(ResultType.COMPLETED)
+
+
+class DestroyMachineApplicationStep(BaseStep):
+    """Base class to destroy machine application using Terraform."""
+
+    def __init__(
+        self,
+        client: Client,
+        tfhelper: TerraformHelper,
+        jhelper: JujuHelper,
+        manifest: Manifest,
+        config: str,
+        applications: list[str],
+        model: str,
+        banner: str = "",
+        description: str = "",
+    ):
+        super().__init__(banner, description)
+        self.client = client
+        self.tfhelper = tfhelper
+        self.jhelper = jhelper
+        self.manifest = manifest
+        self.config = config
+        self.applications = applications
+        self.model = model
+        self._has_tf_resources = False
+
+    def get_application_timeout(self) -> int:
+        """Application timeout in seconds."""
+        return 600
+
+    async def _list_applications(self) -> list[application.Application]:
+        """List applications managed by this step."""
+        apps = []
+        for app in self.applications:
+            try:
+                apps.append(await self.jhelper.get_application(app, self.model))
+                LOG.debug("Found application %s", app)
+            except ApplicationNotFoundException:
+                continue
+        return apps
+
+    def _wait_applications_gone(self, timeout: int) -> None:
+        """Wait for applications to be removed."""
+        run_sync(
+            self.jhelper.wait_application_gone(
+                self.applications, self.model, timeout=timeout
+            )
+        )
+
+    def is_skip(self, status: Status | None = None) -> Result:
+        """Determines if the step should be skipped or not.
+
+        :return: ResultType.SKIPPED if the Step should be skipped,
+                ResultType.COMPLETED or ResultType.FAILED otherwise
+        """
+        try:
+            state = self.tfhelper.pull_state()
+            self._has_tf_resources = bool(state.get("resources"))
+        except TerraformException:
+            LOG.debug("Failed to pull state", exc_info=True)
+
+        _has_juju_resources = len(run_sync(self._list_applications())) > 0
+
+        if not self._has_tf_resources and not _has_juju_resources:
+            return Result(ResultType.SKIPPED)
+
+        return Result(ResultType.COMPLETED)
+
+    def run(self, status: Status | None = None) -> Result:
+        """Destroy machine application using Terraform."""
+        if self._has_tf_resources:
+            try:
+                self.tfhelper.update_tfvars_and_apply_tf(
+                    self.client,
+                    self.manifest,
+                    tfvar_config=self.config,
+                    override_tfvars={
+                        "machine_model": self.model,
+                    },
+                    tf_apply_extra_args=["-input=false", "-destroy"],
+                )
+            except TerraformException as e:
+                return Result(ResultType.FAILED, str(e))
+
+        timeout_factor = 0.8
+
+        try:
+            self._wait_applications_gone(
+                int(self.get_application_timeout() * timeout_factor)
+            )
+        except TimeoutException:
+            LOG.warning("Failed to destroy applications, trying through provider sdk")
+            apps = run_sync(self._list_applications())
+            for app in apps:
+                try:
+                    run_sync(app.destroy(destroy_storage=True, force=True))
+                except juju_errors.JujuError:
+                    LOG.debug("Failed to destroy application", exc_info=True)
+                    continue
+
+            try:
+                self._wait_applications_gone(
+                    int(self.get_application_timeout() * (1 - timeout_factor))
+                )
+            except TimeoutException:
+                return Result(
+                    ResultType.FAILED, "Timed out destroying applications, try manually"
+                )
 
         return Result(ResultType.COMPLETED)
 
