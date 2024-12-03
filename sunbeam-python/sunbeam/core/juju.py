@@ -449,13 +449,32 @@ class JujuHelper:
             **options,
         )
 
-    async def add_machine(self, name: str, model: str) -> Machine:
-        """Add machines to model."""
+    async def add_machine(
+        self, name: str, model: str, base: str = JUJU_BASE
+    ) -> Machine:
+        """Add machine to model.
+
+        Workaround for https://github.com/juju/python-libjuju/issues/1229
+        """
         model_impl = await self.get_model(model)
-        machine: Machine = await model_impl.add_machine(
-            spec=model_impl.uuid + ":" + name, series="jammy"
-        )  # type: ignore
-        return machine
+        base_name, base_channel = base.split("@")
+        params = juju_client.AddMachineParams(
+            placement=juju_client.Placement(scope=model_impl.uuid, directive=name),
+            jobs=["JobHostUnits"],
+            base=juju_client.Base(channel=base_channel, name=base_name),
+        )
+
+        client_facade = juju_client.MachineManagerFacade.from_connection(
+            model_impl.connection()
+        )
+        results = await client_facade.AddMachines(params=[params])
+        error = results.machines[0].error
+        if error:
+            raise JujuError("Error adding machine: %s" % error.message)
+        machine_id = results.machines[0].machine
+
+        LOG.debug("Added new machine %s", machine_id)
+        return await model_impl._wait_for_new("machine", machine_id)  # type: ignore
 
     async def get_unit(self, name: str, model: str) -> Unit:
         """Fetch an application's unit in model.
