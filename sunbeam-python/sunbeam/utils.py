@@ -242,7 +242,8 @@ class CatchGroup(click.Group):
             LOG.debug(e, exc_info=True)
             message = (
                 "An unexpected error has occurred."
-                " Please run 'sunbeam inspect' to generate an inspection report."
+                " Please see https://canonical.com/microstack/docs/inspect"
+                " for troubleshooting information."
             )
             LOG.warn(message)
             LOG.error("Error: %s", e)

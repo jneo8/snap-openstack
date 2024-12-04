@@ -24,7 +24,6 @@ from sunbeam import log
 from sunbeam.commands import configure as configure_cmds
 from sunbeam.commands import dashboard_url as dasboard_url_cmds
 from sunbeam.commands import generate_cloud_config as generate_cloud_config_cmds
-from sunbeam.commands import inspect as inspect_cmds
 from sunbeam.commands import juju_utils as juju_cmds
 from sunbeam.commands import launch as launch_cmds
 from sunbeam.commands import manifest as manifest_cmds
@@ -106,7 +105,6 @@ def main():
     cli.add_command(prepare_node_cmds.prepare_node_script)
     cli.add_command(configure_cmds.configure)
     cli.add_command(generate_cloud_config_cmds.cloud_config)
-    cli.add_command(inspect_cmds.inspect)
     cli.add_command(launch_cmds.launch)
     cli.add_command(openrc_cmds.openrc)
     cli.add_command(dasboard_url_cmds.dashboard_url)
@@ -135,6 +133,8 @@ def main():
 
     cli.add_command(utils)
     utils.add_command(utils_cmds.juju_login)
+    utils.add_command(utils_cmds.plans)
+    utils.add_command(utils_cmds.unlock_plan)
 
     cli.add_command(juju)
     juju.add_command(juju_cmds.register_controller)
