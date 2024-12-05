@@ -40,7 +40,7 @@ resource "juju_application" "microk8s" {
     name     = "microk8s"
     channel  = var.charm_microk8s_channel
     revision = var.charm_microk8s_revision
-    base    = "ubuntu@22.04"
+    base    = "ubuntu@24.04"
   }
 
   config = merge({

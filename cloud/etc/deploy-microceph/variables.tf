@@ -16,7 +16,7 @@
 variable "charm_microceph_channel" {
   description = "Operator channel for microceph deployment"
   type        = string
-  default     = "reef/candidate"
+  default     = "squid/beta"
 }
 
 variable "charm_microceph_revision" {
@@ -33,7 +33,7 @@ variable "charm_microceph_config" {
 
 variable "microceph_channel" {
   description = "K8S channel to deploy, not the operator channel"
-  default     = "reef/stable"
+  default     = "squid/stable"
 }
 
 variable "machine_ids" {

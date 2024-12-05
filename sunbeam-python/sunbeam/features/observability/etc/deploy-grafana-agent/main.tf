@@ -34,7 +34,7 @@ resource "juju_application" "grafana-agent" {
     name     = "grafana-agent"
     channel  = var.grafana-agent-channel
     revision = var.grafana-agent-revision
-    base     = "ubuntu@22.04"
+    base     = "ubuntu@24.04"
   }
 
   config = var.grafana-agent-config

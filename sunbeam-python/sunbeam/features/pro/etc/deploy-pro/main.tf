@@ -39,7 +39,7 @@ resource "juju_application" "ubuntu_pro" {
   charm {
     name    = "ubuntu-advantage"
     channel = var.ubuntu-advantage-channel
-    base    = "ubuntu@22.04"
+    base    = "ubuntu@24.04"
   }
 
   config = {

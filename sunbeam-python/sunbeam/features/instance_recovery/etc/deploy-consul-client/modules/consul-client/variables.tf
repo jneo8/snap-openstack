@@ -36,7 +36,7 @@ variable "revision" {
 variable "base" {
   description = "Operator base"
   type        = string
-  default     = "ubuntu@22.04"
+  default     = "ubuntu@24.04"
 }
 
 variable "resource-configs" {

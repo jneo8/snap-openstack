@@ -32,9 +32,9 @@ core:
       sunbeam-machine:
         channel: 2024.1/beta
       microceph:
-        channel: reef/beta
+        channel: squid/beta
         config:
-          snap-channel: reef/beta
+          snap-channel: squid/beta
 features:
   caas:
     software:

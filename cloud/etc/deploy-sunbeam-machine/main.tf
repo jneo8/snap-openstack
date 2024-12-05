@@ -36,7 +36,7 @@ resource "juju_application" "sunbeam-machine" {
     name     = "sunbeam-machine"
     channel  = var.charm_channel
     revision = var.charm_revision
-    base    = "ubuntu@22.04"
+    base    = "ubuntu@24.04"
   }
 
   config = var.charm_config

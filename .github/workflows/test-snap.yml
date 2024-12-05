@@ -21,12 +21,12 @@ on:
       microceph-charm-channel:
         description: Specify microceph charms channel
         required: true
-        default: reef/candidate
+        default: squid/beta
         type: string
       microceph-snap-channel:
         description: Specify microceph snap channel
         required: true
-        default: reef/candidate
+        default: squid/beta
         type: string
       rabbitmq-charm-channel:
         description: Specify rabbitmq charms channel
@@ -63,7 +63,7 @@ on:
 jobs:
   functional-test:
     name: Functional test
-    runs-on: [self-hosted, large, jammy, x64]
+    runs-on: [self-hosted, large, noble, x64]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
