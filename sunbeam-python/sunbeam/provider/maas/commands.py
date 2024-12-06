@@ -98,6 +98,7 @@ from sunbeam.provider.maas.steps import (
     MaasBootstrapJujuStep,
     MaasClusterStatusStep,
     MaasConfigureMicrocephOSDStep,
+    MaasCreateLoadBalancerIPPoolsStep,
     MaasDeployInfraMachinesStep,
     MaasDeployK8SApplicationStep,
     MaasDeployMachinesStep,
@@ -185,7 +186,8 @@ from sunbeam.steps.microk8s import (
 from sunbeam.steps.openstack import (
     DeployControlPlaneStep,
     DestroyControlPlaneStep,
-    OpenStackPatchLoadBalancerServicesStep,
+    OpenStackPatchLoadBalancerServicesIPPoolStep,
+    OpenStackPatchLoadBalancerServicesIPStep,
     PromptRegionStep,
 )
 from sunbeam.steps.sunbeam_machine import (
@@ -734,6 +736,12 @@ def deploy(
             proxy_settings=proxy_settings,
         )
     )
+    plan2.append(MaasCreateLoadBalancerIPPoolsStep(deployment, client, maas_client))
+    plan2.append(
+        OpenStackPatchLoadBalancerServicesIPPoolStep(
+            client, deployment.public_api_label
+        )
+    )
     # Redeploy of Microceph is required to fill terraform vars
     # related to traefik-rgw/keystone-endpoints offers from
     # openstack model
@@ -748,7 +756,7 @@ def deploy(
             refresh=True,
         )
     )
-    plan2.append(OpenStackPatchLoadBalancerServicesStep(client))
+    plan2.append(OpenStackPatchLoadBalancerServicesIPStep(client))
     plan2.append(TerraformInitStep(tfhelper_hypervisor_deploy))
     plan2.append(
         DeployHypervisorApplicationStep(

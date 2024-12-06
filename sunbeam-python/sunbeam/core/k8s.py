@@ -13,9 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+from typing import Type
 
 from lightkube import ApiError
 from lightkube.core.client import Client as KubeClient
+from lightkube.generic_resource import (
+    GenericNamespacedResource,
+    create_namespaced_resource,
+)
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.core_v1 import Node, PersistentVolumeClaim, Pod
 from lightkube.types import CascadeType
@@ -28,12 +33,16 @@ LOG = logging.getLogger(__name__)
 # --- Microk8s specific
 MICROK8S_KUBECONFIG_KEY = "Microk8sConfig"
 MICROK8S_DEFAULT_STORAGECLASS = "microk8s-hostpath"
-METALLB_ANNOTATION = "metallb.universe.tf/loadBalancerIPs"
 
 # --- K8s specific
 K8S_DEFAULT_STORAGECLASS = "csi-rawfile-default"
 K8S_KUBECONFIG_KEY = "K8SKubeConfig"
 SERVICE_LB_ANNOTATION = "io.cilium/lb-ipam-ips"
+
+# --- Metallb specific
+METALLB_IP_ANNOTATION = "metallb.universe.tf/loadBalancerIPs"
+METALLB_ADDRESS_POOL_ANNOTATION = "metallb.universe.tf/address-pool"
+METALLB_ALLOCATED_POOL_ANNOTATION = "metallb.universe.tf/ip-allocated-from-pool"
 
 SUPPORTED_K8S_PROVIDERS = ["k8s", "microk8s"]
 CREDENTIAL_SUFFIX = "-creds"
@@ -93,9 +102,46 @@ class K8SHelper:
                 return MICROK8S_KUBECONFIG_KEY
 
     @classmethod
-    def get_loadbalancer_annotation(cls) -> str:
-        """Return loadbalancer annotation matching provider."""
-        return METALLB_ANNOTATION
+    def get_loadbalancer_ip_annotation(cls) -> str:
+        """Return loadbalancer ip annotation matching provider."""
+        return METALLB_IP_ANNOTATION
+
+    @classmethod
+    def get_loadbalancer_address_pool_annotation(cls) -> str:
+        """Return loadbalancer address pool annotation matching provider."""
+        return METALLB_ADDRESS_POOL_ANNOTATION
+
+    @classmethod
+    def get_loadbalancer_allocated_pool_annotation(cls) -> str:
+        """Return loadbalancer allocated ip pool annotation."""
+        return METALLB_ALLOCATED_POOL_ANNOTATION
+
+    @classmethod
+    def get_lightkube_loadbalancer_resource(cls) -> Type[GenericNamespacedResource]:
+        """Return lighkube generic resource of type loadbalancer."""
+        return create_namespaced_resource(
+            "metallb.io",
+            "v1beta1",
+            "IPAddressPool",
+            "ipaddresspools",
+            verbs=["delete", "get", "list", "patch", "post", "put"],
+        )
+
+    @classmethod
+    def get_lightkube_l2_advertisement_resource(cls) -> Type[GenericNamespacedResource]:
+        """Return lighkube generic resource of type l2advertisement."""
+        return create_namespaced_resource(
+            "metallb.io",
+            "v1beta1",
+            "L2Advertisement",
+            "l2advertisements",
+            verbs=["delete", "get", "list", "patch", "post", "put"],
+        )
+
+    @classmethod
+    def get_loadbalancer_namespace(cls) -> str:
+        """Return namespace for loadbalancer."""
+        return "metallb-system"
 
 
 def find_node(client: KubeClient, name: str) -> Node:
