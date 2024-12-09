@@ -434,11 +434,9 @@ class ValidationFeature(OpenStackControlPlaneFeature):
     @click.command()
     @click_option_show_hints
     @pass_method_obj
-    def enable_cmd(
-        self, deployment: Deployment, config: FeatureConfig, show_hints: bool
-    ) -> None:
+    def enable_cmd(self, deployment: Deployment, show_hints: bool) -> None:
         """Enable OpenStack Integration Test Suite (tempest)."""
-        self.enable_feature(deployment, config, show_hints)
+        self.enable_feature(deployment, FeatureConfig(), show_hints)
 
     @click.command()
     @click_option_show_hints
