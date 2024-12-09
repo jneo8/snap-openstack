@@ -428,6 +428,7 @@ class JujuHelper:
         revision: int | None = None,
         to: list[str] | None = None,
         config: dict | None = None,
+        base: str = JUJU_BASE,
     ):
         """Deploy an application."""
         options: dict = {}
@@ -445,7 +446,7 @@ class JujuHelper:
             charm,
             application_name=name,
             num_units=num_units,
-            base=JUJU_BASE,
+            base=base,
             **options,
         )
 

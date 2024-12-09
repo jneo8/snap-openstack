@@ -16,7 +16,7 @@
 variable "ubuntu-advantage-channel" {
   description = "Channel to use for deployment of ubuntu-advantage charm"
   type        = string
-  default     = "latest/stable"
+  default     = "latest/edge"
 }
 
 variable "token" {

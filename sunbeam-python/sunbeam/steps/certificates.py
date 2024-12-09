@@ -24,10 +24,11 @@ from sunbeam.core.juju import (
     run_sync,
 )
 from sunbeam.core.manifest import CharmManifest, Manifest
+from sunbeam.versions import JUJU_BASE
 
 LOG = logging.getLogger(__name__)
 APPLICATION = "tls-operator"
-CHARM = "self-signed-certificates"
+CHARM = "sunbeam-ssc"
 CERTIFICATES_APP_TIMEOUT = 1200
 
 
@@ -80,6 +81,7 @@ class DeployCertificatesProviderApplicationStep(BaseStep):
                 revision=charm_manifest.revision,
                 to=machines,
                 config=charm_manifest.config,
+                base=JUJU_BASE,
             )
         )
 

@@ -14,20 +14,21 @@
 # limitations under the License.
 
 
-SUPPORTED_RELEASE = "jammy"
+SUPPORTED_RELEASE = "noble"
 JUJU_CHANNEL = "3.6/stable"
-JUJU_BASE = "ubuntu@22.04"
+JUJU_BASE = "ubuntu@24.04"
 OPENSTACK_CHANNEL = "2024.1/stable"
 OVN_CHANNEL = "24.03/stable"
 RABBITMQ_CHANNEL = "3.12/stable"
 TRAEFIK_CHANNEL = "latest/beta"
-MICROCEPH_CHANNEL = "reef/candidate"
+MICROCEPH_CHANNEL = "squid/beta"
 SUNBEAM_MACHINE_CHANNEL = "2024.1/stable"
 SUNBEAM_CLUSTERD_CHANNEL = "2024.1/stable"
 SNAP_SUNBEAM_CLUSTERD_CHANNEL = "2024.1/stable"
 MICROK8S_CHANNEL = "legacy/stable"
 MYSQL_CHANNEL = "8.0/stable"
 CERT_AUTH_CHANNEL = "latest/beta"
+SUNBEAM_SSC_CHANNEL = "latest/beta"
 BIND_CHANNEL = "9/stable"
 VAULT_CHANNEL = "1.16/stable"
 CONSUL_CHANNEL = "1.19/edge"
@@ -65,6 +66,7 @@ MACHINE_CHARMS = {
     "openstack-hypervisor": OPENSTACK_CHANNEL,
     "sunbeam-machine": SUNBEAM_MACHINE_CHANNEL,
     "sunbeam-clusterd": SUNBEAM_CLUSTERD_CHANNEL,
+    "sunbeam-ssc": SUNBEAM_SSC_CHANNEL,
 }
 
 

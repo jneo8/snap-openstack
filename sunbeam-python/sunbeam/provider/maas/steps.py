@@ -1552,7 +1552,7 @@ class MaasDeployInfraMachinesStep(BaseStep):
             LOG.debug(f"Adding machine {machine['hostname']} to model {self.model}")
             run_sync(
                 self.jhelper.add_machine(
-                    "system-id=" + machine["system_id"], self.model
+                    "system-id=" + machine["system_id"], self.model, JUJU_BASE
                 )
             )
 

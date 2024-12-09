@@ -615,6 +615,7 @@ class DeploySunbeamClusterdApplicationStep(BaseStep):
                 revision=charm_manifest.revision,
                 to=machines,
                 config=charm_config,
+                base=versions.JUJU_BASE,
             )
         )
 
