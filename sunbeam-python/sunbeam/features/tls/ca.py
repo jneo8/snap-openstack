@@ -503,8 +503,8 @@ class CaTlsFeature(TlsFeature):
         Return the commands available once the feature is enabled.
         """
         return {
-            "init": [{"name": self.group, "command": self.tls_group}],
-            "init.tls": [{"name": self.name, "command": self.ca_group}],
+            "init": [{"name": self.group.name, "command": self.tls_group}],
+            "init.tls": [{"name": "ca", "command": self.ca_group}],
             "init.tls.ca": [
                 {"name": "unit_certs", "command": self.configure},
                 {
