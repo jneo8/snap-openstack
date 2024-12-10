@@ -18,6 +18,7 @@ import collections.abc
 import ipaddress
 import json
 import logging
+import os
 import re
 import secrets
 import socket
@@ -440,3 +441,15 @@ class DefaultableMappingParameter(click.ParamType):
 
         # Use square braces to indicate an option or optional argument.
         return f"[{repr_str}]"
+
+
+def clean_env():
+    """Remove unwanted environment variables from running process.
+
+    OpenStack variables defined in the environment can interfere with
+    the operation of the snap. When these variables are actually needed,
+    the snap set them itself.
+    """
+    for key in os.environ:
+        if key.startswith("OS_"):
+            os.environ.pop(key)
