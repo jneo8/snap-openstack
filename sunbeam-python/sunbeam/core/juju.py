@@ -54,7 +54,7 @@ from snaphelpers import Snap
 
 from sunbeam.clusterd.client import Client
 from sunbeam.core.common import SunbeamException
-from sunbeam.versions import JUJU_BASE
+from sunbeam.versions import JUJU_BASE, SUPPORTED_RELEASE
 
 LOG = logging.getLogger(__name__)
 CONTROLLER_MODEL = "admin/controller"
@@ -429,6 +429,7 @@ class JujuHelper:
         to: list[str] | None = None,
         config: dict | None = None,
         base: str = JUJU_BASE,
+        series: str = SUPPORTED_RELEASE,
     ):
         """Deploy an application."""
         options: dict = {}
@@ -447,6 +448,7 @@ class JujuHelper:
             application_name=name,
             num_units=num_units,
             base=base,
+            series=series,
             **options,
         )
 
