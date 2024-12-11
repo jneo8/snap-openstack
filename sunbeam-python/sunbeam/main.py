@@ -33,7 +33,7 @@ from sunbeam.commands import proxy as proxy_cmds
 from sunbeam.commands import utils as utils_cmds
 from sunbeam.core import deployments as deployments_jobs
 from sunbeam.provider import commands as provider_cmds
-from sunbeam.utils import CatchGroup
+from sunbeam.utils import CatchGroup, clean_env
 
 LOG = logging.getLogger()
 
@@ -98,6 +98,7 @@ def juju(ctx):
 
 
 def main():
+    clean_env()
     snap = Snap()
     logfile = log.prepare_logfile(snap.paths.user_common / "logs", "sunbeam")
     log.setup_root_logging(logfile)
