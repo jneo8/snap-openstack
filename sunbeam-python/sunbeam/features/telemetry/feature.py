@@ -204,7 +204,7 @@ class TelemetryFeature(OpenStackControlPlaneFeature):
         """Returns the database processes accessing this service."""
         return {
             "aodh": {"aodh-k8s": 8},
-            "gnocchi": {"gnocchi-k8s": 8},
+            "gnocchi": {"gnocchi-k8s": 12},
         }
 
     @click.command()

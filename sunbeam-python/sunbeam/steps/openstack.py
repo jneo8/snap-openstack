@@ -97,7 +97,9 @@ CONNECTIONS = {
     "horizon": {"horizon-k8s": 20},
     "keystone": {"keystone-k8s": 5},
     "neutron": {"neutron-k8s": 8 * 2},
-    "nova": {"nova-k8s": 8 * 3},
+    # Nova k8s as multiple mysql routers
+    # that also need to be factored in
+    "nova": {"nova-k8s": 11 * 3},
     "placement": {"placement-k8s": 4},
 }
 
@@ -157,8 +159,9 @@ def compute_resources_for_service(
     total_connections = 0
     for process in database.values():
         # each service needs, in the worst case, max_pool_size connections
-        # per process, plus one for its mysql router
-        nb_connections = max_pool_size * process + 1
+        # per process, plus 1 for its mysql router, 1 for mysql router charm
+        # 1 for the db charm
+        nb_connections = max_pool_size * process + 3
         total_connections += nb_connections
         memory_needed += nb_connections * MB_BYTES_PER_CONNECTION
     return total_connections, memory_needed
