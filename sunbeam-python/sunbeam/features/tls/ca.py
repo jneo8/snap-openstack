@@ -461,7 +461,9 @@ class CaTlsFeature(TlsFeature):
         """Configure Unit certs."""
         client = deployment.get_client()
         manifest = deployment.get_manifest(manifest_path)
-        preseed = manifest.core.config
+        preseed = {}
+        if (ca := manifest.get_feature(self.name.split(".")[-1])) and ca.config:
+            preseed = ca.config.model_dump(by_alias=True)
         model = OPENSTACK_MODEL
         apps_to_monitor = ["traefik", "traefik-public", "keystone"]
         if client.cluster.list_nodes_by_role("storage"):
@@ -485,7 +487,7 @@ class CaTlsFeature(TlsFeature):
                 jhelper,
                 ca,
                 ca_chain,
-                deployment_preseed=preseed.model_dump(by_alias=True) if preseed else {},
+                deployment_preseed=preseed,
             ),
             # On ingress change, the keystone takes time to update the service
             # endpoint, update the identity-service relation data on every
