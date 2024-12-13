@@ -128,12 +128,20 @@ from sunbeam.steps.k8s import (
     AddK8SCloudStep,
     AddK8SCredentialStep,
     AddK8SUnitsStep,
+    CheckMysqlK8SDistributionStep,
+    CheckOvnK8SDistributionStep,
+    CheckRabbitmqK8SDistributionStep,
+    CordonK8SUnitStep,
     DeployK8SApplicationStep,
+    DrainK8SUnitStep,
+    MigrateK8SKubeconfigStep,
     RemoveK8SUnitsStep,
     StoreK8SKubeConfigStep,
+    UpdateK8SCloudStep,
 )
 from sunbeam.steps.microceph import (
     AddMicrocephUnitsStep,
+    CheckMicrocephDistributionStep,
     ConfigureMicrocephOSDStep,
     DeployMicrocephApplicationStep,
     RemoveMicrocephUnitsStep,
@@ -962,32 +970,59 @@ def remove(ctx: click.Context, name: str, force: bool, show_hints: bool) -> None
 
     plan = [
         JujuLoginStep(deployment.juju_account),
+        CheckMicrocephDistributionStep(
+            client,
+            name,
+            jhelper,
+            deployment.openstack_machines_model,
+            force=force,
+        ),
+        CheckMysqlK8SDistributionStep(
+            client,
+            name,
+            jhelper,
+            deployment.openstack_machines_model,
+            force=force,
+        ),
+        CheckOvnK8SDistributionStep(
+            client,
+            name,
+            jhelper,
+            deployment.openstack_machines_model,
+            force=force,
+        ),
+        CheckRabbitmqK8SDistributionStep(
+            client,
+            name,
+            jhelper,
+            deployment.openstack_machines_model,
+            force=force,
+        ),
+        MigrateK8SKubeconfigStep(
+            client, name, jhelper, deployment.openstack_machines_model
+        ),
+        UpdateK8SCloudStep(deployment, jhelper),
+        RemoveHypervisorUnitStep(
+            client, name, jhelper, deployment.openstack_machines_model, force
+        ),
+        RemoveMicrocephUnitsStep(
+            client, name, jhelper, deployment.openstack_machines_model
+        ),
+        CordonK8SUnitStep(client, name, jhelper, deployment.openstack_machines_model),
+        DrainK8SUnitStep(client, name, jhelper, deployment.openstack_machines_model),
+        RemoveK8SUnitsStep(client, name, jhelper, deployment.openstack_machines_model),
         RemoveSunbeamMachineUnitsStep(
             client, name, jhelper, deployment.openstack_machines_model
         ),
+        RemoveJujuMachineStep(
+            client, name, jhelper, deployment.openstack_machines_model
+        ),
+        # Cannot remove user as the same user name cannot be resued,
+        # so commenting the RemoveJujuUserStep
+        # RemoveJujuUserStep(name),
+        ClusterRemoveNodeStep(client, name),
     ]
 
-    plan.append(
-        RemoveK8SUnitsStep(client, name, jhelper, deployment.openstack_machines_model)
-    )
-
-    plan.extend(
-        [
-            RemoveMicrocephUnitsStep(
-                client, name, jhelper, deployment.openstack_machines_model
-            ),
-            RemoveHypervisorUnitStep(
-                client, name, jhelper, deployment.openstack_machines_model, force
-            ),
-            RemoveJujuMachineStep(
-                client, name, jhelper, deployment.openstack_machines_model
-            ),
-            # Cannot remove user as the same user name cannot be resued,
-            # so commenting the RemoveJujuUserStep
-            # RemoveJujuUserStep(name),
-            ClusterRemoveNodeStep(client, name),
-        ]
-    )
     run_plan(plan, console, show_hints)
     click.echo(f"Removed node {name} from the cluster")
     # Removing machine does not clean up all deployed juju components. This is
@@ -995,9 +1030,10 @@ def remove(ctx: click.Context, name: str, force: bool, show_hints: bool) -> None
     # Without the workaround mentioned in LP#1851489, it is not possible to
     # reprovision the machine back.
     click.echo(
-        f"Run command 'sudo /sbin/remove-juju-services' on node {name} "
+        f"Run command `sudo /sbin/remove-juju-services` on node {name} "
         "to reuse the machine."
     )
+    click.echo("Run `sunbeam cluster resize` to scale down the cluster")
 
 
 @click.command("deployment")
