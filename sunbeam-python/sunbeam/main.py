@@ -28,6 +28,7 @@ from sunbeam.commands import juju_utils as juju_cmds
 from sunbeam.commands import launch as launch_cmds
 from sunbeam.commands import manifest as manifest_cmds
 from sunbeam.commands import openrc as openrc_cmds
+from sunbeam.commands import plans as plans_cmd
 from sunbeam.commands import prepare_node as prepare_node_cmds
 from sunbeam.commands import proxy as proxy_cmds
 from sunbeam.commands import utils as utils_cmds
@@ -132,10 +133,10 @@ def main():
     cli.add_command(enable)
     cli.add_command(disable)
 
+    cli.add_command(plans_cmd.plans)
+
     cli.add_command(utils)
     utils.add_command(utils_cmds.juju_login)
-    utils.add_command(utils_cmds.plans)
-    utils.add_command(utils_cmds.unlock_plan)
 
     cli.add_command(juju)
     juju.add_command(juju_cmds.register_controller)
