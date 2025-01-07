@@ -303,7 +303,7 @@ async def test_jhelper_get_leader_unit(
     app = "k8s"
     unit = await jhelper.get_leader_unit(app, "control-plane")
     assert unit is not None
-    assert applications.get.called_with(app)
+    applications.get.assert_called_with(app)
 
 
 @pytest.mark.asyncio
@@ -334,7 +334,7 @@ async def test_jhelper_get_application(
 ):
     app = await jhelper.get_application("k8s", "control-plane")
     assert app is not None
-    assert applications.get.called_with("k8s")
+    applications.get.assert_called_with("k8s")
 
 
 @pytest.mark.asyncio
