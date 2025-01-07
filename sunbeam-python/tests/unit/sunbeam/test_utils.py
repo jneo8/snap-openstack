@@ -13,12 +13,9 @@
 # limitations under the License.
 
 import textwrap
-from dataclasses import InitVar
 from unittest.mock import mock_open, patch
 
 import pytest
-from pydantic import PrivateAttr
-from pydantic.dataclasses import dataclass
 
 import sunbeam.utils as utils
 
@@ -56,25 +53,6 @@ def ifaddresses():
     with patch("sunbeam.utils.netifaces.ifaddresses") as p:
         p.side_effect = lambda nic: IFADDRESSES.get(nic)
         yield p
-
-
-@dataclass
-class B:
-    b_str: str | None = None
-    b_dict: dict | None = None
-
-
-@dataclass
-class A:
-    a_init: InitVar[str]
-    a_priv: str = PrivateAttr(default="a_priv")
-    a_int: int | None = None
-    a_str: str | None = None
-    a_dict: dict | None = None
-    a_dict_b: dict[str, B] | None = None
-
-    def __post_init__(self, a_init):
-        self.a_priv = "a_priv"
 
 
 class TestUtils:
