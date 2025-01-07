@@ -262,9 +262,10 @@ class DeployGrafanaAgentStep(BaseStep, JujuStepHelper):
 
     def run(self, status: Status | None = None) -> Result:
         """Execute configuration using terraform."""
+        integration_apps = ["k8s", "openstack-hypervisor"]
         extra_tfvars = {
             "principal-application-model": self.model,
-            "principal-application": "openstack-hypervisor",
+            "grafana-agent-integration-apps": integration_apps,
         }
         # Offer URLs from COS are added from feature
         extra_tfvars.update(

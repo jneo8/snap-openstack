@@ -15,8 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-variable "principal-application" {
-  description = "Name of the deployed principal application that integrates with grafana-agent"
+variable "grafana-agent-integration-apps" {
+  description = "List of the deployed principal applications that integrate with grafana-agent"
+  type        = list(string)
+  default     = []
 }
 
 variable "principal-application-model" {
