@@ -422,7 +422,20 @@ def get_juju_bootstrap_plans(
     """Get Juju Bootstrap related plans."""
     client = deployment.get_client()
     proxy_settings = deployment.get_proxy_settings()
-    bootstrap_args.extend(["--config", "controller-service-type=loadbalancer"])
+
+    # If the secret backend is left to defaults i.e., auto, the secret backend
+    # is set to k8s if the controller is k8s based and non-k8s machines cannot
+    # get secrets as they try to connect to k8s on service_ip which is not
+    # reachable from non-k8s machines.
+    # https://bugs.launchpad.net/snap-openstack/+bug/2091724
+    # To avoid the bug, change the default secret backend to internal
+    bootstrap_args.extend(
+        [
+            "--config",
+            "controller-service-type=loadbalancer",
+            "--model-default=secret-backend=internal",
+        ]
+    )
 
     return [
         AddK8SCloudInClientStep(deployment),
