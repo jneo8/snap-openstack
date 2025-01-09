@@ -72,7 +72,7 @@ class TestEnableUbuntuProApplicationStep(unittest.TestCase):
             self.client,
             self.manifest,
             tfvar_config=None,
-            override_tfvars={"token": self.token},
+            override_tfvars={"machine-model": self.model, "token": self.token},
         )
         self.jhelper.wait_application_ready.assert_called_once()
         assert result.result_type == ResultType.COMPLETED
