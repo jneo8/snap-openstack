@@ -41,8 +41,9 @@ resource "juju_application" "grafana-agent" {
 }
 
 # juju integrate <principal-application>:cos-agent grafana-agent:cos-agent
-resource "juju_integration" "principal-application-to-grafana-agent" {
-  model = var.principal-application-model
+resource "juju_integration" "grafana_agent_integrations" {
+  for_each = toset(var.grafana-agent-integration-apps)
+  model    = var.principal-application-model
 
   application {
     name     = juju_application.grafana-agent.name
@@ -50,7 +51,7 @@ resource "juju_integration" "principal-application-to-grafana-agent" {
   }
 
   application {
-    name     = var.principal-application
+    name     = each.value
     endpoint = "cos-agent"
   }
 }
@@ -71,7 +72,7 @@ resource "juju_integration" "grafana-agent-to-cos-prometheus" {
 
 # juju integrate grafana-agent cos.loki-logging
 resource "juju_integration" "grafana-agent-to-cos-loki" {
-  count = var.logging-offer-url != null ? 1 : 0 
+  count = var.logging-offer-url != null ? 1 : 0
   model = var.principal-application-model
 
   application {
