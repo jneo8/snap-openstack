@@ -26,14 +26,10 @@ terraform {
 
 provider "juju" {}
 
-data "juju_model" "controller" {
-  name = "controller"
-}
-
 resource "juju_application" "ubuntu_pro" {
   count = var.token != "" ? 1 : 0
   name  = "ubuntu-pro"
-  model = data.juju_model.controller.name
+  model = var.machine-model
   units = 0
 
   charm {
@@ -49,7 +45,7 @@ resource "juju_application" "ubuntu_pro" {
 
 resource "juju_integration" "juju_info" {
   count = var.token != "" ? 1 : 0
-  model = data.juju_model.controller.name
+  model = var.machine-model
 
   application {
     name     = "sunbeam-machine"

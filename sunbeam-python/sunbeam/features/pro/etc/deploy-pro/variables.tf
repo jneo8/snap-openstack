@@ -19,6 +19,11 @@ variable "ubuntu-advantage-channel" {
   default     = "latest/edge"
 }
 
+variable "machine-model" {
+  description = "Name of model to deploy ubuntu-pro into."
+  type        = string
+}
+
 variable "token" {
   description = "Ubuntu Pro token to use to attach support subscriptions"
   type        = string
