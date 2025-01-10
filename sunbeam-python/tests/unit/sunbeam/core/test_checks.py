@@ -49,6 +49,7 @@ class TestSshKeysConnectedCheck:
 
 class TestDaemonGroupCheck:
     def test_run(self, mocker, snap):
+        snap.services.list.return_value = {"clusterd": Mock(active=True)}
         mocker.patch.object(checks, "Snap", return_value=snap)
         mocker.patch.object(os, "access", return_value=True)
 
@@ -59,6 +60,7 @@ class TestDaemonGroupCheck:
         assert result is True
 
     def test_run_no_daemon_socket_access(self, mocker, snap):
+        snap.services.list.return_value = {"clusterd": Mock(active=True)}
         mocker.patch.object(checks, "Snap", return_value=snap)
         mocker.patch.object(os, "access", return_value=False)
 
@@ -68,6 +70,17 @@ class TestDaemonGroupCheck:
 
         assert result is False
         assert "Insufficient permissions" in check.message
+
+    def test_run_daemon_not_active(self, mocker, snap):
+        snap.services.list.return_value = {"clusterd": Mock(active=False)}
+        mocker.patch.object(checks, "Snap", return_value=snap)
+
+        check = checks.DaemonGroupCheck()
+
+        result = check.run()
+
+        assert result is False
+        assert "Clusterd service is not active" in check.message
 
 
 class TestLocalShareCheck:
