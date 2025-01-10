@@ -169,7 +169,7 @@ class TerraformHelper:
             if backend_updated:
                 LOG.debug("Backend updated, running terraform init -reconfigure")
                 cmd.append("-reconfigure")
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -203,7 +203,7 @@ class TerraformHelper:
             cmd.extend(["-auto-approve", "-no-color"])
             if self.parallelism is not None:
                 cmd.append(f"-parallelism={self.parallelism}")
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -241,7 +241,7 @@ class TerraformHelper:
             ]
             if self.parallelism is not None:
                 cmd.append(f"-parallelism={self.parallelism}")
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -270,7 +270,7 @@ class TerraformHelper:
 
         try:
             cmd = [self.terraform, "output", "-json", "-no-color"]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -306,7 +306,7 @@ class TerraformHelper:
 
         try:
             cmd = [self.terraform, "state", "pull"]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -335,7 +335,7 @@ class TerraformHelper:
 
         try:
             cmd = [self.terraform, "state", "list"]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -365,7 +365,7 @@ class TerraformHelper:
 
         try:
             cmd = [self.terraform, "state", "rm", resource]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(
                 cmd,
                 capture_output=True,

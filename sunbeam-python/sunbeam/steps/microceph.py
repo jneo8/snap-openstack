@@ -618,7 +618,7 @@ class DestroyMicrocephApplicationStep(DestroyMachineApplicationStep):
                     LOG.debug(f"Failed to remove resource {resource}: {str(e)}")
                     return Result(
                         ResultType.FAILED,
-                        f"Failed to remove resource {resource}" " from state",
+                        f"Failed to remove resource {resource} from state",
                     )
 
         return super().run(status)

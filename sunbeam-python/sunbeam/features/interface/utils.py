@@ -93,7 +93,7 @@ def validate_ca_chain(
         chain_bytes = base64.b64decode(value)
         chain_list = re.findall(
             pattern=(
-                "(?=-----BEGIN CERTIFICATE-----)(.*?)" "(?<=-----END CERTIFICATE-----)"
+                "(?=-----BEGIN CERTIFICATE-----)(.*?)(?<=-----END CERTIFICATE-----)"
             ),
             string=chain_bytes.decode(),
             flags=re.DOTALL,

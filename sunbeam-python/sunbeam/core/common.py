@@ -161,7 +161,7 @@ class StepResult:
             # attribute.
             if hasattr(self, key):
                 raise ValueError(
-                    f"{key} was specified but already exists on " f"this StepResult."
+                    f"{key} was specified but already exists on this StepResult."
                 )
             self.__setattr__(key, value)
 
