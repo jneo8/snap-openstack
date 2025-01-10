@@ -78,7 +78,7 @@ class Profile(pydantic.BaseModel):
 DEFAULT_PROFILE = Profile(
     name="refstack",
     help=(
-        "Tests that are part of the RefStack project " "https://refstack.openstack.org/"
+        "Tests that are part of the RefStack project https://refstack.openstack.org/"
     ),
     params={"test-list": "refstack-2022.11"},
 )

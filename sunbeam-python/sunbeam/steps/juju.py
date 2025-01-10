@@ -303,7 +303,7 @@ class BootstrapJujuStep(BaseStep, JujuStepHelper):
                     arg = "=".join((option, "********"))
                 hidden_cmd.append(arg)
 
-            LOG.debug(f'Running command {" ".join(hidden_cmd)}')
+            LOG.debug(f"Running command {' '.join(hidden_cmd)}")
             env = os.environ.copy()
             env.update(self.proxy_settings)
 
@@ -345,7 +345,7 @@ class ScaleJujuStep(BaseStep, JujuStepHelper):
             str(self.n),
             *self.extra_args,
         ]
-        LOG.debug(f'Running command {" ".join(cmd)}')
+        LOG.debug(f"Running command {' '.join(cmd)}")
         process = subprocess.run(cmd, capture_output=True, text=True, check=True)
         LOG.debug(f"Command finished. stdout={process.stdout}, stderr={process.stderr}")
         cmd = [
@@ -360,7 +360,7 @@ class ScaleJujuStep(BaseStep, JujuStepHelper):
         ]
         self.update_status(status, "scaling controller")
         LOG.debug("Waiting for HA to be enabled")
-        LOG.debug(f'Running command {" ".join(cmd)}')
+        LOG.debug(f"Running command {' '.join(cmd)}")
         process = subprocess.run(cmd, capture_output=True, text=True, check=True)
         LOG.debug(f"Command finished. stdout={process.stdout}, stderr={process.stderr}")
         return Result(ResultType.COMPLETED)
@@ -456,7 +456,7 @@ class CreateJujuUserStep(BaseStep, JujuStepHelper):
         """
         try:
             cmd = [self._get_juju_binary(), "add-user", self.username]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -473,7 +473,7 @@ class CreateJujuUserStep(BaseStep, JujuStepHelper):
 
             # Grant superuser access to user.
             cmd = [self._get_juju_binary(), "grant", self.username, "superuser"]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -488,7 +488,7 @@ class CreateJujuUserStep(BaseStep, JujuStepHelper):
                 "admin",
                 CONTROLLER_MODEL,
             ]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -536,7 +536,7 @@ class JujuGrantModelAccessStep(BaseStep, JujuStepHelper):
                 "admin",
                 model_with_owner,
             ]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -594,7 +594,7 @@ class RemoveJujuUserStep(BaseStep, JujuStepHelper):
         """
         try:
             cmd = [self._get_juju_binary(), "remove-user", self.username, "--yes"]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -699,7 +699,7 @@ class RegisterJujuUserStep(BaseStep, JujuStepHelper):
                     self.controller,
                     "--no-prompt",
                 ]
-                LOG.debug(f'Running command {" ".join(cmd)}')
+                LOG.debug(f"Running command {' '.join(cmd)}")
                 process = subprocess.run(
                     cmd, capture_output=True, text=True, check=True
                 )
@@ -901,7 +901,7 @@ class UnregisterJujuController(BaseStep, JujuStepHelper):
                 self.controller,
                 "--no-prompt",
             ]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -1080,7 +1080,7 @@ class RemoveJujuMachineStep(BaseStep, JujuStepHelper):
                 str(self.machine_id),
                 "--no-prompt",
             ]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -1600,7 +1600,7 @@ class DownloadJujuControllerCharmStep(BaseStep, JujuStepHelper):
                 "--base",
                 JUJU_BASE,
             ]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             env = os.environ.copy()
             env.update(self.proxy_settings)
             process = subprocess.run(
@@ -1928,7 +1928,7 @@ class SwitchToController(BaseStep, JujuStepHelper):
         """Switch to juju controller."""
         try:
             cmd = [self._get_juju_binary(), "switch", self.controller]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -2156,7 +2156,7 @@ class MigrateModelStep(BaseStep, JujuStepHelper):
 
     def _switch_controller(self, controller: str):
         cmd = [self._get_juju_binary(), "switch", controller]
-        LOG.debug(f'Running command {" ".join(cmd)}')
+        LOG.debug(f"Running command {' '.join(cmd)}")
         process = subprocess.run(cmd, capture_output=True, text=True, check=True)
         LOG.debug(f"Command finished. stdout={process.stdout}, stderr={process.stderr}")
 
@@ -2205,7 +2205,7 @@ class MigrateModelStep(BaseStep, JujuStepHelper):
 
         try:
             cmd = [self._get_juju_binary(), "migrate", self.model, self.to_controller]
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"

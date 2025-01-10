@@ -126,7 +126,7 @@ class VaultHelper:
             "-tls-skip-verify",
             "-format=json",
         ]
-        LOG.debug(f'Running vault command: {" ".join(cmd)}')
+        LOG.debug(f"Running vault command: {' '.join(cmd)}")
         result = self._run_command_on_container(unit, cmd)
         LOG.debug(f"Vault command result: {result}")
         return json.loads(result.get("stdout"))
@@ -149,7 +149,7 @@ class VaultHelper:
             "-tls-skip-verify",
             "-format=json",
         ]
-        LOG.debug(f'Running vault command: {" ".join(cmd)}')
+        LOG.debug(f"Running vault command: {' '.join(cmd)}")
         result = self._run_command_on_container(unit, cmd)
         # Do not log result since the result has secret keys
         LOG.debug(f"Vault command result code: {result['return-code']}")
@@ -175,7 +175,7 @@ class VaultHelper:
             "-format=json",
             key,
         ]
-        LOG.debug(f'Running vault command: {" ".join(cmd[:-1])}')
+        LOG.debug(f"Running vault command: {' '.join(cmd[:-1])}")
         result = self._run_command_on_container(unit, cmd)
         LOG.debug(f"Vault command result: {result}")
         if result["return-code"] != 0:
@@ -201,7 +201,7 @@ class VaultHelper:
             "-format=json",
         ]
         env = {"VAULT_TOKEN": root_token}
-        LOG.debug(f'Running vault command: {" ".join(cmd)}')
+        LOG.debug(f"Running vault command: {' '.join(cmd)}")
         result = self._run_command_on_container(unit, cmd, env)
         # Do not log result since the result has root token
         LOG.debug(f"Vault command result code: {result.get('return-code')}")

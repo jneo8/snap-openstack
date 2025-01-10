@@ -311,9 +311,9 @@ class MachineNetworkCheck(DiagnosticsCheck):
                 diagnostics=textwrap.dedent(
                     f"""\
                     A machine needs to be in spaces to be a part of an openstack
-                    deployment. Given machine has roles: {', '.join(assigned_roles)},
+                    deployment. Given machine has roles: {", ".join(assigned_roles)},
                     and therefore needs to be a part of the following spaces:
-                    {', '.join(required_spaces)}."""
+                    {", ".join(required_spaces)}."""
                 ),
                 machine=self.machine["hostname"],
             )
@@ -551,7 +551,7 @@ class MachineRequirementsCheck(DiagnosticsCheck):
                     {memory_min}MB RAM to be a part of an openstack deployment.
                     Either add more cores and memory to the machine or remove the
                     machine from the deployment.
-                    {self.machine['hostname']}:
+                    {self.machine["hostname"]}:
                         roles: {self.machine["roles"]}
                         cores: {self.machine["cores"]}
                         memory: {self.machine["memory"]}MB"""
@@ -690,7 +690,7 @@ class ZonesCheck(DiagnosticsCheck):
         diagnostics = textwrap.dedent(
             f"""\
             A deployment needs to have either 1 zone or more than 2 zones.
-            Current zones: {', '.join(self.zones)}
+            Current zones: {", ".join(self.zones)}
             """
         )
         if nb_zones == 0:

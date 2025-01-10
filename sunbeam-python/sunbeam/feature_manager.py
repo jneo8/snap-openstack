@@ -263,9 +263,6 @@ class FeatureManager:
                     p.upgrade_hook(deployment, upgrade_release=upgrade_release)
                 except TypeError:
                     LOG.debug(
-                        (
-                            f"Feature {p.name} does not support upgrades "
-                            "between channels"
-                        )
+                        f"Feature {p.name} does not support upgrades between channels"
                     )
                     p.upgrade_hook(deployment)

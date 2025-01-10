@@ -114,7 +114,7 @@ def launch(
             instance_name = name if name else petname.Generate()
             image = conn.compute.find_image(image_name)
             flavor = conn.compute.find_flavor("m1.tiny")
-            network = conn.network.find_network(f'{tf_output["OS_USERNAME"]}-network')
+            network = conn.network.find_network(f"{tf_output['OS_USERNAME']}-network")
             keypair = conn.compute.find_keypair(key)
             server = conn.compute.create_server(
                 name=instance_name,

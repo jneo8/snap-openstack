@@ -996,7 +996,7 @@ class JujuHelper:
             )
         except asyncio.TimeoutError as e:
             raise TimeoutException(
-                "Timed out while waiting for units " f"{', '.join(name_set)} to be gone"
+                f"Timed out while waiting for units {', '.join(name_set)} to be gone"
             ) from e
 
     async def wait_units_ready(
@@ -1491,7 +1491,7 @@ class JujuStepHelper:
         cmd.extend(args)
         cmd.extend(["--format", "json"])
 
-        LOG.debug(f'Running command {" ".join(cmd)}')
+        LOG.debug(f"Running command {' '.join(cmd)}")
         process = subprocess.run(cmd, capture_output=True, text=True, check=True)
         LOG.debug(f"Command finished. stdout={process.stdout}, stderr={process.stderr}")
 
@@ -1628,7 +1628,7 @@ class JujuStepHelper:
             ]
             if controller:
                 cmd.extend(["--controller", controller, "--force"])
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -1651,7 +1651,7 @@ class JujuStepHelper:
 
             env = os.environ.copy()
             env.update({"KUBECONFIG": temp.name})
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(
                 cmd, capture_output=True, text=True, check=True, env=env
             )
@@ -1679,7 +1679,7 @@ class JujuStepHelper:
                 cmd.extend(["--controller", controller])
             else:
                 cmd.extend(["--client"])
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -1702,7 +1702,7 @@ class JujuStepHelper:
             requirer,
         ]
         try:
-            LOG.debug(f'Running command {" ".join(cmd)}')
+            LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
             LOG.debug(
                 f"Command finished. stdout={process.stdout}, stderr={process.stderr}"
@@ -1722,7 +1722,7 @@ class JujuStepHelper:
             provider,
             requirer,
         ]
-        LOG.debug(f'Running command {" ".join(cmd)}')
+        LOG.debug(f"Running command {' '.join(cmd)}")
         process = subprocess.run(cmd, capture_output=True, text=True, check=True)
         LOG.debug(f"Command finished. stdout={process.stdout}, stderr={process.stderr}")
 
