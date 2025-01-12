@@ -606,7 +606,7 @@ class LXDJujuControllerRegistrationCheck(Check):
         controllers = JujuStepHelper().get_controllers(clouds=["localhost"])
         if len(controllers) == 0:
             self.message = (
-                "Missing Juju controller on LXD"
+                "Missing Juju controller on LXD\n"
                 "Bootstrap Juju controller on LXD:"
                 "\n"
                 "    juju bootstrap localhost"
