@@ -38,6 +38,8 @@ from sunbeam.core.juju import JujuStepHelper
 
 LOG = logging.getLogger(__name__)
 
+CLUSTERD_SERVICE = "clusterd"
+
 
 def run_preflight_checks(checks: Sequence["Check"], console: Console):
     """Run preflight checks sequentially.
@@ -235,11 +237,11 @@ class DaemonGroupCheck(Check):
     """Check if user is member of socket group."""
 
     def __init__(self):
-        snap = Snap()
+        self.snap = Snap()
 
         self.user = os.environ.get("USER")
-        self.group = snap.config.get("daemon.group")
-        self.clusterd_socket = Path(snap.paths.common / "state" / "control.socket")
+        self.group = self.snap.config.get("daemon.group")
+        self.clusterd_socket = Path(self.snap.paths.common / "state" / "control.socket")
 
         super().__init__(
             "Check for snap_daemon group membership",
@@ -252,6 +254,24 @@ class DaemonGroupCheck(Check):
         Checks:
             - User has access to clusterd socket
         """
+        services = self.snap.services.list()
+        if CLUSTERD_SERVICE not in services:
+            self.message = f"{CLUSTERD_SERVICE} service not detected"
+            return False
+
+        if (clusterd := services[CLUSTERD_SERVICE]) and not clusterd.active:
+            self.message = (
+                f"{CLUSTERD_SERVICE.capitalize()} service is not active\n"
+                "Check status by running:\n"
+                "\n"
+                f"    snap services {self.snap.name}\n"
+                "\n"
+                "Check logs by running:\n"
+                "\n"
+                f"   sudo snap logs {self.snap.name}.clusterd"
+            )
+            return False
+
         if not os.access(self.clusterd_socket, os.W_OK):
             self.message = (
                 "Insufficient permissions to run sunbeam commands\n"
