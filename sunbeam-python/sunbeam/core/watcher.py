@@ -14,10 +14,9 @@
 # limitations under the License.
 
 import logging
-import time
 from typing import Any
 
-import timeout_decorator
+import tenacity
 from watcherclient import v1 as watcher
 from watcherclient.common.apiclient.exceptions import NotFound
 from watcherclient.v1 import client as watcher_client
@@ -31,9 +30,9 @@ from sunbeam.steps.openstack import REGION_CONFIG_KEY
 LOG = logging.getLogger(__name__)
 
 # Timeout while waiting for the watcher resource to reach the target state.
-TIMEOUT = 60 * 3
+WAIT_TIMEOUT = 60 * 3
 # Sleep interval between querying watcher resources.
-SLEEP_INTERVAL = 5
+WAIT_SLEEP_INTERVAL = 5
 ENABLE_MAINTENANCE_AUDIT_TEMPLATE_NAME = "Sunbeam Cluster Maintaining Template"
 ENABLE_MAINTENANCE_STRATEGY_NAME = "host_maintenance"
 ENABLE_MAINTENANCE_GOAL_NAME = "cluster_maintaining"
@@ -100,7 +99,23 @@ def get_workload_balancing_audit_template(
     return template
 
 
-@timeout_decorator.timeout(TIMEOUT)
+@tenacity.retry(
+    reraise=True,
+    stop=tenacity.stop_after_delay(WAIT_TIMEOUT),
+    wait=tenacity.wait_fixed(WAIT_SLEEP_INTERVAL),
+)
+def _wait_resource_in_target_state(
+    client: watcher_client.Client,
+    resource_name: str,
+    resource_uuid: str,
+    states: list[str] = ["SUCCEEDED", "FAILED"],
+) -> watcher.Audit:
+    src = getattr(client, resource_name).get(resource_uuid)
+    if src.state not in states:
+        raise SunbeamException(f"{resource_name} {resource_uuid} not in target state")
+    return src
+
+
 def create_audit(
     client: watcher_client.Client,
     template: watcher.AuditTemplate,
@@ -112,11 +127,12 @@ def create_audit(
         audit_type=audit_type,
         parameters=parameters,
     )
-    while True:
-        audit_details = client.audit.get(audit.uuid)
-        if audit_details.state in ["SUCCEEDED", "FAILED"]:
-            break
-        time.sleep(SLEEP_INTERVAL)
+    audit_details = _wait_resource_in_target_state(
+        client=client,
+        resource_name="audit",
+        resource_uuid=audit.uuid,
+    )
+
     if audit_details.state == "SUCCEEDED":
         LOG.debug(f"Create Watcher audit {audit.uuid} successfully")
     else:
@@ -131,7 +147,9 @@ def create_audit(
 
 def _check_audit_plans_recommended(client: watcher_client.Client, audit: watcher.Audit):
     action_plans = client.action_plan.list(audit=audit.uuid)
-    # Verify all the action_plan's state is RECOMMENDED
+    # Verify all the action_plan's state is RECOMMENDED.
+    # In case there is not action been generated, the action plan state
+    # will be SUCCEEDED at the beginning.
     if not all(plan.state in ["RECOMMENDED", "SUCCEEDED"] for plan in action_plans):
         raise SunbeamException(
             f"Not all action plan for audit({audit.uuid}) is RECOMMENDED"
@@ -153,7 +171,6 @@ def exec_audit(client: watcher_client.Client, audit: watcher.Audit):
     LOG.info(f"All Action plan for Audit {audit.uuid} execution successfully")
 
 
-@timeout_decorator.timeout(TIMEOUT)
 def _exec_plan(client: watcher_client.Client, action_plan: watcher.ActionPlan):
     """Run action plan."""
     if action_plan.state == "SUCCEEDED":
@@ -161,15 +178,36 @@ def _exec_plan(client: watcher_client.Client, action_plan: watcher.ActionPlan):
         return
     client.action_plan.start(action_plan_id=action_plan.uuid)
 
-    _action_plan: watcher.ActionPlan
-    while True:
-        _action_plan = client.action_plan.get(action_plan_id=action_plan.uuid)
-        if _action_plan.state in ["SUCCEEDED", "FAILED"]:
-            break
-        time.sleep(SLEEP_INTERVAL)
+    action_plan_details = _wait_resource_in_target_state(
+        client=client,
+        resource_name="action_plan",
+        resource_uuid=action_plan.uuid,
+    )
 
-    if _action_plan.state == "SUCCEEDED":
+    if action_plan_details.state == "SUCCEEDED":
         LOG.debug(f"Action plan {action_plan.uuid} execution successfully")
     else:
         LOG.debug(f"Action plan {action_plan.uuid} execution failed")
-        raise SunbeamException(f"Action plan {action_plan.uuid} execution failed")
+
+    # Even if an action fails, the action plan can still be in the SUCCEEDED state.
+    # To handle this, we check if there are any failed actions at this point.
+    _raise_on_failed_action(client=client, action_plan=action_plan)
+
+
+def _raise_on_failed_action(
+    client: watcher_client.Client, action_plan: watcher.ActionPlan
+):
+    """Raise exception on failed action."""
+    actions = client.action.list(action_plan=action_plan.uuid, detail=True)
+    info = {}
+    for action in actions:
+        if not action.state == "FAILED":
+            continue
+        info[action.uuid] = {
+            "action": action.action_type,
+            "updated-at": action.updated_at,
+            "description": action.description,
+            "input_parameters": action.input_parameters,
+        }
+    if len(info) > 0:
+        raise SunbeamException(f"Actions in FAILED state. {info}")

@@ -14,6 +14,7 @@
 from unittest.mock import Mock, call, patch
 
 import pytest
+import tenacity
 from watcherclient.common.apiclient.exceptions import NotFound
 
 import sunbeam.core.watcher as watcher_helper
@@ -122,20 +123,22 @@ def test_get_workload_balancing_audit_template_not_found(mock_create_template_fu
     mock_create_template_func.assert_called_once_with(client=mock_client)
 
 
-@patch("sunbeam.core.watcher.time")
+@patch("sunbeam.core.watcher._wait_resource_in_target_state")
 @patch("sunbeam.core.watcher._check_audit_plans_recommended")
-def test_create_audit(mock_check_audit_plans_recommended, mock_time):
+def test_create_audit(
+    mock_check_audit_plans_recommended, mock_wait_resource_in_target_state
+):
     mock_client = Mock()
     mock_template = Mock()
     fake_audit_type = "fake_audit_type"
     fake_parameters = {"fake_parameter_a": "a", "fake_parameter_b": "b"}
     mock_audit = Mock()
 
-    audit_details = [Mock(), Mock(), Mock()]
-    audit_details[-1].state = "SUCCEEDED"
-
     mock_client.audit.create.return_value = mock_audit
-    mock_client.audit.get.side_effect = audit_details
+
+    mock_audit_detail = Mock()
+    mock_audit_detail.state = "SUCCEEDED"
+    mock_wait_resource_in_target_state.return_value = mock_audit_detail
 
     result = watcher_helper.create_audit(
         mock_client, mock_template, fake_audit_type, fake_parameters
@@ -148,10 +151,14 @@ def test_create_audit(mock_check_audit_plans_recommended, mock_time):
         audit_type=fake_audit_type,
         parameters=fake_parameters,
     )
+    mock_wait_resource_in_target_state.assert_called_once_with(
+        client=mock_client,
+        resource_name="audit",
+        resource_uuid=mock_audit.uuid,
+    )
     mock_check_audit_plans_recommended.assert_called_once_with(
         client=mock_client, audit=mock_audit
     )
-    mock_time.sleep.assert_has_calls([call(5), call(5)])
 
 
 @patch("sunbeam.core.watcher._check_audit_plans_recommended")
@@ -238,36 +245,38 @@ def test_exec_plan_state_succeeded():
     mock_client.action_plan.start.assert_not_called()
 
 
-@patch("sunbeam.core.watcher.time")
-def test_exec_plan_state_pending(mock_time):
+@patch("sunbeam.core.watcher._wait_resource_in_target_state.retry.sleep")
+def test_wait_resource_in_target_state_pending(mock_func_sleep):
     mock_client = Mock()
-    mock_action_plan = Mock()
-    mock_action_plan.state = "PENDING"
 
-    action_plans = [Mock(), Mock(), Mock()]
-    action_plans[-1].state = "SUCCEEDED"
-    mock_client.action_plan.get.side_effect = action_plans
+    fake_resource = [Mock() for i in range(5)]
+    fake_resource[-1].state = "SUCCEEDED"
+    mock_client.fake_resource.get.side_effect = fake_resource
 
-    watcher_helper._exec_plan(mock_client, mock_action_plan)
-    mock_client.action_plan.start.assert_called_once_with(
-        action_plan_id=mock_action_plan.uuid
+    watcher_helper._wait_resource_in_target_state(
+        mock_client,
+        "fake_resource",
+        "fake-uuid",
     )
-    mock_time.sleep.assert_has_calls([call(5), call(5)])
+    mock_client.fake_resource.get.assert_has_calls(
+        [call("fake-uuid") for _ in range(len(fake_resource))]
+    )
 
 
-def test_exec_plan_state_pending_failed():
+@patch(
+    "sunbeam.core.watcher._wait_resource_in_target_state.retry.stop",
+    return_value=tenacity.stop_after_attempt(10),
+)
+@patch("sunbeam.core.watcher._wait_resource_in_target_state.retry.sleep")
+def test_wait_resource_in_target_state_failed(mock_retry_sleep, mock_retry_stop):
     mock_client = Mock()
-    mock_action_plan = Mock()
-    mock_action_plan.state = "PENDING"
 
-    mock_client.action_plan.get.return_value = Mock()
-    mock_client.action_plan.get.return_value.state = "FAILED"
+    fake_resource = [Mock() for i in range(5)]
+    mock_client.fake_resource.get.side_effect = fake_resource
 
     with pytest.raises(SunbeamException):
-        watcher_helper._exec_plan(mock_client, mock_action_plan)
-    mock_client.action_plan.start.assert_called_once_with(
-        action_plan_id=mock_action_plan.uuid
-    )
-    mock_client.action_plan.get.assert_called_once_with(
-        action_plan_id=mock_action_plan.uuid
-    )
+        watcher_helper._wait_resource_in_target_state(
+            mock_client,
+            "fake_resource",
+            "fake-uuid",
+        )
