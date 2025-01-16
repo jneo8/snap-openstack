@@ -243,7 +243,13 @@ class ExtendedAPIService(service.BaseService):
         """Get status of the cluster."""
         cluster = self._get("/1.0/status")
         members = cluster.get("metadata", {})
-        return {member["name"]: {"status": member["status"]} for member in members}
+        return {
+            member["name"]: {
+                "status": member["status"],
+                "address": member["address"],
+            }
+            for member in members
+        }
 
 
 class ClusterService(MicroClusterService, ExtendedAPIService):

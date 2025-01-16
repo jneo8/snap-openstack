@@ -192,8 +192,11 @@ class ClusterStatusStep(abc.ABC, BaseStep):
         machines_status = {}
         status = run_sync(self.jhelper.get_model_status(model))
         for machine, machine_status in status["machines"].items():
+            machine_name = machine_status.get("hostname")
+            if not machine_name:
+                machine_name = machine_status.get("dns-name")
             machines_status[machine] = {
-                "name": machine_status["hostname"],
+                "name": machine_name,
                 "status": machine_status["instance-status"]["status"],
             }
         return machines_status
