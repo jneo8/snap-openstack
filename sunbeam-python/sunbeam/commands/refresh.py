@@ -52,6 +52,8 @@ console = Console()
     is_flag=True,
     show_default=True,
     default=False,
+    # note(gboutry): Hidden until supported
+    hidden=True,
     help="Upgrade OpenStack release.",
 )
 @click_option_show_hints
