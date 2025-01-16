@@ -29,9 +29,9 @@ from sunbeam.steps.openstack import REGION_CONFIG_KEY
 
 LOG = logging.getLogger(__name__)
 
-# Timeout while waiting for the watcher resource to reach the target state.
+# Timeout of seconds while waiting for the watcher resource to reach the target state.
 WAIT_TIMEOUT = 60 * 3
-# Sleep interval between querying watcher resources.
+# Sleep interval (in seconds) between querying watcher resources.
 WAIT_SLEEP_INTERVAL = 5
 ENABLE_MAINTENANCE_AUDIT_TEMPLATE_NAME = "Sunbeam Cluster Maintaining Template"
 ENABLE_MAINTENANCE_STRATEGY_NAME = "host_maintenance"
