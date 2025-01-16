@@ -24,6 +24,7 @@ from rich.console import Console
 import sunbeam.core.questions
 from sunbeam import utils
 from sunbeam.clusterd.client import Client
+from sunbeam.clusterd.service import ClusterServiceUnavailableException
 from sunbeam.commands.configure import (
     CLOUD_CONFIG_SECTION,
     SetHypervisorUnitsOptionsStep,
@@ -33,6 +34,7 @@ from sunbeam.core.juju import JujuHelper, run_sync
 from sunbeam.core.manifest import Manifest
 from sunbeam.steps import hypervisor
 from sunbeam.steps.cluster_status import ClusterStatusStep
+from sunbeam.steps.clusterd import CLUSTERD_PORT
 
 LOG = logging.getLogger(__name__)
 console = Console()
@@ -210,12 +212,56 @@ class LocalClusterStatusStep(ClusterStatusStep):
                 return "active"
         return status
 
+    def _get_microcluster_status(self) -> dict:
+        """Get microcluster status.
+
+        Override this method to include microcluster member address as well in
+        the status.
+        This is required due to workaround bug
+        https://github.com/juju/juju/issues/18641
+        """
+        client = self.deployment.get_client()
+        try:
+            cluster_status = client.cluster.get_status()
+        except ClusterServiceUnavailableException:
+            LOG.debug("Failed to query cluster status", exc_info=True)
+            raise SunbeamException("Cluster service is not yet bootstrapped.")
+        status = {}
+        for node, _status in cluster_status.items():
+            status[node] = {
+                "address": _status.get("address"),
+                "status": _status.get("status"),
+            }
+        return status
+
     def _update_microcluster_status(self, status: dict, microcluster_status: dict):
-        """How to update microcluster status in the status dict."""
-        for member, member_status in microcluster_status.items():
-            for node_status in status[
-                self.deployment.openstack_machines_model
-            ].values():
-                if node_status.get("name") != member:
-                    continue
-                node_status["clusterd-status"] = member_status
+        """Update microcluster status in the status dict.
+
+        If the hostname in status and microcluster_status does not match, compare
+        with ip address in microcluster_status and update hostname and cluster
+        status accordingly.
+        """
+        members = microcluster_status.keys()
+        for node_status in status[self.deployment.openstack_machines_model].values():
+            node_name = node_status.get("name")
+            if node_name not in members:
+                for member, member_status in microcluster_status.items():
+                    # If node name does not match in microcluster status and status,
+                    # check if it matches with ip address in microcluster status. This
+                    # situation can happen due to
+                    # https://github.com/juju/juju/issues/18641
+                    # Replace node name with actual hostname from microcluster status.
+                    if (
+                        member_status.get("address").removesuffix(f":{CLUSTERD_PORT}")
+                        == node_name
+                    ):
+                        LOG.debug(
+                            f"Node name matched with address {node_name}, change name "
+                            f"to {member}"
+                        )
+                        node_name = member
+                        node_status["name"] = member
+
+            node_status["clusterd-status"] = microcluster_status.get(node_name, {}).get(
+                "status"
+            )
