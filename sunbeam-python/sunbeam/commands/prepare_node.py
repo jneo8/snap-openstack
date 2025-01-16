@@ -16,7 +16,7 @@
 import click
 from rich.console import Console
 
-from sunbeam.versions import JUJU_CHANNEL, SUPPORTED_RELEASE
+from sunbeam.versions import JUJU_CHANNEL, LXD_CHANNEL, SUPPORTED_RELEASE
 
 console = Console()
 
@@ -111,8 +111,61 @@ if [[ $risk != "stable" ]]; then
 fi
 """
 
+BOOTSTRAP_TEMPLATE = f"""
+# Install the lxd snap
+sudo snap install lxd --channel {LXD_CHANNEL}
+USER=$(whoami)
+# Ensure current user is part of the LXD group
+sudo usermod --append --groups lxd $USER
+
+if [ -n "$(sudo --user $USER lxc network list --format csv | grep lxdbr0)" ]; then
+    echo 'Sunbeam requires the LXD bridge to be called anything except lxdbr0'
+    exit 1
+fi
+
+# Try to determine if LXD is already bootstrapped
+if [ -z "$(sudo --user $USER lxc storage list --format csv)" ];
+then
+    echo 'Bootstrapping LXD'
+    cat <<EOF | sudo --user $USER lxd init --preseed
+networks:
+- config:
+    ipv4.address: auto
+    ipv6.address: none
+  name: sunbeambr0
+  project: default
+storage_pools:
+- name: default
+  driver: dir
+profiles:
+- devices:
+    eth0:
+      name: eth0
+      network: sunbeambr0
+      type: nic
+    root:
+      path: /
+      pool: default
+      type: disk
+  name: default
+EOF
+fi
+# Bootstrap juju onto LXD
+echo 'Bootstrapping Juju onto LXD'
+sudo --user $USER juju show-controller
+if [ $? -ne 0 ]; then
+    sudo --user $USER juju bootstrap localhost
+fi
+"""
+
 
 @click.command()
+@click.option(
+    "--bootstrap",
+    is_flag=True,
+    help="Prepare the node for use as primary node.",
+    default=False,
+)
 @click.option(
     "--client",
     "-c",
@@ -120,10 +173,14 @@ fi
     help="Prepare the node for use as a client.",
     default=False,
 )
-def prepare_node_script(client: bool = False) -> None:
+def prepare_node_script(bootstrap: bool = False, client: bool = False) -> None:
     """Generate script to prepare a node for Sunbeam use."""
+    if bootstrap and client:
+        raise click.UsageError("Cannot prepare node as both client and bootstrap")
     script = "#!/bin/bash\n"
     if not client:
         script += PREPARE_NODE_TEMPLATE
     script += COMMON_TEMPLATE
+    if bootstrap:
+        script += BOOTSTRAP_TEMPLATE
     console.print(script, soft_wrap=True)
