@@ -39,6 +39,10 @@ from sunbeam.steps.maintenance import (
     RunWatcherHostMaintenanceStep,
     RunWatcherWorkloadBalancingStep,
 )
+from sunbeam.steps.microceph import (
+    MicroCephEnterMaintenanceModeStep,
+    MicroCephExitMaintenanceModeStep,
+)
 from sunbeam.utils import click_option_show_hints
 
 console = Console()
@@ -90,19 +94,37 @@ def _get_node_roles(
     type=click.BOOL,
     default=False,
 )
+@click.option(
+    "--set-noout",
+    help="prevent CRUSH from automatically rebalancing the ceph cluster",
+    type=click.BOOL,
+    default=True,
+)
+@click.option(
+    "--stop-osds",
+    help=(
+        "Optional to stop and disable OSD service on that node."
+        " Defaults to keep the OSD service running when"
+        " entering maintenance mode"
+    ),
+    type=click.BOOL,
+    default=True,
+)
 @click_option_show_hints
 @click.pass_context
 def enable_maintenance(
     ctx: click.Context,
     nodes,
     force,
+    set_noout,
+    stop_osds,
     show_hints: bool = False,
 ) -> None:
     console.print("Enable maintenance")
     deployment: Deployment = ctx.obj
     jhelper = JujuHelper(deployment.get_connected_controller())
 
-    control_nodes, compute_nodes, _ = _get_node_roles(
+    control_nodes, compute_nodes, storage_nodes = _get_node_roles(
         deployment=deployment,
         jhelper=jhelper,
         console=console,
@@ -131,6 +153,18 @@ def enable_maintenance(
 
         if node in compute_nodes:
             plan.append(RunWatcherHostMaintenanceStep(deployment=deployment, node=node))
+        if node in storage_nodes:
+            plan.append(
+                MicroCephEnterMaintenanceModeStep(
+                    client=deployment.get_client(),
+                    name=node,
+                    jhelper=jhelper,
+                    force=force,
+                    model=deployment.openstack_machines_model,
+                    set_noout=set_noout,
+                    stop_osds=stop_osds,
+                ),
+            )
 
         results = run_plan(plan, console, show_hints)
 
@@ -170,7 +204,7 @@ def disable_maintenance(
     client = deployment.get_client()
     jhelper = JujuHelper(deployment.get_connected_controller())
 
-    _, compute_nodes, _ = _get_node_roles(
+    _, compute_nodes, storage_nodes = _get_node_roles(
         deployment=deployment,
         jhelper=jhelper,
         console=console,
@@ -189,5 +223,14 @@ def disable_maintenance(
                     model=deployment.openstack_machines_model,
                 ),
                 RunWatcherWorkloadBalancingStep(deployment=deployment),
+            ]
+        if node in storage_nodes:
+            plan += [
+                MicroCephExitMaintenanceModeStep(
+                    client=deployment.get_client(),
+                    name=node,
+                    jhelper=jhelper,
+                    model=deployment.openstack_machines_model,
+                )
             ]
         run_plan(plan, console, show_hints)
