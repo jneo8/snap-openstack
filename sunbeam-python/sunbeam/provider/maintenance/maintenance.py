@@ -14,34 +14,34 @@
 # limitations under the License.
 
 import logging
-from typing import Tuple
+from os import linesep
+from typing import Any
 
 import click
 from rich.console import Console
+from watcherclient import v1 as watcher
 
 from sunbeam.core.checks import Check, run_preflight_checks
 from sunbeam.core.common import (
     BaseStep,
+    Result,
     ResultType,
     get_step_message,
-    get_step_result,
     run_plan,
-    validate_nodes,
 )
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper
+from sunbeam.core.questions import ConfirmQuestion, Question
 from sunbeam.provider.local.steps import LocalClusterStatusStep
 from sunbeam.provider.maas.steps import MaasClusterStatusStep
 from sunbeam.provider.maintenance import checks
 from sunbeam.steps.cluster_status import ClusterStatusStep
 from sunbeam.steps.hypervisor import EnableHypervisorStep
 from sunbeam.steps.maintenance import (
-    RunWatcherHostMaintenanceStep,
-    RunWatcherWorkloadBalancingStep,
-)
-from sunbeam.steps.microceph import (
-    MicroCephEnterMaintenanceModeStep,
-    MicroCephExitMaintenanceModeStep,
+    CreateWatcherHostMaintenanceAuditStep,
+    CreateWatcherWorkloadBalancingAuditStep,
+    MicroCephActionStep,
+    RunWatcherAuditStep,
 )
 from sunbeam.utils import click_option_show_hints
 
@@ -49,13 +49,13 @@ console = Console()
 LOG = logging.getLogger(__name__)
 
 
-def _get_node_roles(
+def _get_node_status(
     deployment: Deployment,
     jhelper: JujuHelper,
     console: Console,
     show_hints: bool,
-    nodes: list[str],
-) -> Tuple[list[str], list[str], list[str]]:
+    node: str,
+) -> dict[str, Any]:
     cluster_status_step: type[ClusterStatusStep]
     if deployment.type == "local":
         cluster_status_step = LocalClusterStatusStep
@@ -65,39 +65,163 @@ def _get_node_roles(
     results = run_plan([cluster_status_step(deployment, jhelper)], console, show_hints)
     cluster_status = get_step_message(results, cluster_status_step)
 
-    control_nodes = []
-    compute_nodes = []
-    storage_nodes = []
+    for _, _node in cluster_status["openstack-machines"].items():
+        if _node["hostname"] == node:
+            return _node["status"]
+    return {}
 
-    for _, node in cluster_status["openstack-machines"].items():
-        if node["hostname"] in nodes:
-            if "control" in node["status"]:
-                control_nodes.append(node["hostname"])
-            if "compute" in node["status"]:
-                compute_nodes.append(node["hostname"])
-            if "storage" in node["status"]:
-                storage_nodes.append(node["hostname"])
-    return control_nodes, compute_nodes, storage_nodes
+
+class OperationViewer:
+    def __init__(self, node: str):
+        self.node = node
+        self.operations: list[str] = []
+        self.operation_states: dict[str, str] = {}
+
+    @staticmethod
+    def _get_watcher_action_key(action: watcher.Action) -> str:
+        key: str
+        if action.action_type == "change_nova_service_state":
+            key = "{} state={} resource={}".format(
+                action.action_type,
+                action.input_parameters["state"],
+                action.input_parameters["resource_name"],
+            )
+        if action.action_type == "migrate":
+            key = "Migrate instance type={} resource={}".format(
+                action.input_parameters["migration_type"],
+                action.input_parameters["resource_name"],
+            )
+        return key
+
+    def add_watch_actions(self, actions: list[watcher.Action]):
+        """Append Watcher actions to operations."""
+        for action in actions:
+            key = self._get_watcher_action_key(action)
+            self.operations.append(key)
+            self.operation_states[key] = "PENDING"
+
+    def add_maintenance_action_steps(self, action_result: dict[str, Any]):
+        """Append juju maintenance action's actions to operations."""
+        for action in action_result.get("actions", "").split(linesep):
+            self.operations.append(action)
+            self.operation_states[action] = "SKIPPED"
+
+    def add_step(self, step_name: str):
+        """Append BaseStep to operations."""
+        self.operations.append(step_name)
+        self.operation_states[step_name] = "SKIPPED"
+
+    def update_watcher_actions_result(self, actions: list[watcher.Action]):
+        """Update result of Watcher actions."""
+        for action in actions:
+            key = self._get_watcher_action_key(action)
+            self.operation_states[key] = action.state
+
+    def update_maintenance_action_steps_result(self, action_result: dict[str, Any]):
+        """Update result of juju maintenance action's actions."""
+        error_msg = action_result.get("error", "")
+
+        for ops in self.operations:
+            if "ok-to-stop" in ops:
+                if "ok-to-stop" in error_msg:
+                    self.operation_states[ops] = "FAILED"
+                    break
+                self.operation_states[ops] = "SUCCEEDED"
+            elif "at least 3 mon, 1 mds, and 1 mgr services" in ops:
+                if "at least 3 mon, 1 mds, and 1 mgr services" in error_msg:
+                    self.operation_states[ops] = "FAILED"
+                    break
+                self.operation_states[ops] = "SUCCEEDED"
+            elif "noout" in ops:
+                if "noout flag" in error_msg:
+                    self.operation_states[ops] = "FAILED"
+                    break
+                self.operation_states[ops] = "SUCCEEDED"
+            elif "osd service" in ops:
+                if "OSD service" in error_msg:
+                    self.operation_states[ops] = "FAILED"
+                    break
+                self.operation_states[ops] = "SUCCEEDED"
+
+    def update_step_result(self, step_name: str, result: Result):
+        """Update BaseStep's result."""
+        if result.result_type == ResultType.COMPLETED:
+            self.operation_states[step_name] = "SUCCEEDED"
+        elif result.result_type == ResultType.FAILED:
+            self.operation_states[step_name] = "FAILED"
+        else:
+            self.operation_states[step_name] = "SKIPPED"
+
+    def _operation_plan(self) -> str:
+        msg = ""
+        for idx, step in enumerate(self.operations):
+            msg += f"\t{idx}: {step}{linesep}"
+        return msg
+
+    def dry_run_message(self) -> str:
+        """Return CLI output message for dry-run."""
+        return (
+            f"Required operations to put {self.node} into "
+            f"maintenance mode:{linesep}{self._operation_plan()}"
+        )
+
+    def prompt(self) -> bool:
+        """Determines if the operations is confirmed by the user."""
+        question: Question = ConfirmQuestion(
+            f"Continue to run operations to put {self.node} into"
+            f" maintenance mode:{linesep}{self._operation_plan()}"
+        )
+        return question.ask() or False
+
+    def _operation_result(self) -> str:
+        msg = ""
+        for idx, step in enumerate(self.operations):
+            msg += f"\t{idx}: {step} {self.operation_states[step]}{linesep}"
+        if msg:
+            msg = "Operation result:{linesep}" + msg
+        return msg
+
+    def check_operation_succeeded(self, results: dict[str, Result]):
+        """Check if all the operations are succeeded."""
+        if any(
+            result.result_type == ResultType.FAILED for _, result in results.items()
+        ):
+            failed_result: Result
+            for name, result in results.items():
+                if result.result_type == ResultType.FAILED:
+                    failed_result = result
+                if name == RunWatcherAuditStep.__name__:
+                    self.update_watcher_actions_result(result.message)
+                elif name == MicroCephActionStep.__name__:
+                    self.update_maintenance_action_steps_result(result.message)
+                elif name == EnableHypervisorStep.__name__:
+                    self.update_step_result(name, result)
+            console.print(self._operation_result())
+            if failed_result:
+                raise click.ClickException(result.message)
 
 
 @click.command()
-@click.option(
-    "--nodes",
-    help="Nodes to enable into maintenance mode",
+@click.argument(
+    "node",
     type=click.STRING,
-    required=True,
-    callback=validate_nodes,
 )
 @click.option(
     "--force",
-    help="Force to ignore preflight_checks",
-    type=click.BOOL,
+    help="Force to ignore preflight checks",
+    is_flag=True,
+    default=False,
+)
+@click.option(
+    "--dry-run",
+    help="Show required operation steps to put node into maintenance mode",
+    is_flag=True,
     default=False,
 )
 @click.option(
     "--set-noout",
     help="prevent CRUSH from automatically rebalancing the ceph cluster",
-    type=click.BOOL,
+    is_flag=True,
     default=True,
 )
 @click.option(
@@ -107,130 +231,245 @@ def _get_node_roles(
         " Defaults to keep the OSD service running when"
         " entering maintenance mode"
     ),
-    type=click.BOOL,
+    is_flag=True,
     default=True,
 )
 @click_option_show_hints
 @click.pass_context
 def enable_maintenance(
     ctx: click.Context,
-    nodes,
+    node,
     force,
+    dry_run,
     set_noout,
     stop_osds,
     show_hints: bool = False,
 ) -> None:
-    console.print("Enable maintenance")
+    console.print(f"Enable maintenance for {node}")
     deployment: Deployment = ctx.obj
     jhelper = JujuHelper(deployment.get_connected_controller())
 
-    control_nodes, compute_nodes, storage_nodes = _get_node_roles(
+    node_status = _get_node_status(
         deployment=deployment,
         jhelper=jhelper,
         console=console,
         show_hints=show_hints,
-        nodes=nodes,
+        node=node,
     )
+
+    # This check is to avoid issue which maintenance mode haven't support
+    # control role, which should be removed after control role be supported.
+    if "control" in node_status:
+        msg = f"Node {node} is control role, which doesn't support maintenance mode"
+        if force:
+            LOG.warning(f"Ignore issue: {msg}")
+        else:
+            raise click.ClickException(msg)
 
     # Run preflight_checks
     preflight_checks: list[Check] = []
-    # Prefligh checks for control role
+    # Preflight checks for compute role
     preflight_checks += [
-        # This check is to avoid issue which maintenance mode haven't support
-        # control role, which should be removed after control role be supported.
-        checks.NodeisNotControlRoleCheck(nodes=control_nodes, force=force),
-    ]
-    # Prefligh checks for compute role
-    preflight_checks += [
-        checks.InstancesStatusCheck(jhelper=jhelper, nodes=compute_nodes, force=force),
-        checks.NoEphemeralDiskCheck(jhelper=jhelper, nodes=compute_nodes, force=force),
+        checks.InstancesStatusCheck(jhelper=jhelper, node=node, force=force),
+        checks.NoEphemeralDiskCheck(jhelper=jhelper, node=node, force=force),
     ]
     run_preflight_checks(preflight_checks, console)
 
-    for node in nodes:
-        plan: list[BaseStep] = []
-        post_checks: list[Check] = []
-
-        if node in compute_nodes:
-            plan.append(RunWatcherHostMaintenanceStep(deployment=deployment, node=node))
-        if node in storage_nodes:
-            plan.append(
-                MicroCephEnterMaintenanceModeStep(
-                    client=deployment.get_client(),
-                    name=node,
-                    jhelper=jhelper,
-                    force=force,
-                    model=deployment.openstack_machines_model,
-                    set_noout=set_noout,
-                    stop_osds=stop_osds,
-                ),
+    # Generate operations
+    generate_operation_plan: list[BaseStep] = []
+    if "compute" in node_status:
+        generate_operation_plan.append(
+            CreateWatcherHostMaintenanceAuditStep(deployment=deployment, node=node)
+        )
+    if "storage" in node_status:
+        generate_operation_plan.append(
+            MicroCephActionStep(
+                client=deployment.get_client(),
+                node=node,
+                jhelper=jhelper,
+                model=deployment.openstack_machines_model,
+                action_name="enter-maintenance",
+                action_params={
+                    "name": node,
+                    "set-noout": set_noout,
+                    "stop-osds": stop_osds,
+                    "dry-run": True,
+                },
             )
+        )
 
-        results = run_plan(plan, console, show_hints)
+    generate_operation_plan_results = run_plan(
+        generate_operation_plan, console, show_hints
+    )
 
-        # Run post checks
-        if node in compute_nodes:
-            # Run post checks only enable maintenance step is completed.
-            result = get_step_result(results, RunWatcherHostMaintenanceStep)
-            if result.result_type == ResultType.COMPLETED:
-                post_checks += [
-                    checks.NovaInDisableStatusCheck(
-                        jhelper=jhelper, node=node, force=force
-                    ),
-                    checks.NoInstancesOnNodeCheck(
-                        jhelper=jhelper, node=node, force=force
-                    ),
-                ]
-        run_preflight_checks(post_checks, console)
-    console.print("Finish enable maintenance")
+    audit_info = get_step_message(
+        generate_operation_plan_results, CreateWatcherHostMaintenanceAuditStep
+    )
+    microceph_enter_maintenance_dry_run_action_result = get_step_message(
+        generate_operation_plan_results, MicroCephActionStep
+    )
+
+    ops_viewer = OperationViewer(node)
+    if "compute" in node_status:
+        ops_viewer.add_watch_actions(actions=audit_info["actions"])
+    if "storage" in node_status:
+        ops_viewer.add_maintenance_action_steps(
+            action_result=microceph_enter_maintenance_dry_run_action_result
+        )
+
+    if dry_run:
+        console.print(ops_viewer.dry_run_message())
+        return
+
+    confirm = ops_viewer.prompt()
+    if not confirm:
+        return
+
+    # Run operations
+    operation_plan: list[BaseStep] = []
+    if "compute" in node_status:
+        operation_plan.append(
+            RunWatcherAuditStep(
+                deployment=deployment, node=node, audit=audit_info["audit"]
+            )
+        )
+    if "storage" in node_status:
+        operation_plan.append(
+            MicroCephActionStep(
+                client=deployment.get_client(),
+                node=node,
+                jhelper=jhelper,
+                model=deployment.openstack_machines_model,
+                action_name="enter-maintenance",
+                action_params={
+                    "name": node,
+                    "set-noout": set_noout,
+                    "stop-osds": stop_osds,
+                    "dry-run": False,
+                },
+            )
+        )
+
+    operation_plan_results = run_plan(operation_plan, console, show_hints, True)
+    ops_viewer.check_operation_succeeded(operation_plan_results)
+
+    # Run post checks
+    post_checks: list[Check] = []
+    if "compute" in node_status:
+        post_checks += [
+            checks.NovaInDisableStatusCheck(jhelper=jhelper, node=node, force=force),
+            checks.NoInstancesOnNodeCheck(jhelper=jhelper, node=node, force=force),
+        ]
+    run_preflight_checks(post_checks, console)
+    console.print(f"Enable maintenance for node: {node}")
 
 
 @click.command()
-@click.option(
-    "--nodes",
-    help="Nodes to enable into maintenance mode",
+@click.argument(
+    "node",
     type=click.STRING,
-    required=True,
-    callback=validate_nodes,
+)
+@click.option(
+    "--dry-run",
+    help="Show required operation steps to put node into maintenance mode",
+    default=False,
+    is_flag=True,
 )
 @click_option_show_hints
 @click.pass_context
 def disable_maintenance(
     ctx: click.Context,
-    nodes,
+    dry_run,
+    node,
     show_hints: bool = False,
 ) -> None:
     deployment: Deployment = ctx.obj
-    client = deployment.get_client()
     jhelper = JujuHelper(deployment.get_connected_controller())
 
-    _, compute_nodes, storage_nodes = _get_node_roles(
+    node_status = _get_node_status(
         deployment=deployment,
         jhelper=jhelper,
         console=console,
         show_hints=show_hints,
-        nodes=nodes,
+        node=node,
     )
 
-    for node in nodes:
-        plan: list[BaseStep] = []
-        if node in compute_nodes:
-            plan += [
-                EnableHypervisorStep(
-                    client=client,
-                    node=node,
-                    jhelper=jhelper,
-                    model=deployment.openstack_machines_model,
-                ),
-                RunWatcherWorkloadBalancingStep(deployment=deployment),
-            ]
-        if node in storage_nodes:
-            plan += [
-                MicroCephExitMaintenanceModeStep(
-                    client=deployment.get_client(),
-                    name=node,
-                    jhelper=jhelper,
-                    model=deployment.openstack_machines_model,
-                )
-            ]
-        run_plan(plan, console, show_hints)
+    generate_operation_plan: list[BaseStep] = []
+    if "compute" in node_status:
+        generate_operation_plan.append(
+            CreateWatcherWorkloadBalancingAuditStep(deployment=deployment, node=node)
+        )
+    if "storage" in node_status:
+        generate_operation_plan.append(
+            MicroCephActionStep(
+                client=deployment.get_client(),
+                node=node,
+                jhelper=jhelper,
+                model=deployment.openstack_machines_model,
+                action_name="exit-maintenance",
+                action_params={
+                    "name": node,
+                    "dry-run": True,
+                },
+            )
+        )
+
+    generate_operation_plan_results = run_plan(
+        generate_operation_plan, console, show_hints
+    )
+
+    audit_info = get_step_message(
+        generate_operation_plan_results, CreateWatcherWorkloadBalancingAuditStep
+    )
+    microceph_exit_maintenance_dry_run_action_result = get_step_message(
+        generate_operation_plan_results, MicroCephActionStep
+    )
+
+    ops_viewer = OperationViewer(node)
+    if "compute" in node_status:
+        ops_viewer.add_step(step_name=EnableHypervisorStep.__name__)
+        ops_viewer.add_watch_actions(actions=audit_info["actions"])
+    if "storage" in node_status:
+        ops_viewer.add_maintenance_action_steps(
+            action_result=microceph_exit_maintenance_dry_run_action_result
+        )
+
+    if dry_run:
+        console.print(ops_viewer.dry_run_message())
+        return
+
+    confirm = ops_viewer.prompt()
+    if not confirm:
+        return
+
+    operation_plan: list[BaseStep] = []
+    if "compute" in node_status:
+        operation_plan += [
+            EnableHypervisorStep(
+                client=deployment.get_client(),
+                node=node,
+                jhelper=jhelper,
+                model=deployment.openstack_machines_model,
+            ),
+            RunWatcherAuditStep(
+                deployment=deployment, node=node, audit=audit_info["audit"]
+            ),
+        ]
+    if "storage" in node_status:
+        operation_plan.append(
+            MicroCephActionStep(
+                client=deployment.get_client(),
+                node=node,
+                jhelper=jhelper,
+                model=deployment.openstack_machines_model,
+                action_name="exit-maintenance",
+                action_params={
+                    "name": node,
+                    "dry-run": False,
+                },
+            )
+        )
+    operation_plan_results = run_plan(operation_plan, console, show_hints, True)
+    ops_viewer.check_operation_succeeded(operation_plan_results)
+
+    console.print(f"Disable maintenance for node: {node}")

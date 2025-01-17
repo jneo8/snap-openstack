@@ -138,7 +138,8 @@ class TimeoutException(JujuException):
 class ActionFailedException(JujuException):
     """Raised when Juju run failed."""
 
-    pass
+    def __init__(self, action_result):
+        self.action_result = action_result
 
 
 class CmdFailedException(JujuException):

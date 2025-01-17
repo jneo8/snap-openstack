@@ -81,7 +81,7 @@ class TestOpenStackAPI:
         conn.compute.servers.return_value = [1]
         assert sunbeam.core.openstack_api.guests_on_hypervisor("hyper1", conn) == [1]
         conn.compute.servers.assert_called_once_with(
-            all_projects=True, hypervisor_hostname="hyper1"
+            all_projects=True, hypervisor_hostname="hyper1", status=None
         )
 
     def test_remove_compute_service(self):

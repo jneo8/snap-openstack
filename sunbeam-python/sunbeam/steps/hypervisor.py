@@ -499,5 +499,8 @@ class EnableHypervisorStep(BaseStep, JujuStepHelper):
             run_sync(self.jhelper.run_action(self.unit, self.model, "enable"))
         except ActionFailedException as e:
             LOG.debug(str(e))
-            return Result(ResultType.FAILED, "Failed to enable hypervisor unit")
+            return Result(
+                ResultType.FAILED,
+                f"Failed to enable hypervisor service for unit {self.unit}",
+            )
         return Result(ResultType.COMPLETED)

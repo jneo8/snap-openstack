@@ -14,14 +14,15 @@
 # limitations under the License.
 
 import logging
-from typing import Any
+from typing import Any, Iterable
 
 import tenacity
+from rich.status import Status
 from watcherclient import v1 as watcher
 from watcherclient.common.apiclient.exceptions import NotFound
 from watcherclient.v1 import client as watcher_client
 
-from sunbeam.core.common import SunbeamException, read_config
+from sunbeam.core.common import BaseStep, SunbeamException, read_config
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper
 from sunbeam.core.openstack_api import get_admin_connection
@@ -40,6 +41,12 @@ ENABLE_MAINTENANCE_GOAL_NAME = "cluster_maintaining"
 WORKLOAD_BALANCING_GOAL_NAME = "workload_balancing"
 WORKLOAD_BALANCING_STRATEGY_NAME = "workload_stabilization"
 WORKLOAD_BALANCING_AUDIT_TEMPLATE_NAME = "Sunbeam Cluster Workload Balancing Template"
+
+
+class WatcherActionFailedException(Exception):
+    """Raise if Watcher Action in FAILED state."""
+
+    pass
 
 
 def get_watcher_client(deployment: Deployment) -> watcher_client.Client:
@@ -157,10 +164,16 @@ def _check_audit_plans_recommended(client: watcher_client.Client, audit: watcher
 
 
 def get_actions(
-    client: watcher_client.Client, audit: watcher.Audit
+    client: watcher_client.Client,
+    audit: watcher.Audit,
+    limit: int = 0,
+    sort_key: str = "created_at",
+    sort_dir: str = "asc",
 ) -> list[watcher.Action]:
     """Get list of actions by audit."""
-    return client.action.list(audit=audit.uuid, detail=True)
+    return client.action.list(
+        audit=audit.uuid, detail=True, limit=limit, sort_key=sort_key, sort_dir=sort_dir
+    )
 
 
 def exec_audit(client: watcher_client.Client, audit: watcher.Audit):
@@ -168,7 +181,7 @@ def exec_audit(client: watcher_client.Client, audit: watcher.Audit):
     action_plans = client.action_plan.list(audit=audit.uuid)
     for action_plan in action_plans:
         _exec_plan(client=client, action_plan=action_plan)
-    LOG.info(f"All Action plan for Audit {audit.uuid} execution successfully")
+    LOG.debug(f"All Action plans for Audit {audit.uuid} started")
 
 
 def _exec_plan(client: watcher_client.Client, action_plan: watcher.ActionPlan):
@@ -177,37 +190,65 @@ def _exec_plan(client: watcher_client.Client, action_plan: watcher.ActionPlan):
         LOG.debug(f"action plan {action_plan.uuid} state is SUCCEEDED, skip execution")
         return
     client.action_plan.start(action_plan_id=action_plan.uuid)
+    LOG.debug(f"Start Watcher action plan {action_plan.uuid}")
 
-    action_plan_details = _wait_resource_in_target_state(
-        client=client,
-        resource_name="action_plan",
-        resource_uuid=action_plan.uuid,
+
+def wait_until_action_state(
+    step: BaseStep,
+    audit: watcher.Audit,
+    client: watcher_client.Client,
+    status: Status | None,
+    expected_state: Iterable[str] = ["SUCCEEDED"],
+):
+    actions = get_actions(client=client, audit=audit)
+    nb_completed_actions = 0
+    nb_actions = len(actions)
+    completed_actions = dict.fromkeys([action.uuid for action in actions], False)
+
+    message = (
+        step.status
+        + "waiting for actions to become expected state"
+        + " ({nb_completed_actions}/{nb_actions})"
     )
 
-    if action_plan_details.state == "SUCCEEDED":
-        LOG.debug(f"Action plan {action_plan.uuid} execution successfully")
-    else:
-        LOG.debug(f"Action plan {action_plan.uuid} execution failed")
-
-    # Even if an action fails, the action plan can still be in the SUCCEEDED state.
-    # To handle this, we check if there are any failed actions at this point.
-    _raise_on_failed_action(client=client, action_plan=action_plan)
-
-
-def _raise_on_failed_action(
-    client: watcher_client.Client, action_plan: watcher.ActionPlan
-):
-    """Raise exception on failed action."""
-    actions = client.action.list(action_plan=action_plan.uuid, detail=True)
-    info = {}
-    for action in actions:
-        if not action.state == "FAILED":
-            continue
-        info[action.uuid] = {
-            "action": action.action_type,
-            "updated-at": action.updated_at,
-            "description": action.description,
-            "input_parameters": action.input_parameters,
-        }
-    if len(info) > 0:
-        raise SunbeamException(f"Actions in FAILED state. {info}")
+    timeout = WAIT_TIMEOUT * nb_actions
+    for attempt in tenacity.Retrying(
+        stop=tenacity.stop_after_delay(timeout),
+        wait=tenacity.wait_fixed(WAIT_SLEEP_INTERVAL),
+        retry=tenacity.retry_if_not_exception_type(WatcherActionFailedException),
+        reraise=True,
+    ):
+        with attempt:
+            actions = get_actions(client=client, audit=audit)
+            for action in actions:
+                if completed_actions.get(action.uuid) is True:
+                    continue
+                LOG.debug(f"Watcher action {action.uuid} is in {action.state} state.")
+                if action.state == "FAILED":
+                    raise WatcherActionFailedException
+                if action.state in expected_state:
+                    completed_actions[action.uuid] = True
+                    nb_completed_actions = sum(completed_actions.values())
+                    if status is not None:
+                        status.update(
+                            message.format(
+                                nb_completed_actions=nb_completed_actions,
+                                nb_actions=nb_actions,
+                            )
+                        )
+            if nb_completed_actions < nb_actions:
+                raise SunbeamException(
+                    "Not all actions completed: {}".format(
+                        ",".join(
+                            [
+                                action.uuid
+                                for action in actions
+                                if action.state not in expected_state
+                            ]
+                        )
+                    )
+                )
+            LOG.debug(
+                f"All actions for Watcher audit {audit.uuid}"
+                " have been successfully completed."
+            )

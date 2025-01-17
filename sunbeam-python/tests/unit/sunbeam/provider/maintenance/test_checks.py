@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import itertools
 from unittest.mock import Mock, call
 
 import pytest
@@ -41,44 +40,42 @@ class TestInstancesStatusCheck:
         mock_get_admin_connection,
         mock_guests_on_hypervisor,
     ):
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
-
+        node = "node1"
+        instances = [[], []]
         mock_guests_on_hypervisor.side_effect = instances
 
-        check = checks.InstancesStatusCheck(Mock(), nodes, False)
+        check = checks.InstancesStatusCheck(Mock(), node, False)
         assert check.run()
 
-    @pytest.mark.parametrize("inst_status", [("ERROR"), ("MIGRATING")])
     def test_run_failed(
         self,
-        inst_status,
         mock_conn,
         mock_get_admin_connection,
         mock_guests_on_hypervisor,
     ):
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
-        instances[-1][-1].status = inst_status
-        instances[-1][-1].id = "target-inst"
+        node = "node1"
+        instances = [[Mock()], [Mock()]]
+        instances[0][-1].id = "target-inst-1"
+        instances[-1][-1].id = "target-inst-2"
 
         mock_guests_on_hypervisor.side_effect = instances
 
-        check = checks.InstancesStatusCheck(Mock(), nodes, False)
+        check = checks.InstancesStatusCheck(Mock(), node, False)
         assert not check.run()
-        assert check.message == f"Instance target-inst is in {inst_status} status"
+        assert check.message == (
+            "Instances not in expected status: {}".format(
+                {"target-inst-1": "ERROR", "target-inst-2": "MIGRATING"},
+            )
+        )
 
-    @pytest.mark.parametrize("inst_status", [("ERROR"), ("MIGRATING")])
-    def test_run_failed_focce(
+    def test_run_failed_force(
         self,
-        inst_status,
         mock_conn,
         mock_get_admin_connection,
         mock_guests_on_hypervisor,
     ):
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
-        instances[-1][-1].status = inst_status
+        nodes = "node1"
+        instances = [[Mock()], [Mock(), Mock()]]
         instances[-1][-1].id = "target-inst"
 
         mock_guests_on_hypervisor.side_effect = instances
@@ -91,93 +88,84 @@ class TestInstancesStatusCheck:
 class TestNoEphemeralDiskCheck:
     def test_run(self, mocker):
         mock_conn = Mock()
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
+        node = "node1"
+        instances = [Mock(), Mock(), Mock()]
         mocker.patch.object(checks, "get_admin_connection", return_value=mock_conn)
         mock_guests_on_hypervisor = mocker.patch.object(
-            checks, "guests_on_hypervisor", side_effect=instances
+            checks, "guests_on_hypervisor", return_value=instances
         )
 
-        flavors = [Mock(), Mock(), Mock(), Mock(), Mock(), Mock()]
-        for flavor in flavors:
-            flavor.ephemeral = 0
-        mock_conn.compute.find_flavor.side_effect = flavors
+        mock_flavor = Mock()
+        mock_flavor.ephemeral = 0
+        mock_conn.compute.find_flavor.return_value = mock_flavor
 
-        check = checks.NoEphemeralDiskCheck(Mock(), nodes, False)
+        check = checks.NoEphemeralDiskCheck(Mock(), node, False)
         assert check.run()
         mock_guests_on_hypervisor.assert_has_calls(
             [
                 call(hypervisor_name="node1", conn=mock_conn),
-                call(hypervisor_name="node2", conn=mock_conn),
             ]
         )
         mock_conn.compute.find_flavor.assert_has_calls(
-            [
-                call(inst.flavor.get.return_value)
-                for inst in itertools.chain.from_iterable(instances)
-            ]
+            [call(inst.flavor.get.return_value) for inst in instances]
         )
 
     def test_run_failed(self, mocker):
         mock_conn = Mock()
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
-        instances[-1][-1].id = "target-inst"
+        node = "node1"
+        instances = [Mock(), Mock(), Mock()]
+        instances[-1].id = "target-inst-a"
+        instances[-2].id = "target-inst-b"
         mocker.patch.object(checks, "get_admin_connection", return_value=mock_conn)
         mock_guests_on_hypervisor = mocker.patch.object(
-            checks, "guests_on_hypervisor", side_effect=instances
+            checks, "guests_on_hypervisor", return_value=instances
         )
 
-        flavors = [Mock(), Mock(), Mock(), Mock(), Mock(), Mock()]
+        flavors = [Mock(), Mock(), Mock()]
         for flavor in flavors:
             flavor.ephemeral = 0
         flavors[-1].ephemeral = 100
+        flavors[-2].ephemeral = 100
         mock_conn.compute.find_flavor.side_effect = flavors
 
-        check = checks.NoEphemeralDiskCheck(Mock(), nodes, False)
+        check = checks.NoEphemeralDiskCheck(Mock(), node, False)
         assert not check.run()
-        assert check.message == "Instance target-inst has ephemeral disk"
+        assert check.message == "Instances have ephemeral disk: {}".format(
+            ["target-inst-b", "target-inst-a"]
+        )
         mock_guests_on_hypervisor.assert_has_calls(
             [
                 call(hypervisor_name="node1", conn=mock_conn),
-                call(hypervisor_name="node2", conn=mock_conn),
             ]
         )
         mock_conn.compute.find_flavor.assert_has_calls(
-            [
-                call(inst.flavor.get.return_value)
-                for inst in itertools.chain.from_iterable(instances)
-            ]
+            [call(inst.flavor.get.return_value) for inst in instances]
         )
 
     def test_run_force(self, mocker):
         mock_conn = Mock()
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
+        node = "node1"
+        instances = [Mock(), Mock(), Mock()]
         mocker.patch.object(checks, "get_admin_connection", return_value=mock_conn)
         mock_guests_on_hypervisor = mocker.patch.object(
-            checks, "guests_on_hypervisor", side_effect=instances
+            checks, "guests_on_hypervisor", return_value=instances
         )
 
-        flavors = [Mock(), Mock(), Mock(), Mock(), Mock(), Mock()]
+        flavors = [Mock(), Mock(), Mock()]
         for flavor in flavors:
             flavor.ephemeral = 0
         flavors[-1].ephemeral = 100
         mock_conn.compute.find_flavor.side_effect = flavors
 
-        check = checks.NoEphemeralDiskCheck(Mock(), nodes, True)
+        check = checks.NoEphemeralDiskCheck(Mock(), node, True)
         assert check.run()
         mock_guests_on_hypervisor.assert_has_calls(
             [
                 call(hypervisor_name="node1", conn=mock_conn),
-                call(hypervisor_name="node2", conn=mock_conn),
             ]
         )
         mock_conn.compute.find_flavor.assert_has_calls(
-            [
-                call(inst.flavor.get.return_value)
-                for inst in itertools.chain.from_iterable(instances)
-            ]
+            [call(inst.flavor.get.return_value) for inst in instances]
         )
 
 
@@ -230,31 +218,22 @@ class TestNoInstanceOnNodeCheck:
 
 class TestNovaInDisableStatusCheck:
     def test_run(self, mock_conn, mock_get_admin_connection):
-        services = [Mock(), Mock(), Mock()]
-        services[-1].host = "node1"
-        services[-1].binary = "nova-compute"
-        services[-1].status = "disabled"
+        services = [Mock()]
         mock_conn.compute.services.return_value = services
 
         check = checks.NovaInDisableStatusCheck(Mock(), "node1", False)
         assert check.run()
 
     def test_run_failed(self, mock_conn, mock_get_admin_connection):
-        services = [Mock(), Mock(), Mock()]
-        services[-1].host = "node1"
-        services[-1].binary = "nova-compute"
-        services[-1].status = "enabled"
+        services = []
         mock_conn.compute.services.return_value = services
 
         check = checks.NovaInDisableStatusCheck(Mock(), "node1", False)
         assert not check.run()
-        assert check.message == "Nova compute still enabled on node node1"
+        assert check.message == "Nova compute still not disabled on node node1"
 
     def test_run_force(self, mock_conn, mock_get_admin_connection):
-        services = [Mock(), Mock(), Mock()]
-        services[-1].host = "node1"
-        services[-1].binary = "nova-compute"
-        services[-1].status = "enabled"
+        services = []
         mock_conn.compute.services.return_value = services
 
         check = checks.NovaInDisableStatusCheck(Mock(), "node1", True)

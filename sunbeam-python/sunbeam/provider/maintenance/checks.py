@@ -29,13 +29,13 @@ LOG = logging.getLogger(__name__)
 
 
 class InstancesStatusCheck(Check):
-    def __init__(self, jhelper: JujuHelper, nodes: list[str], force: bool):
+    def __init__(self, jhelper: JujuHelper, node: str, force: bool):
         super().__init__(
             "Check no instance in ERROR/MIGRATING status on nodes",
             "Checking if there are any instance in ERROR/MIGRATING status on nodes",
         )
         self.jhelper = jhelper
-        self.nodes = nodes
+        self.node = node
         self.force = force
 
     def run(self) -> bool:
@@ -46,29 +46,34 @@ class InstancesStatusCheck(Check):
         """
         conn = get_admin_connection(jhelper=self.jhelper)
 
-        for node in self.nodes:
+        not_expected_status_instances: dict[str, str] = {}
+
+        for status in ["ERROR", "MIGRATING"]:
             for inst in guests_on_hypervisor(
-                hypervisor_name=node,
+                hypervisor_name=self.node,
                 conn=conn,
+                status=status,
             ):
-                if inst.status in ["ERROR", "MIGRATING"]:
-                    _msg = f"Instance {inst.id} is in {inst.status} status"
-                    if self.force:
-                        LOG.warning(f"Ignore issue: {_msg}")
-                        continue
-                    self.message = _msg
-                    return False
+                not_expected_status_instances[inst.id] = status
+
+        if not_expected_status_instances:
+            _msg = f"Instances not in expected status: {not_expected_status_instances}"
+            if self.force:
+                LOG.warning(f"Ignore issue: {_msg}")
+                return True
+            self.message = _msg
+            return False
         return True
 
 
 class NoEphemeralDiskCheck(Check):
-    def __init__(self, jhelper: JujuHelper, nodes: list[str], force: bool):
+    def __init__(self, jhelper: JujuHelper, node: str, force: bool):
         super().__init__(
             "Check no instance using ephemeral disk",
             "Checking if there are any instance is using ephemeral disk",
         )
         self.jhelper = jhelper
-        self.nodes = nodes
+        self.node = node
         self.force = force
 
     def run(self) -> bool:
@@ -79,48 +84,22 @@ class NoEphemeralDiskCheck(Check):
         """
         conn = get_admin_connection(jhelper=self.jhelper)
 
-        for node in self.nodes:
-            for inst in guests_on_hypervisor(
-                hypervisor_name=node,
-                conn=conn,
-            ):
-                flavor = conn.compute.find_flavor(inst.flavor.get("id"))
-                if flavor.ephemeral > 0:
-                    _msg = f"Instance {inst.id} has ephemeral disk"
-                    if self.force:
-                        LOG.warning(f"Ignore issue: {_msg}")
-                        continue
-                    self.message = _msg
-                    return False
-        return True
+        unexpected_instances = []
 
-
-class NodeisNotControlRoleCheck(Check):
-    def __init__(self, nodes: list[str], force: bool):
-        super().__init__(
-            "Check node is not control role",
-            "Checking if any node is control role",
-        )
-        self.nodes = nodes
-        self.force = force
-
-    def run(self) -> bool:
-        """Run the check logic here.
-
-        Return True if check is Ok.
-        Otherwise update self.message and return False.
-        """
-        if len(self.nodes) > 0:
-            for node in self.nodes:
-                _msg = (
-                    f"Node({node}) has control role "
-                    "which doesn't currently support maintenance mode"
-                )
-                if self.force:
-                    LOG.warning(f"Ignore issue: {_msg}")
-                    continue
-                self.message = _msg
-                return False
+        for inst in guests_on_hypervisor(
+            hypervisor_name=self.node,
+            conn=conn,
+        ):
+            flavor = conn.compute.find_flavor(inst.flavor.get("id"))
+            if flavor.ephemeral > 0:
+                unexpected_instances.append(inst.id)
+        if unexpected_instances:
+            _msg = f"Instances have ephemeral disk: {unexpected_instances}"
+            if self.force:
+                LOG.warning(f"Ignore issue: {_msg}")
+                return True
+            self.message = _msg
+            return False
         return True
 
 
@@ -173,13 +152,17 @@ class NovaInDisableStatusCheck(Check):
         """
         conn = get_admin_connection(jhelper=self.jhelper)
 
-        for svc in conn.compute.services():
-            if svc.host == self.node and svc.binary == "nova-compute":
-                if not svc.status == "disabled":
-                    _msg = f"Nova compute still enabled on node {self.node}"
-                    if self.force:
-                        LOG.warning(f"Ignore issue: {_msg}")
-                        return True
-                    self.message = f"Nova compute still enabled on node {self.node}"
-                    return False
+        expected_services = []
+        for svc in conn.compute.services(
+            binary="nova-compute", host=self.node, status="disabled"
+        ):
+            expected_services.append(svc.id)
+
+        if not len(expected_services) == 1:
+            _msg = f"Nova compute still not disabled on node {self.node}"
+            if self.force:
+                LOG.warning(f"Ignore issue: {_msg}")
+                return True
+            self.message = _msg
+            return False
         return True
