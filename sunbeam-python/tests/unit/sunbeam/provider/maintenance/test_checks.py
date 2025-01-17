@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import itertools
 from unittest.mock import Mock, call
 
 import pytest
@@ -41,12 +40,12 @@ class TestInstancesStatusCheck:
         mock_get_admin_connection,
         mock_guests_on_hypervisor,
     ):
-        nodes = ["node1", "node2"]
+        node = "node1"
         instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
 
         mock_guests_on_hypervisor.side_effect = instances
 
-        check = checks.InstancesStatusCheck(Mock(), nodes, False)
+        check = checks.InstancesStatusCheck(Mock(), node, False)
         assert check.run()
 
     @pytest.mark.parametrize("inst_status", [("ERROR"), ("MIGRATING")])
@@ -57,14 +56,14 @@ class TestInstancesStatusCheck:
         mock_get_admin_connection,
         mock_guests_on_hypervisor,
     ):
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
-        instances[-1][-1].status = inst_status
-        instances[-1][-1].id = "target-inst"
+        node = "node1"
+        instances = [Mock(), Mock(), Mock()]
+        instances[-1].status = inst_status
+        instances[-1].id = "target-inst"
 
-        mock_guests_on_hypervisor.side_effect = instances
+        mock_guests_on_hypervisor.return_value = instances
 
-        check = checks.InstancesStatusCheck(Mock(), nodes, False)
+        check = checks.InstancesStatusCheck(Mock(), node, False)
         assert not check.run()
         assert check.message == f"Instance target-inst is in {inst_status} status"
 
@@ -76,12 +75,12 @@ class TestInstancesStatusCheck:
         mock_get_admin_connection,
         mock_guests_on_hypervisor,
     ):
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
-        instances[-1][-1].status = inst_status
-        instances[-1][-1].id = "target-inst"
+        nodes = "node1"
+        instances = [Mock(), Mock(), Mock()]
+        instances[-1].status = inst_status
+        instances[-1].id = "target-inst"
 
-        mock_guests_on_hypervisor.side_effect = instances
+        mock_guests_on_hypervisor.return_value = instances
 
         check = checks.InstancesStatusCheck(Mock(), nodes, True)
 
@@ -91,93 +90,80 @@ class TestInstancesStatusCheck:
 class TestNoEphemeralDiskCheck:
     def test_run(self, mocker):
         mock_conn = Mock()
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
+        node = "node1"
+        instances = [Mock(), Mock(), Mock()]
         mocker.patch.object(checks, "get_admin_connection", return_value=mock_conn)
         mock_guests_on_hypervisor = mocker.patch.object(
-            checks, "guests_on_hypervisor", side_effect=instances
+            checks, "guests_on_hypervisor", return_value=instances
         )
 
-        flavors = [Mock(), Mock(), Mock(), Mock(), Mock(), Mock()]
-        for flavor in flavors:
-            flavor.ephemeral = 0
-        mock_conn.compute.find_flavor.side_effect = flavors
+        mock_flavor = Mock()
+        mock_flavor.ephemeral = 0
+        mock_conn.compute.find_flavor.return_value = mock_flavor
 
-        check = checks.NoEphemeralDiskCheck(Mock(), nodes, False)
+        check = checks.NoEphemeralDiskCheck(Mock(), node, False)
         assert check.run()
         mock_guests_on_hypervisor.assert_has_calls(
             [
                 call(hypervisor_name="node1", conn=mock_conn),
-                call(hypervisor_name="node2", conn=mock_conn),
             ]
         )
         mock_conn.compute.find_flavor.assert_has_calls(
-            [
-                call(inst.flavor.get.return_value)
-                for inst in itertools.chain.from_iterable(instances)
-            ]
+            [call(inst.flavor.get.return_value) for inst in instances]
         )
 
     def test_run_failed(self, mocker):
         mock_conn = Mock()
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
-        instances[-1][-1].id = "target-inst"
+        node = "node1"
+        instances = [Mock(), Mock(), Mock()]
+        instances[-1].id = "target-inst"
         mocker.patch.object(checks, "get_admin_connection", return_value=mock_conn)
         mock_guests_on_hypervisor = mocker.patch.object(
-            checks, "guests_on_hypervisor", side_effect=instances
+            checks, "guests_on_hypervisor", return_value=instances
         )
 
-        flavors = [Mock(), Mock(), Mock(), Mock(), Mock(), Mock()]
+        flavors = [Mock(), Mock(), Mock()]
         for flavor in flavors:
             flavor.ephemeral = 0
         flavors[-1].ephemeral = 100
         mock_conn.compute.find_flavor.side_effect = flavors
 
-        check = checks.NoEphemeralDiskCheck(Mock(), nodes, False)
+        check = checks.NoEphemeralDiskCheck(Mock(), node, False)
         assert not check.run()
         assert check.message == "Instance target-inst has ephemeral disk"
         mock_guests_on_hypervisor.assert_has_calls(
             [
                 call(hypervisor_name="node1", conn=mock_conn),
-                call(hypervisor_name="node2", conn=mock_conn),
             ]
         )
         mock_conn.compute.find_flavor.assert_has_calls(
-            [
-                call(inst.flavor.get.return_value)
-                for inst in itertools.chain.from_iterable(instances)
-            ]
+            [call(inst.flavor.get.return_value) for inst in instances]
         )
 
     def test_run_force(self, mocker):
         mock_conn = Mock()
-        nodes = ["node1", "node2"]
-        instances = [[Mock(), Mock(), Mock()], [Mock(), Mock(), Mock()]]
+        node = "node1"
+        instances = [Mock(), Mock(), Mock()]
         mocker.patch.object(checks, "get_admin_connection", return_value=mock_conn)
         mock_guests_on_hypervisor = mocker.patch.object(
-            checks, "guests_on_hypervisor", side_effect=instances
+            checks, "guests_on_hypervisor", return_value=instances
         )
 
-        flavors = [Mock(), Mock(), Mock(), Mock(), Mock(), Mock()]
+        flavors = [Mock(), Mock(), Mock()]
         for flavor in flavors:
             flavor.ephemeral = 0
         flavors[-1].ephemeral = 100
         mock_conn.compute.find_flavor.side_effect = flavors
 
-        check = checks.NoEphemeralDiskCheck(Mock(), nodes, True)
+        check = checks.NoEphemeralDiskCheck(Mock(), node, True)
         assert check.run()
         mock_guests_on_hypervisor.assert_has_calls(
             [
                 call(hypervisor_name="node1", conn=mock_conn),
-                call(hypervisor_name="node2", conn=mock_conn),
             ]
         )
         mock_conn.compute.find_flavor.assert_has_calls(
-            [
-                call(inst.flavor.get.return_value)
-                for inst in itertools.chain.from_iterable(instances)
-            ]
+            [call(inst.flavor.get.return_value) for inst in instances]
         )
 
 

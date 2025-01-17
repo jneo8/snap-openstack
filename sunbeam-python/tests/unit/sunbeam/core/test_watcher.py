@@ -216,7 +216,13 @@ def test_get_actions():
     mock_audit = Mock()
     result = watcher_helper.get_actions(mock_client, mock_audit)
     assert result == mock_client.action.list.return_value
-    mock_client.action.list.assert_called_once_with(audit=mock_audit.uuid, detail=True)
+    mock_client.action.list.assert_called_once_with(
+        audit=mock_audit.uuid,
+        detail=True,
+        limit=0,
+        sort_key="created_at",
+        sort_dir="asc",
+    )
 
 
 @patch("sunbeam.core.watcher._exec_plan")
@@ -233,6 +239,17 @@ def test_exec_audit(mock_exec_plan):
             call(client=mock_client, action_plan=mock_action_plans[0]),
             call(client=mock_client, action_plan=mock_action_plans[1]),
         ]
+    )
+
+
+def test_exec_plan():
+    mock_client = Mock()
+    mock_action_plan = Mock()
+    mock_action_plan.state = "PENDING"
+
+    watcher_helper._exec_plan(mock_client, mock_action_plan)
+    mock_client.action_plan.start.assert_called_once_with(
+        action_plan_id=mock_action_plan.uuid
     )
 
 
@@ -279,4 +296,75 @@ def test_wait_resource_in_target_state_failed(mock_retry_sleep, mock_retry_stop)
             mock_client,
             "fake_resource",
             "fake-uuid",
+        )
+
+
+@patch("sunbeam.core.watcher.get_actions")
+@patch(
+    "sunbeam.core.watcher.tenacity.wait_fixed",
+    return_value=tenacity.wait_fixed(0),
+)
+@patch(
+    "sunbeam.core.watcher.tenacity.stop_after_delay",
+    return_value=tenacity.stop_after_attempt(10),
+)
+def test_wait_until_action_state(
+    mock_stop_after_delay,
+    mock_wait_fixed,
+    mock_get_actions,
+):
+    mock_client = Mock()
+    mock_status = Mock()
+    mock_step = Mock()
+    mock_step.status = "fake-status-msg"
+    mock_audit = Mock()
+
+    times = 5
+    action_num = 3
+    side_effect = []
+    for i in range(times):
+        actions = []
+        for j in range(action_num):
+            action = Mock()
+            action.uuid = str(j)
+            actions.append(action)
+        side_effect.append(actions)
+    for action in side_effect[-1]:
+        action.state = "SUCCEEDED"
+
+    side_effect[1][0].state = "SUCCEEDED"
+
+    mock_get_actions.side_effect = side_effect
+
+    watcher_helper.wait_until_action_state(
+        mock_step, mock_audit, mock_client, mock_status
+    )
+
+
+@patch("sunbeam.core.watcher.get_actions")
+@patch(
+    "sunbeam.core.watcher.tenacity.wait_fixed",
+    return_value=tenacity.wait_fixed(0),
+)
+@patch(
+    "sunbeam.core.watcher.tenacity.stop_after_delay",
+    return_value=tenacity.stop_after_attempt(10),
+)
+def test_wait_until_action_state_failed(
+    mock_stop_after_delay,
+    mock_wait_fixed,
+    mock_get_actions,
+):
+    mock_client = Mock()
+    mock_status = Mock()
+    mock_step = Mock()
+    mock_step.status = "fake-status-msg"
+    mock_audit = Mock()
+
+    mock_get_actions.return_value = [Mock()]
+    mock_get_actions.return_value[0].state = "FAILED"
+
+    with pytest.raises(watcher_helper.WatcherActionFailedException):
+        watcher_helper.wait_until_action_state(
+            mock_step, mock_audit, mock_client, mock_status
         )
