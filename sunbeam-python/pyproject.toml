@@ -100,5 +100,5 @@ min-file-size = 1
 max-complexity = 15
 
 [[tool.mypy.overrides]]
-module = ["watcherclient.*", "timeout_decorator"]
+module = ["watcherclient.*"]
 follow_untyped_imports = true
