@@ -18,7 +18,7 @@ import pytest
 from sunbeam.core.juju import ApplicationNotFoundException
 from sunbeam.core.openstack import OPENSTACK_MODEL
 from sunbeam.core.watcher import WATCHER_APPLICATION
-from sunbeam.provider.maintenance import checks
+from sunbeam.features.maintenance import checks
 
 
 @pytest.fixture
@@ -244,7 +244,7 @@ class TestNovaInDisableStatusCheck:
 
 
 class TestMicroCephMaintenancePreflightCheck:
-    @patch("sunbeam.provider.maintenance.checks.JujuActionHelper")
+    @patch("sunbeam.features.maintenance.checks.JujuActionHelper")
     def test_run(self, mock_action_helper):
         mock_client = Mock()
         mock_jhelper = Mock()
@@ -274,7 +274,7 @@ class TestMicroCephMaintenancePreflightCheck:
 
 
 class TestWatcherApplicationExistsCheck:
-    @patch("sunbeam.provider.maintenance.checks.run_sync")
+    @patch("sunbeam.features.maintenance.checks.run_sync")
     def test_run(self, mock_run_sync):
         mock_jhelper = Mock()
         check = checks.WatcherApplicationExistsCheck(mock_jhelper)
@@ -285,7 +285,7 @@ class TestWatcherApplicationExistsCheck:
             name=WATCHER_APPLICATION, model=OPENSTACK_MODEL
         )
 
-    @patch("sunbeam.provider.maintenance.checks.run_sync")
+    @patch("sunbeam.features.maintenance.checks.run_sync")
     def test_run_failed(self, mock_run_sync):
         mock_jhelper = Mock()
         mock_run_sync.side_effect = ApplicationNotFoundException

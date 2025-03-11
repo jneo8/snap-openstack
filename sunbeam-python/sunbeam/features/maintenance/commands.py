@@ -27,8 +27,8 @@ from sunbeam.core.common import (
 )
 from sunbeam.core.deployment import Deployment
 from sunbeam.core.juju import JujuHelper
-from sunbeam.provider.maintenance import checks
-from sunbeam.provider.maintenance.utils import OperationViewer, get_node_status
+from sunbeam.features.maintenance import checks
+from sunbeam.features.maintenance.utils import OperationViewer, get_node_status
 from sunbeam.steps.hypervisor import EnableHypervisorStep
 from sunbeam.steps.maintenance import (
     CreateWatcherHostMaintenanceAuditStep,
@@ -48,7 +48,7 @@ def maintenance(ctx):
     """Manage maintenance mode for Sunbeam Cluster."""
 
 
-@maintenance.command()
+@click.command()
 @click.argument(
     "node",
     type=click.STRING,
@@ -106,9 +106,7 @@ def enable(
     )
 
     if not node_status:
-        raise click.ClickException(
-            f"Node: {node} does not exist in cluster"
-        )
+        raise click.ClickException(f"Node: {node} does not exist in cluster")
 
     # This check is to avoid issue which maintenance mode haven't support
     # control role, which should be removed after control role be supported.
@@ -236,7 +234,7 @@ def enable(
     console.print(f"Enable maintenance for node: {node}")
 
 
-@maintenance.command()
+@click.command()
 @click.argument(
     "node",
     type=click.STRING,
@@ -274,9 +272,7 @@ def disable(
         node=node,
     )
     if not node_status:
-        raise click.ClickException(
-            f"Node: {node} does not exist in cluster"
-        )
+        raise click.ClickException(f"Node: {node} does not exist in cluster")
 
     # Run preflight_checks
     preflight_checks: list[Check] = []

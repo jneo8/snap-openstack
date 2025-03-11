@@ -14,14 +14,14 @@
 # limitations under the License.
 from unittest.mock import Mock, patch
 
-from sunbeam.provider.maintenance.utils import (
+from sunbeam.features.maintenance.utils import (
     get_node_status,
 )
 
 
-@patch("sunbeam.provider.maintenance.utils.LocalClusterStatusStep")
-@patch("sunbeam.provider.maintenance.utils.run_plan")
-@patch("sunbeam.provider.maintenance.utils.get_step_message")
+@patch("sunbeam.features.maintenance.utils.LocalClusterStatusStep")
+@patch("sunbeam.features.maintenance.utils.run_plan")
+@patch("sunbeam.features.maintenance.utils.get_step_message")
 def test_get_node_status(
     mock_get_step_message,
     mock_run_plan,
