@@ -23,6 +23,7 @@ from lightkube import ConfigError, KubeConfig
 from lightkube.core.client import Client as KubeClient
 from rich.console import Console
 
+from sunbeam import utils
 from sunbeam.clusterd.client import Client
 from sunbeam.clusterd.service import (
     ConfigItemNotFoundException,
@@ -79,6 +80,7 @@ from sunbeam.core.steps import (
     RemoveMachineUnitsStep,
 )
 from sunbeam.core.terraform import TerraformHelper
+from sunbeam.steps.juju import BOOTSTRAP_CONFIG_KEY
 
 LOG = logging.getLogger(__name__)
 K8S_CONFIG_KEY = "TerraformVarsK8S"
@@ -195,11 +197,29 @@ class DeployK8SApplicationStep(DeployMachineApplicationStep):
         variables = load_answers(self.client, self._ADDONS_CONFIG)
         return variables.get("k8s-addons", {}).get("loadbalancer")
 
+    def _get_loadbalancer_l2_interfaces(self) -> str | None:
+        """Return l2 interfaces to use for loadbalancer.
+
+        For local mode, the interfaces is based on management cidr on bootstrap
+        machine.
+        """
+        bootstrap_variables = load_answers(self.client, BOOTSTRAP_CONFIG_KEY)
+        management_cidr = bootstrap_variables.get("bootstrap", {}).get(
+            "management_cidr"
+        )
+
+        if management_cidr is None:
+            return None
+
+        return utils.get_local_ifname_by_cidr(management_cidr)
+
     def _get_k8s_config_tfvars(self) -> dict:
         config_tfvars: dict[str, bool | str] = {
             "load-balancer-enabled": True,
             "load-balancer-l2-mode": True,
         }
+        if l2_interfaces := self._get_loadbalancer_l2_interfaces():
+            config_tfvars["load-balancer-l2-interfaces"] = l2_interfaces
 
         charm_manifest = self.manifest.core.software.charms.get("k8s")
         if charm_manifest and charm_manifest.config:

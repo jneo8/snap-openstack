@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 0.15.1"
+  required_version = ">= 1.5.7"
   required_providers {
     openstack = {
       source  = "terraform-provider-openstack/openstack"
@@ -12,47 +12,56 @@ provider "openstack" {}
 
 # Flavors
 resource "openstack_compute_flavor_v2" "m1_tiny" {
-  name      = "m1.tiny"
-  ram       = "512"
-  vcpus     = "1"
-  disk      = "4"
-  is_public = true
+  for_each    = toset(["m1.tiny", "m1.tiny-sev"])
+  name        = each.key
+  ram         = "512"
+  vcpus       = "1"
+  disk        = "4"
+  is_public   = true
+  extra_specs = strcontains(each.key, "sev") ? { "hw:mem_encryption" : true } : {}
 }
 
 resource "openstack_compute_flavor_v2" "m1_small" {
-  name      = "m1.small"
-  ram       = "2048"
-  vcpus     = "1"
-  disk      = "30"
-  is_public = true
+  for_each    = toset(["m1.small", "m1.small-sev"])
+  name        = each.key
+  ram         = "2048"
+  vcpus       = "1"
+  disk        = "30"
+  is_public   = true
+  extra_specs = strcontains(each.key, "sev") ? { "hw:mem_encryption" : true } : {}
 }
 
 resource "openstack_compute_flavor_v2" "m1_medium" {
-  name      = "m1.medium"
-  ram       = "4096"
-  vcpus     = "2"
-  disk      = "60"
-  is_public = true
+  for_each    = toset(["m1.medium", "m1.medium-sev"])
+  name        = each.key
+  ram         = "4096"
+  vcpus       = "2"
+  disk        = "60"
+  is_public   = true
+  extra_specs = strcontains(each.key, "sev") ? { "hw:mem_encryption" : true } : {}
 }
 
 resource "openstack_compute_flavor_v2" "m1_large" {
-  name      = "m1.large"
-  ram       = "8192"
-  vcpus     = "4"
-  disk      = "90"
-  is_public = true
+  for_each    = toset(["m1.large", "m1.large-sev"])
+  name        = each.key
+  ram         = "8192"
+  vcpus       = "4"
+  disk        = "90"
+  is_public   = true
+  extra_specs = strcontains(each.key, "sev") ? { "hw:mem_encryption" : true } : {}
 }
 
 resource "openstack_images_image_v2" "ubuntu" {
   name             = "ubuntu"
-  image_source_url = "http://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+  image_source_url = "http://cloud-images.ubuntu.com/${var.distro_version}/current/${var.distro_version}-server-cloudimg-${var.distro_arch}.img"
   container_format = "bare"
   disk_format      = "qcow2"
   visibility       = "public"
 
   properties = {
-    architecture    = "x86_64"
-    hypervisor_type = "qemu"
+    architecture     = "x86_64"
+    hypervisor_type  = "qemu"
+    hw_firmware_type = "uefi"
   }
 }
 

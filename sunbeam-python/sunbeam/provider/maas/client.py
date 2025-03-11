@@ -426,3 +426,22 @@ def get_ip_ranges_from_space(client: MaasClient, space: str) -> dict[str, list[d
         if len(ranges) > 0:
             ip_ranges[subnet["cidr"]] = ranges
     return ip_ranges
+
+
+def get_ifname_from_space(client: MaasClient, space: str, **extra_args) -> str | None:
+    """Get interface name for the given space.
+
+    The machines are filtered by options in **kwargs and the first machine is used
+    to get the corresponding interface for the space.
+    """
+    machines_raw = client.list_machines(**extra_args)
+    if not machines_raw:
+        return None
+
+    machine = machines_raw[0]
+    for interface in machine.get("interface_set", {}):
+        for link in interface.get("links", {}):
+            if link.get("subnet", {}).get("vlan", {}).get("space") == space:
+                return interface.get("name")
+
+    return None

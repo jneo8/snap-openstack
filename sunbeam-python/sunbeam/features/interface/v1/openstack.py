@@ -66,6 +66,7 @@ from sunbeam.steps.openstack import (
     get_database_resource_dict,
     get_database_resource_tfvars,
     get_database_storage_dict,
+    service_scale_function,
     write_database_resource_dict,
     write_database_storage_dict,
 )
@@ -235,7 +236,7 @@ class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigTy
         {
             "cinder": {
               "cinder-k8s": 4,
-              "cinder-ceph-k8s": 4,
+              "cinder-volume": 4,
             }
         }
         """
@@ -261,6 +262,7 @@ class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigTy
             config = read_config(client, self.get_tfvar_config_key())
         except ConfigItemNotFoundException:
             config = {}
+        storage_nodes = client.cluster.list_nodes_by_role("storage")
         database_processes = self.get_database_charm_processes()
         resource_dict = get_database_resource_dict(client)
         if enable:
@@ -279,7 +281,7 @@ class OpenStackControlPlaneFeature(EnableDisableFeature, typing.Generic[ConfigTy
         return get_database_resource_tfvars(
             config.get("many-mysql", False),
             resource_dict,
-            config.get("os-api-scale", 1),
+            service_scale_function(config.get("os-api-scale", 1), len(storage_nodes)),
         )
 
     def _get_database_storage_map_tfvars(

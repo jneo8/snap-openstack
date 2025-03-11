@@ -14,7 +14,9 @@
 # limitations under the License.
 
 import logging
+import re
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -533,7 +535,19 @@ class ValidationFeature(OpenStackControlPlaneFeature):
             progress_message=progress_message,
         )
 
-        console.print(action_result.get("summary", "").strip())
+        summary = action_result.get("summary", "").strip()
+        console.print(summary)
+
+        failed_match = re.search(r"Failed:\s+(\d+)", summary)
+        unexpected_success_match = re.search(r"Unexpected Success:\s+(\d+)", summary)
+
+        failed = int(failed_match.group(1)) if failed_match else 0
+        unexpected_success = (
+            int(unexpected_success_match.group(1)) if unexpected_success_match else 0
+        )
+
+        if failed > 0 or unexpected_success > 0:
+            sys.exit(1)
 
         if output:
             # Due to shelling out to the juju cli (rather than using libjuju),

@@ -352,6 +352,27 @@ def click_option_topology(func: decorators.FC) -> decorators.FC:
     )(func)
 
 
+def click_option_database(func: click.decorators.FC) -> click.decorators.FC:
+    return click.option(
+        "--database",
+        default="auto",
+        type=click.Choice(
+            [
+                "auto",
+                "single",
+                "multi",
+            ],
+            case_sensitive=False,
+        ),
+        help=(
+            "Allows definition of the intended cluster configuration: "
+            "'auto' for automatic determination, "
+            "'single' for a single database, "
+            "'multi' for a database per service, "
+        ),
+    )(func)
+
+
 def update_config(client: Client, key: str, config: dict):
     client.cluster.update_config(key, json.dumps(config))
 

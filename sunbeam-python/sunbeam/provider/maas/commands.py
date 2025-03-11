@@ -57,6 +57,8 @@ from sunbeam.core.common import (
     FORMAT_TABLE,
     FORMAT_YAML,
     BaseStep,
+    click_option_database,
+    click_option_topology,
     get_step_message,
     run_plan,
     str_presenter,
@@ -122,6 +124,13 @@ from sunbeam.steps import cluster_status
 from sunbeam.steps.bootstrap_state import SetBootstrapped
 from sunbeam.steps.certificates import APPLICATION as CERTIFICATES_APPLICATION
 from sunbeam.steps.certificates import DeployCertificatesProviderApplicationStep
+from sunbeam.steps.cinder_volume import (
+    AddCinderVolumeUnitsStep,
+    CheckCinderVolumeDistributionStep,
+    DeployCinderVolumeApplicationStep,
+    DestroyCinderVolumeApplicationStep,
+    RemoveCinderVolumeUnitsStep,
+)
 from sunbeam.steps.clusterd import APPLICATION as CLUSTERD_APPLICATION
 from sunbeam.steps.clusterd import (
     DeploySunbeamClusterdApplicationStep,
@@ -501,6 +510,8 @@ def _name_mapper(node: dict) -> str:
     help="Manifest file.",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
+@click_option_topology
+@click_option_database
 @click_option_show_hints
 @click.pass_context
 def deploy(
@@ -508,6 +519,7 @@ def deploy(
     manifest_path: Path | None = None,
     accept_defaults: bool = False,
     topology: str = "auto",
+    database: str = "auto",
     show_hints: bool = False,
 ) -> None:
     """Deploy the MAAS-backed deployment.
@@ -566,6 +578,7 @@ def deploy(
     tfhelper_sunbeam_machine = deployment.get_tfhelper("sunbeam-machine-plan")
     tfhelper_k8s = deployment.get_tfhelper("k8s-plan")
     tfhelper_microceph = deployment.get_tfhelper("microceph-plan")
+    tfhelper_cinder_volume = deployment.get_tfhelper("cinder-volume-plan")
     tfhelper_openstack_deploy = deployment.get_tfhelper("openstack-plan")
     tfhelper_hypervisor_deploy = deployment.get_tfhelper("hypervisor-plan")
 
@@ -676,7 +689,27 @@ def deploy(
             deployment.openstack_machines_model,
         )
     )
+    plan2.append(TerraformInitStep(tfhelper_cinder_volume))
+    plan2.append(
+        DeployCinderVolumeApplicationStep(
+            deployment,
+            client,
+            tfhelper_cinder_volume,
+            jhelper,
+            manifest,
+            deployment.openstack_machines_model,
+        )
+    )
     plan2.append(TerraformInitStep(tfhelper_openstack_deploy))
+    plan2.append(
+        AddCinderVolumeUnitsStep(
+            client,
+            storage,
+            jhelper,
+            deployment.openstack_machines_model,
+            tfhelper_openstack_deploy,
+        )
+    )
     plan2.append(
         DeployControlPlaneStep(
             deployment,
@@ -684,8 +717,7 @@ def deploy(
             jhelper,
             manifest,
             topology,
-            # maas deployment always deploys multiple databases
-            "large",
+            database,
             deployment.openstack_machines_model,
             proxy_settings=proxy_settings,
         )
@@ -710,6 +742,18 @@ def deploy(
             refresh=True,
         )
     )
+    # Fill AMQP / Keystone / MySQL offers from openstack model
+    plan2.append(
+        DeployCinderVolumeApplicationStep(
+            deployment,
+            client,
+            tfhelper_cinder_volume,
+            jhelper,
+            manifest,
+            deployment.openstack_machines_model,
+            refresh=True,
+        )
+    )
     plan2.append(OpenStackPatchLoadBalancerServicesIPStep(client))
     plan2.append(TerraformInitStep(tfhelper_hypervisor_deploy))
     plan2.append(
@@ -718,6 +762,7 @@ def deploy(
             client,
             tfhelper_hypervisor_deploy,
             tfhelper_openstack_deploy,
+            tfhelper_cinder_volume,
             jhelper,
             manifest,
             deployment.openstack_machines_model,
@@ -1347,6 +1392,13 @@ def remove_node(ctx: click.Context, name: str, force: bool, show_hints: bool) ->
 
     check_plan: list[BaseStep] = [
         JujuLoginStep(deployment.juju_account),
+        CheckCinderVolumeDistributionStep(
+            client,
+            name,
+            jhelper,
+            deployment.openstack_machines_model,
+            force=force,
+        ),
         CheckMicrocephDistributionStep(
             client,
             name,
@@ -1386,6 +1438,9 @@ def remove_node(ctx: click.Context, name: str, force: bool, show_hints: bool) ->
         UpdateK8SCloudStep(deployment, jhelper),
         RemoveHypervisorUnitStep(
             client, name, jhelper, deployment.openstack_machines_model, force
+        ),
+        RemoveCinderVolumeUnitsStep(
+            client, name, jhelper, deployment.openstack_machines_model
         ),
         RemoveMicrocephUnitsStep(
             client, name, jhelper, deployment.openstack_machines_model
@@ -1475,6 +1530,7 @@ def destroy_deployment_cmd(
 
         openstack_tfhelper = deployment.get_tfhelper("openstack-plan")
         microceph_tfhelper = deployment.get_tfhelper("microceph-plan")
+        cinder_volume_tfhelper = deployment.get_tfhelper("cinder-volume-plan")
         k8s_tfhelper = deployment.get_tfhelper("k8s-plan")
         if client and clusterd_up:
             # note(gboutry): can't use terraform if no clusterd is up
@@ -1485,6 +1541,14 @@ def destroy_deployment_cmd(
                     DestroyHypervisorApplicationStep(
                         client,
                         hypervisor_tfhelper,
+                        jhelper,
+                        manifest,
+                        deployment.openstack_machines_model,
+                    ),
+                    TerraformInitStep(cinder_volume_tfhelper),
+                    DestroyCinderVolumeApplicationStep(
+                        client,
+                        cinder_volume_tfhelper,
                         jhelper,
                         manifest,
                         deployment.openstack_machines_model,

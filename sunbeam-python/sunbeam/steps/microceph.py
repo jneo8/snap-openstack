@@ -70,7 +70,9 @@ def microceph_questions():
 async def list_disks(jhelper: JujuHelper, model: str, unit: str) -> tuple[dict, dict]:
     """Call list-disks action on an unit."""
     LOG.debug("Running list-disks on : %r", unit)
-    action_result = await jhelper.run_action(unit, model, "list-disks")
+    action_result = await jhelper.run_action(
+        unit, model, "list-disks", action_params={"host-only": True}
+    )
     LOG.debug(
         "Result after running action list-disks on %r: %r",
         unit,

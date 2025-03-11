@@ -22,3 +22,17 @@ variable "user" {
   })
   sensitive = true
 }
+
+
+# Image resource distro, e.g noble etc
+variable "distro_version" {
+  type = string
+  default = "noble"
+}
+
+
+# Image resource arch, e.g amd64
+variable "distro_arch" {
+  type = string
+  default = "amd64"
+}

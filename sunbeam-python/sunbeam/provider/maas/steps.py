@@ -1585,7 +1585,9 @@ class MaasConfigureMicrocephOSDStep(BaseStep):
     async def _list_disks(self, unit: str) -> tuple[dict, dict]:
         """Call list-disks action on an unit."""
         LOG.debug("Running list-disks on : %r", unit)
-        action_result = await self.jhelper.run_action(unit, self.model, "list-disks")
+        action_result = await self.jhelper.run_action(
+            unit, self.model, "list-disks", action_params={"host-only": True}
+        )
         LOG.debug(
             "Result after running action list-disks on %r: %r",
             unit,
@@ -1830,6 +1832,19 @@ class MaasDeployK8SApplicationStep(k8s.DeployK8SApplicationStep):
     def _get_loadbalancer_range(self) -> str | None:
         """Return loadbalancer range from public space."""
         return self.ranges
+
+    def _get_loadbalancer_l2_interfaces(self) -> str | None:
+        """Return l2 interfaces to use for loadbalancer.
+
+        For maas mode, the interfaces are corresponding to infra,
+        internal and public spaces on any one of control nodes.
+        """
+        management_space = self.deployment.get_space(Networks.MANAGEMENT)
+        return maas_client.get_ifname_from_space(
+            self.maas_client,
+            management_space,
+            tags=maas_deployment.RoleTags.CONTROL.value,
+        )
 
     def is_skip(self, status: Status | None = None):
         """Determines if the step should be skipped or not."""

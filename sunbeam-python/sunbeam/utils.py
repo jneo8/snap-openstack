@@ -200,6 +200,17 @@ def get_local_ip_by_cidr(cidr: str) -> str:
     raise ValueError(f"No local IP address found for CIDR {cidr}")
 
 
+def get_local_ifname_by_cidr(cidr: str) -> str:
+    """Get ifname of the first IP address of host associated with CIDR."""
+    network = ipaddress.ip_network(cidr, strict=True)
+    with NDB() as ndb:
+        for parsed_address in ndb.addresses.summary():
+            address = ipaddress.ip_address(parsed_address["address"])
+            if address in network:
+                return parsed_address["ifname"]
+    raise ValueError(f"No local interface found for CIDR {cidr}")
+
+
 def get_local_cidr_by_default_route() -> str:
     """Get CIDR of host associated with default gateway."""
     conf = get_ifaddresses_by_default_route()

@@ -18,7 +18,7 @@ terraform {
   required_providers {
     juju = {
       source  = "juju/juju"
-      version = "= 0.15.1"
+      version = "= 0.17.1"
     }
   }
 
@@ -96,4 +96,8 @@ resource "juju_integration" "microceph-cert-distributor" {
   application {
     offer_url = var.cert-distributor-offer-url
   }
+}
+
+output "ceph-application-name" {
+  value = juju_application.microceph.name
 }

@@ -2173,20 +2173,27 @@ class MigrateModelStep(BaseStep, JujuStepHelper):
 
     @tenacity.retry(
         wait=tenacity.wait_fixed(10),
-        stop=tenacity.stop_after_delay(300),
+        stop=tenacity.stop_after_delay(960),
         retry=tenacity.retry_if_exception_type(ValueError),
         reraise=True,
     )
-    def _wait_for_model(self, model: str) -> bool:
-        models = self._juju_cmd("models")
-        LOG.debug(f"Models: {models}")
-        models = models.get("models", [])
-        LOG.debug(f"models: {models} .. looking for {model}")
-        for model_ in models:
-            if model_.get("short-name") == model:
-                return True
+    def _wait_for_model(self, model: str, owner: str):
+        try:
+            self._juju_cmd("status", "--model", f"{owner}/{model}")
+        except subprocess.CalledProcessError as e:
+            LOG.debug(f"No model {model} found. stdout: {e.stdout}, stderr: {e.stderr}")
+            raise ValueError(f"No model {model} found")
 
-        raise ValueError(f"No model {model} found")
+    def _get_model_owner(self, model: str) -> str:
+        """Determine model owner."""
+        try:
+            model_info = self._juju_cmd("show-model", model)
+        except subprocess.CalledProcessError:
+            raise ValueError(f"Model {model} not found")
+        LOG.debug(f"Model info: {model_info}")
+        if owner := model_info.get(model, {}).get("owner"):
+            return owner
+        raise ValueError(f"Owner not found for model {model}")
 
     def is_skip(self, status: Status | None = None) -> Result:
         """Determines if the step should be skipped or not."""
@@ -2215,6 +2222,13 @@ class MigrateModelStep(BaseStep, JujuStepHelper):
             return Result(ResultType.FAILED, str(e))
 
         try:
+            owner = self._get_model_owner(self.model)
+        except ValueError:
+            msg = f"Failed to determine owner for model {self.model}"
+            LOG.debug(msg)
+            return Result(ResultType.FAILED, msg)
+
+        try:
             cmd = [self._get_juju_binary(), "migrate", self.model, self.to_controller]
             LOG.debug(f"Running command {' '.join(cmd)}")
             process = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -2236,9 +2250,12 @@ class MigrateModelStep(BaseStep, JujuStepHelper):
 
         try:
             # If the model is visible in to_controller, consider migration is completed.
-            self._wait_for_model(self.model)
-        except ValueError as e:
-            return Result(ResultType.FAILED, str(e))
+            self._wait_for_model(self.model, owner)
+        except ValueError:
+            LOG.debug("Failed to find model after migration", exc_info=True)
+            return Result(
+                ResultType.FAILED, f"Timed out waiting for model {self.model} to appear"
+            )
 
         return Result(ResultType.COMPLETED)
 

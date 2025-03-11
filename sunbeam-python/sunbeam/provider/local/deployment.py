@@ -45,6 +45,7 @@ from sunbeam.core.juju import (
     JujuController,
 )
 from sunbeam.core.questions import QuestionBank, load_answers, show_questions
+from sunbeam.provider.local.steps import local_hypervisor_questions
 from sunbeam.steps.clusterd import (
     BOOTSTRAP_CONFIG_KEY,
     CLUSTERD_PORT,
@@ -249,7 +250,7 @@ class LocalDeployment(Deployment):
             )
         )
         ext_net_bank_remote = QuestionBank(
-            questions=ext_net_questions(),
+            questions=ext_net_questions() | local_hypervisor_questions(),
             console=console,
             previous_answers=variables.get("external_network"),
         )
